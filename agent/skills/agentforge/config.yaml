@@ -1,0 +1,64 @@
+domain: agentforge
+api_url: http://localhost:8002
+language: zh
+
+roles:
+  R1:
+    name: admin
+    label: "管理员"
+    permissions: [register-template, config, spawn, destroy, query, audit]
+  R2:
+    name: operator
+    label: "操作者"
+    permissions: [spawn, destroy, sleep, wake, list, query]
+  R3:
+    name: observer
+    label: "观察者"
+    permissions: [query, list]
+
+flow:
+  name: agent_lifecycle
+  states: [created, active, sleeping, destroyed]
+  transitions:
+    - from: created
+      to: active
+      action: spawn
+      role: R2
+    - from: active
+      to: sleeping
+      action: sleep
+      role: R2
+    - from: sleeping
+      to: active
+      action: wake
+      role: R2
+    - from: active
+      to: destroyed
+      action: destroy
+      role: R2
+    - from: sleeping
+      to: destroyed
+      action: destroy
+      role: R2
+
+commitments:
+  C1:
+    description: "Agent 响应 @mention 后 5min 内开始处理"
+    trigger_state: active
+    deadline_minutes: 5
+
+arena:
+  scope: room
+
+templates_dir: "../agents/"
+
+adapters:
+  claude:
+    sdk: claude-agent-sdk
+    launcher: "../adapters/claude/launcher.py"
+  codex:
+    sdk: openai-agents
+    launcher: "../adapters/codex/launcher.py"
+  kimicode:
+    sdk: kimicode-sdk
+    launcher: "../adapters/kimicode/launcher.py"
