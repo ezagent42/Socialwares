@@ -2,32 +2,25 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
-.venv/
 dist/
+.venv/
+
+# Agent runtime state
+.gitagent/
+agent/agents/_generated/
+
+# User-local overrides
+claude.local.sh
+.mcp.env
+
+# Secrets
 .env
-.env.*
-!.env.example
-!.env.local.example
-*.db
-*.db-journal
-
-# JavaScript / Node
-node_modules/
-.next/
-out/
-.turbo/
-
-# Workspace runtime data
-.socialware-workspace/*/
+*.key
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Editor
+# IDE
 .idea/
 .vscode/
-*.swp
-
-# Claude Code local config
-.claude/settings.local.json

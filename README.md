@@ -1,33 +1,34 @@
 # Socialwares
 
-Agent-first Socialware Web App — built on the RSCF model (Role, Scope, Commitment, Flow).
+Socialware App MonoRepo — 面向 agent 的协作应用。
 
-## Structure
-
-```
-Socialwares/
-├── api/     FastAPI backend (Python, uv)
-├── app/     Next.js frontend (TypeScript, pnpm)
-└── agent/   Agent logic placeholder (pending interface definition)
-```
-
-## Quick Start
+## 快速开始
 
 ```bash
-make install   # install all dependencies
-cp api/.env.example api/.env
-cp app/.env.local.example app/.env.local
-# fill in ANTHROPIC_API_KEY and AUTH_SECRET
-make dev       # start api :8000 and app :3000
+# 克隆仓库
+gh repo clone ezagent42/Socialwares
+cd Socialwares
+
+# 配置 Claude Code 开发环境
+./scripts/setup-claude.sh
+
+# 启动开发
+claude
 ```
 
-## Architecture
+## 目录结构
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full architecture principles.
+- `apps/` — Socialware App 本体 (TaskArena, AgentForge)
+- `agent/` — GitAgent 格式的 agent 定义 (本机启动)
+- `scripts/` — 运维和适配脚本
+- `scenarios/` — 多 agent 场景编排
+- `docs/` — 文档
 
-| Layer | Tech |
-|---|---|
-| Frontend | Next.js 15 + App Router + shadcn/ui + Tailwind |
-| Auth | Auth.js v5 (Credentials) |
-| Backend | FastAPI + SQLAlchemy async + SQLite |
-| Agent | Anthropic SDK via `api/agent_bridge.py` |
+## 四原语
+
+每个 Socialware App 通过四个原语暴露 API:
+
+- **Role** — 角色定义与权限
+- **Flow** — 状态机与流程
+- **Commitment** — 承诺与 SLA
+- **Arena** — 作用域与可见性
