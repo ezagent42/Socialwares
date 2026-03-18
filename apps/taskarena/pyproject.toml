@@ -1,0 +1,14 @@
+[project]
+name = "taskarena"
+version = "0.1.0"
+description = "TaskArena Socialware App — 任务 CRUD + 状态机 + 角色权限 + SLA"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.32.0",
+    "pyyaml>=6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
