@@ -1,0 +1,9 @@
+hooks:
+  on_session_start:
+    - script: ../../hooks/session-start.sh
+      description: "Health check for Socialwares environment"
+      timeout: 10
+  pre_tool_use:
+    - script: ../../hooks/enforce-tools.sh
+      description: "Block pip/npm, suggest uv/pnpm"
+      timeout: 5

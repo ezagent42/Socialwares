@@ -1,0 +1,13 @@
+layers:
+  - name: working
+    path: MEMORY.md
+    max_lines: 200
+    format: markdown
+
+update_triggers:
+  - on_session_end
+  - on_explicit_save
+
+archive_policy:
+  max_entries: 50
+  retention: "90d"

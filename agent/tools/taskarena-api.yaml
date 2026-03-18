@@ -1,0 +1,29 @@
+name: taskarena-api
+description: "TaskArena API — 任务 CRUD、状态机转换、审核"
+version: "0.1.0"
+
+input_schema:
+  type: object
+  properties:
+    action:
+      type: string
+      enum: [create, read, update, review, close, list]
+      description: "API action"
+    task_id:
+      type: string
+      description: "Task ID (for read/update/review/close)"
+    data:
+      type: object
+      description: "Request body"
+  required: [action]
+
+implementation:
+  type: script
+  path: "../skills/taskarena/scripts/"
+  runtime: python3
+  timeout: 30
+
+annotations:
+  requires_confirmation: false
+  read_only: false
+  cost: low

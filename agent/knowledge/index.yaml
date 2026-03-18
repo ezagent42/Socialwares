@@ -1,0 +1,11 @@
+documents:
+  - path: socialware-concepts.md
+    tags: [socialware, concepts, overview]
+    priority: high
+    always_load: true
+    summary: "Socialware 核心概念和四原语"
+  - path: ../skills/dev/references/four-primitives.md
+    tags: [primitives, role, flow, commitment, arena]
+    priority: high
+    always_load: false
+    summary: "四原语 (Role/Flow/Commitment/Arena) 详细参考"
