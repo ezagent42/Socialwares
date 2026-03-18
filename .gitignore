@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+.env
+.env.*
+!.env.example
+!.env.local.example
+*.db
+*.db-journal
+
+# JavaScript / Node
+node_modules/
+.next/
+out/
+.turbo/
+
+# Workspace runtime data
+.socialweb-workspace/*/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp
+
+# Claude Code local config
+.claude/settings.local.json

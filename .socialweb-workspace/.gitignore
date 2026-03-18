@@ -1,0 +1,3 @@
+# Ignore all runtime workspace data — local only
+*
+!.gitignore
