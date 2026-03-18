@@ -1,0 +1,32 @@
+name: task-review-flow
+description: "3 agent 自动执行 提交→审核 流程 (mock)"
+
+bus:
+  type: local
+  endpoint: localhost:8080
+
+agents:
+  - name: manager
+    template: agent/agents/taskarena-admin
+    adapter: claude
+    roles: [taskarena:R1]
+    auto_start: true
+
+  - name: submitter
+    template: agent/agents/taskarena-submitter
+    adapter: claude
+    roles: [taskarena:R2]
+    auto_start: true
+
+  - name: reviewer
+    template: agent/agents/taskarena-reviewer
+    adapter: claude
+    roles: [taskarena:R3]
+    auto_start: false
+    trigger: "@mention"
+
+workflow:
+  - submitter: "/taskarena create --title 'GPS设备采购' --budget 300000"
+  - manager: "/taskarena update --id task-001 --assignee reviewer"
+  - reviewer: "/taskarena review --id task-001 --decision approve"
+  - manager: "/taskarena close --id task-001"
