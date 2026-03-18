@@ -31,7 +31,7 @@ Agent should handle it on behalf of the user instead.
 
 ### Multi-Tenant Workspace Isolation
 
-Each Room maps to `.socialweb-workspace/{room.name}/`. All file-system
+Each Room maps to `.socialware-workspace/{room.name}/`. All file-system
 operations by agents must be scoped to this path.
 
 - `room.name` is validated as `^[a-z0-9-]+$` (no path traversal)

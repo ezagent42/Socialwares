@@ -18,7 +18,7 @@ out/
 .turbo/
 
 # Workspace runtime data
-.socialweb-workspace/*/
+.socialware-workspace/*/
 
 # OS
 .DS_Store

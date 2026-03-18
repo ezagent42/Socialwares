@@ -33,7 +33,7 @@ class User(Base):
 
 class Room(Base):
     """Maps to the Arena (Scope) primitive in RSCF.
-    Each room isolates its agent work under .socialweb-workspace/{name}/"""
+    Each room isolates its agent work under .socialware-workspace/{name}/"""
 
     __tablename__ = "rooms"
 

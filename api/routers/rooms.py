@@ -12,7 +12,7 @@ from schemas import RoomCreate, RoomOut
 router = APIRouter()
 
 WORKSPACE_ROOT = os.path.abspath(
-    os.getenv("WORKSPACE_ROOT", os.path.join(os.path.dirname(__file__), "../../.socialweb-workspace"))
+    os.getenv("WORKSPACE_ROOT", os.path.join(os.path.dirname(__file__), "../../.socialware-workspace"))
 )
 
 
