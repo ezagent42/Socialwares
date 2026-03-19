@@ -180,11 +180,36 @@ Evolution routing:
 
 ## Platform Adapters
 
-| Platform | Command | Working Directory | Permission Skip |
-|----------|---------|-------------------|-----------------|
-| Claude Code | `claude` | `cd $dir` | `--dangerously-skip-permissions` |
-| Codex | `codex` | `--cd $dir` | `--full-auto` |
-| Kimi Code | `kimi` | `--work-dir $dir` | `--yolo` |
+Adapters translate the deployed `.runtime/agents/{role}/` into platform-specific launch commands. Each adapter lives in `agent/adapters/{platform}/` with a `shell.sh` (CLI mode) and/or `sdk.py` (SDK mode).
+
+### Usage
+
+```bash
+# Default: Claude Code
+./agent/start.sh --role default
+
+# Switch platform
+./agent/start.sh --role default --adapter codex
+./agent/start.sh --role default --adapter kimicode
+
+# SDK mode (production)
+python src/start_agent.py --role default --adapter codex
+```
+
+### Supported Platforms
+
+| Platform | Command | Working Directory | Permission Skip | Ref |
+|----------|---------|-------------------|-----------------|-----|
+| Claude Code | `claude` | `cd $dir` | `--dangerously-skip-permissions` | [docs](https://docs.anthropic.com/en/docs/claude-code/cli-reference) |
+| Codex | `codex` | `--cd $dir` | `--full-auto` | [docs](https://openai.github.io/codex/cli/reference) |
+| Kimi Code | `kimi` | `--work-dir $dir` | `--yolo` | [docs](https://moonshotai.github.io/kimi-cli/en/reference/kimi-command.html) |
+
+### Adding a New Adapter
+
+1. Create `agent/adapters/{name}/shell.sh` and/or `sdk.py`
+2. `shell.sh` receives `$PROJECT_DIR` as first argument, `cd` into it, launch CLI
+3. `sdk.py` extends `BaseAdapter` from `agent/adapters/base.py`
+4. Use with `--adapter {name}`
 
 ## Progressive Growth
 
