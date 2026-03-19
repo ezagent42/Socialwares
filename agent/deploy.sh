@@ -44,12 +44,18 @@ for role_dir in "$AGENT_DIR"/role/*/; do
         cat "$role_dir/SOUL.md" 2>/dev/null || true
     } > "$role_runtime/SOUL.md"
 
-    # 软连接 flow/ 下的每个 skill
+    # 软连接 flow/ 下的每个 skill (使用相对路径，跨机器可移植)
     for skill_dir in "$AGENT_DIR"/flow/*/; do
         [ -d "$skill_dir" ] || continue
         skill_name=$(basename "$skill_dir")
-        target="$skill_dir"
         link="$role_runtime/.claude/skills/$skill_name"
+
+        # 计算从 link 位置到 skill_dir 的相对路径
+        # link: .runtime/agents/{role}/.claude/skills/{skill}
+        # target: agent/flow/{skill}/
+        # 相对: ../../../../../agent/flow/{skill}
+        link_dir=$(dirname "$link")
+        target=$(python3 -c "import os.path; print(os.path.relpath('$skill_dir', '$link_dir'))")
 
         # 删除旧连接
         [ -L "$link" ] && rm "$link"

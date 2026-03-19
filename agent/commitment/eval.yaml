@@ -1,12 +1,26 @@
-# Commitment 示例 — 在此定义 Eval 指标和 SLA
+# Commitment — 可追踪的承诺/评估标准
+#
+# 声明式定义: 描述"什么算达标"，不规定"怎么检查"。
+# 执行方式由 App 的 Biz 层决定 (API middleware / cron / eval 脚本)。
+#
+# 示例:
 #
 # commitments:
 #   C1:
-#     description: "描述承诺内容"
-#     trigger_state: submitted
-#     deadline_hours: 72
+#     description: "审核者在任务提交后 72h 内完成审核"
+#     metric: time_to_review
+#     threshold: "72h"
 #     debtor_role: reviewer
 #     creditor_role: submitter
-#     escalation_role: admin
+#
+#   C2:
+#     description: "客户满意度 ≥ 4.5 星"
+#     metric: customer_rating
+#     threshold: ">=4.5"
+#
+#   C3:
+#     description: "每周至少完成 3 个任务"
+#     metric: tasks_completed_per_week
+#     threshold: ">=3"
 
 commitments: {}
