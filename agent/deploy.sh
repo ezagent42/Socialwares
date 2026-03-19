@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# deploy.sh — Compile four primitives -> .runtime/
+# Generate an isolated $PROJECT_DIR for each role (with .claude/skills/, SOUL.md)
+# .runtime/data/ is the shared data directory
+# .runtime/agents/{role}/ is the isolated environment for each role
+set -euo pipefail
+
+AGENT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$AGENT_DIR/.." && pwd)"
+
+# Default workspace
+WORKSPACE="${1:-.socialware/workspace/default}"
+if [[ "$WORKSPACE" = /* ]]; then
+    RUNTIME_DIR="$WORKSPACE/.runtime"
+else
+    RUNTIME_DIR="$REPO_ROOT/$WORKSPACE/.runtime"
+fi
+
+echo "Deploying four primitives → $RUNTIME_DIR"
+echo ""
+
+# 1. Create .runtime/ directory structure
+mkdir -p "$RUNTIME_DIR/data/Files"
+mkdir -p "$RUNTIME_DIR/data/Sqlite"
+
+# 2. Generate an isolated PROJECT_DIR for each role
+for role_dir in "$AGENT_DIR"/role/*/; do
+    [ -d "$role_dir" ] || continue
+    role_name=$(basename "$role_dir")
+    role_runtime="$RUNTIME_DIR/agents/$role_name"
+
+    echo "  Role: $role_name"
+
+    # Create directories
+    mkdir -p "$role_runtime/.claude/skills"
+    mkdir -p "$role_runtime/.claude/hooks"
+
+    # Merge SOUL.md: scope/SOUL.md + role/{name}/SOUL.md
+    {
+        cat "$AGENT_DIR/scope/SOUL.md" 2>/dev/null || true
+        echo ""
+        echo "---"
+        echo ""
+        cat "$role_dir/SOUL.md" 2>/dev/null || true
+    } > "$role_runtime/SOUL.md"
+
+    # Symlink each skill from flow/ (using relative paths for cross-machine portability)
+    for skill_dir in "$AGENT_DIR"/flow/*/; do
+        [ -d "$skill_dir" ] || continue
+        skill_name=$(basename "$skill_dir")
+        link="$role_runtime/.claude/skills/$skill_name"
+
+        # Calculate relative path from link location to skill_dir
+        # link: .runtime/agents/{role}/.claude/skills/{skill}
+        # target: agent/flow/{skill}/
+        # relative: ../../../../../agent/flow/{skill}
+        link_dir=$(dirname "$link")
+        target=$(python3 -c "import os.path; print(os.path.relpath('$skill_dir', '$link_dir'))")
+
+        # Remove old symlink
+        [ -L "$link" ] && rm "$link"
+        [ -d "$link" ] && rm -rf "$link"
+
+        ln -s "$target" "$link"
+    done
+
+    # Copy commitment eval configuration
+    if [ -f "$AGENT_DIR/commitment/eval.yaml" ]; then
+        cp "$AGENT_DIR/commitment/eval.yaml" "$role_runtime/eval.yaml"
+    fi
+
+    echo "    SOUL.md: $(wc -l < "$role_runtime/SOUL.md") lines"
+    echo "    Skills: $(ls "$role_runtime/.claude/skills/" 2>/dev/null | wc -l)"
+    echo ""
+done
+
+echo "Deploy complete."
+echo "  Data: $RUNTIME_DIR/data/"
+echo "  Agents: $RUNTIME_DIR/agents/"
+echo ""
+echo "Start with: ./agent/start.sh --role <role_name>"

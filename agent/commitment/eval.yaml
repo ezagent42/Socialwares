@@ -1,0 +1,27 @@
+# Commitment — Trackable commitments / evaluation criteria
+#
+# Declarative definition: describes "what counts as meeting the standard",
+# without prescribing "how to check".
+# Execution method is determined by the App's Biz layer (API middleware / cron / eval scripts).
+#
+# Examples:
+#
+# commitments:
+#   C1:
+#     description: "Reviewer completes review within 72h after task submission"
+#     metric: time_to_review
+#     threshold: "72h"
+#     debtor_role: reviewer
+#     creditor_role: submitter
+#
+#   C2:
+#     description: "Customer satisfaction ≥ 4.5 stars"
+#     metric: customer_rating
+#     threshold: ">=4.5"
+#
+#   C3:
+#     description: "Complete at least 3 tasks per week"
+#     metric: tasks_completed_per_week
+#     threshold: ">=3"
+
+commitments: {}
