@@ -51,7 +51,7 @@ socialwares/
 │   ├── flow/                 ← How: Skills (操作定义)
 │   │   └── check_health/SKILL.md
 │   ├── deploy.sh             ← 编译四原语 → .runtime/
-│   ├── start.sh              ← 开发模式启动入口
+│   ├── start.sh              ← CLI 模式启动入口
 │   └── adapters/             ← 平台适配 (Claude/Codex/Kimi)
 ├── scripts/
 │   ├── create-my-socialware.py  ← 创建新 App 实例
@@ -156,11 +156,11 @@ python src/start_agent.py --role admin --adapter codex
 uv run scripts/create-my-socialware.py
 
 # 命令行参数
-uv run scripts/create-my-socialware.py --name my-app --role admin --description "任务管理"
+uv run scripts/create-my-socialware.py --room my-team --app task-manager --description "任务管理"
 ```
 
 执行:
-1. 复制模板 (src/, app/, agent/ 四原语) → `.socialware/workspace/{name}/`
+1. 复制模板 (src/, app/, agent/ 四原语) → `.socialware/workspace/{room}/{app}/`
 2. 定制 scope/SOUL.md 和 role/SOUL.md
 3. 自动运行 deploy.sh
 
@@ -168,10 +168,10 @@ uv run scripts/create-my-socialware.py --name my-app --role admin --description 
 
 ```bash
 # 检查变更
-./scripts/evolve.sh my-app --check
+./scripts/evolve.sh my-team/task-manager --check
 
 # 创建 PR (将 workspace 改进回馈到模板)
-./scripts/evolve.sh my-app --pr
+./scripts/evolve.sh my-team/task-manager --pr
 ```
 
 进化路由:
