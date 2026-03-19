@@ -1,0 +1,8 @@
+[project]
+name = "socialwares"
+version = "0.1.0"
+description = "Socialware App 脚手架模板 — Agent 交互可视化的 Web 应用"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
