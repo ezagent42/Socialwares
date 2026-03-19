@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""create-my-socialware — 创建新的 Socialware App 实例。
+"""create-my-socialware — Create a new Socialware App instance.
 
-类似 mix phx.new 或 npx create-next-app。
-将模板复制到 .socialware/workspace/{room}/{app}/ 并定制四原语。
+Similar to mix phx.new or npx create-next-app.
+Copies the template to .socialware/workspace/{room}/{app}/ and customizes the four primitives.
 
 Usage:
     uv run scripts/create-my-socialware.py
     uv run scripts/create-my-socialware.py --room my-team --app task-manager
-    uv run scripts/create-my-socialware.py --room my-team --app task-manager --description "任务管理"
+    uv run scripts/create-my-socialware.py --room my-team --app task-manager --description "Task management"
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ REPO_ROOT = Path(__file__).parent.parent
 
 
 def prompt_input(label: str, default: str = "") -> str:
-    """交互式输入，支持默认值。"""
+    """Interactive input with default value support."""
     if default:
         raw = input(f"  {label} [{default}]: ").strip()
         return raw or default
@@ -30,11 +30,11 @@ def prompt_input(label: str, default: str = "") -> str:
         raw = input(f"  {label}: ").strip()
         if raw:
             return raw
-        print("    (不能为空)")
+        print("    (cannot be empty)")
 
 
 def create_workspace(room: str, app: str, description: str) -> Path:
-    """创建 workspace 并复制模板。"""
+    """Create workspace and copy templates."""
     workspace_dir = REPO_ROOT / ".socialware" / "workspace" / room / app
     if workspace_dir.exists():
         print(f"  Error: '{room}/{app}' already exists at {workspace_dir}")
@@ -42,21 +42,21 @@ def create_workspace(room: str, app: str, description: str) -> Path:
 
     workspace_dir.mkdir(parents=True)
 
-    # 复制 src/
+    # Copy src/
     src_src = REPO_ROOT / "src"
     src_dst = workspace_dir / "src"
     if src_src.exists():
         shutil.copytree(src_src, src_dst, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         print(f"  Copied src/")
 
-    # 复制 app/
+    # Copy app/
     app_src = REPO_ROOT / "app"
     app_dst = workspace_dir / "app"
     if app_src.exists():
         shutil.copytree(app_src, app_dst, ignore=shutil.ignore_patterns("node_modules", ".next"))
         print(f"  Copied app/")
 
-    # 复制 agent/ 四原语
+    # Copy agent/ four primitives
     agent_src = REPO_ROOT / "agent"
     agent_dst = workspace_dir / "agent"
     agent_dst.mkdir()
@@ -68,7 +68,7 @@ def create_workspace(room: str, app: str, description: str) -> Path:
             shutil.copytree(prim_src, prim_dst, ignore=shutil.ignore_patterns("__pycache__", "README.md"))
             print(f"  Copied agent/{primitive}/")
 
-    # 复制 deploy.sh, start.sh, adapters/
+    # Copy deploy.sh, start.sh, adapters/
     for script in ["deploy.sh", "start.sh"]:
         script_src = agent_src / script
         script_dst = agent_dst / script
@@ -84,46 +84,46 @@ def create_workspace(room: str, app: str, description: str) -> Path:
 
 
 def customize_workspace(workspace_dir: Path, app: str, description: str) -> None:
-    """定制 workspace 中的四原语。"""
+    """Customize the four primitives in the workspace."""
 
-    # 重写 scope/SOUL.md
+    # Rewrite scope/SOUL.md
     scope_soul = workspace_dir / "agent" / "scope" / "SOUL.md"
     scope_soul.write_text(f"""# {app}
 
 {description}
 
-## 能力
+## Capabilities
 
-- 健康检查 (/health)
-- (在此添加你的 App 能力)
+- Health check (/health)
+- (Add your App capabilities here)
 
-## 边界
+## Boundaries
 
-- (在此定义 Agent 的操作边界)
+- (Define the Agent's operational boundaries here)
 """)
     print(f"  Customized agent/scope/SOUL.md")
 
-    # 重写 default role SOUL.md (保持 default，不重命名)
+    # Rewrite default role SOUL.md (keep as 'default', do not rename)
     role_soul = workspace_dir / "agent" / "role" / "default" / "SOUL.md"
     if role_soul.exists():
         role_soul.write_text(f"""# Default Agent
 
-你是 {app} 的 Agent。
+You are the Agent for {app}.
 
-## 身份
+## Identity
 
-- 角色: default
-- 权限: 所有操作
+- Role: default
+- Permissions: all operations
 
-## 职责
+## Responsibilities
 
-根据用户指令操作 {app}。
+Operate {app} according to user instructions.
 """)
         print(f"  Customized agent/role/default/SOUL.md")
 
 
 def run_deploy(workspace_dir: Path) -> bool:
-    """运行 deploy.sh。"""
+    """Run deploy.sh."""
     deploy_sh = REPO_ROOT / "agent" / "deploy.sh"
 
     result = subprocess.run(
@@ -142,10 +142,10 @@ def run_deploy(workspace_dir: Path) -> bool:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="创建新的 Socialware App 实例")
-    parser.add_argument("--room", help="Room 名称 (workspace 分组)")
-    parser.add_argument("--app", help="App 名称")
-    parser.add_argument("--description", help="App 描述")
+    parser = argparse.ArgumentParser(description="Create a new Socialware App instance")
+    parser.add_argument("--room", help="Room name (workspace group)")
+    parser.add_argument("--app", help="App name")
+    parser.add_argument("--description", help="App description")
     args = parser.parse_args()
 
     print()
@@ -161,11 +161,11 @@ def main() -> None:
     print(f"Creating {room}/{app}...")
     print()
 
-    # 1. 创建并复制
+    # 1. Create and copy
     workspace_dir = create_workspace(room, app, description)
     print()
 
-    # 2. 定制
+    # 2. Customize
     customize_workspace(workspace_dir, app, description)
     print()
 
@@ -178,15 +178,15 @@ def main() -> None:
     print(f"Created '{room}/{app}' at {ws_rel}/")
     print()
     print("Next steps:")
-    print(f"  # 启动 agent (开发模式)")
+    print(f"  # Start agent (dev mode)")
     print(f"  ./agent/start.sh --role default --workspace {ws_rel}")
     print()
-    print(f"  # 编辑四原语")
+    print(f"  # Edit four primitives")
     print(f"  vim {ws_rel}/agent/scope/SOUL.md")
     print(f"  vim {ws_rel}/agent/role/default/SOUL.md")
     print(f"  vim {ws_rel}/agent/flow/")
     print()
-    print(f"  # 添加新角色 (P5 渐进生长)")
+    print(f"  # Add new roles (P5 incremental growth)")
     print(f"  mkdir {ws_rel}/agent/role/admin")
     print(f"  vim {ws_rel}/agent/role/admin/SOUL.md")
     print()

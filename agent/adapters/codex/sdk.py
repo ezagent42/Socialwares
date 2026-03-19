@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """OpenAI Codex/Agents SDK adapter.
 
-参考:
+Reference:
 - CLI: https://openai.github.io/codex/cli/reference
 - SDK: https://openai.github.io/openai-agents-python/
 """
@@ -19,7 +19,7 @@ class CodexAdapter(BaseAdapter):
     """OpenAI Codex CLI / Agents SDK adapter."""
 
     def launch_shell(self) -> None:
-        """通过 Codex CLI 启动。"""
+        """Launch via Codex CLI."""
         subprocess.run([
             "codex",
             "--cd", str(self.config.project_dir),
@@ -27,7 +27,7 @@ class CodexAdapter(BaseAdapter):
         ])
 
     def launch_sdk(self) -> None:
-        """通过 OpenAI Agents SDK 程序化启动。"""
+        """Launch programmatically via OpenAI Agents SDK."""
         print(f"[Codex SDK] Launching {self.config.name}")
         print(f"[Codex SDK] Working dir: {self.config.project_dir}")
 

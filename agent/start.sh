@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# start.sh — 统一启动入口 (开发模式)
-# 检查 .runtime/ → 选择 adapter → 启动 agent
+# start.sh — Unified launch entry point (dev mode)
+# Check .runtime/ -> select adapter -> start agent
 set -euo pipefail
 
 AGENT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$AGENT_DIR/.." && pwd)"
 
-# 默认参数
+# Default parameters
 ROLE=""
 ADAPTER="claude"
 WORKSPACE=".socialware/workspace/default"
 
-# 解析参数
+# Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
         --role) ROLE="$2"; shift 2 ;;
@@ -23,16 +23,16 @@ done
 
 RUNTIME_DIR="$REPO_ROOT/$WORKSPACE/.runtime"
 
-# 1. 检查 .runtime/ 是否存在，不存在则自动 deploy
+# 1. Check if .runtime/ exists; auto-deploy if not
 if [ ! -d "$RUNTIME_DIR/agents" ]; then
     echo "No .runtime/ found. Running deploy.sh..."
     "$AGENT_DIR/deploy.sh" "$WORKSPACE"
     echo ""
 fi
 
-# 2. 确定要启动的 roles
+# 2. Determine which roles to start
 if [ -z "$ROLE" ]; then
-    # 列出所有可用 role
+    # List all available roles
     echo "Available roles:"
     for role_dir in "$RUNTIME_DIR"/agents/*/; do
         [ -d "$role_dir" ] || continue
@@ -43,10 +43,10 @@ if [ -z "$ROLE" ]; then
     exit 0
 fi
 
-# 3. 解析 role 列表
+# 3. Parse role list
 IFS=',' read -ra ROLES <<< "$ROLE"
 
-# 4. 检查 adapter 是否存在
+# 4. Check if adapter exists
 ADAPTER_DIR="$AGENT_DIR/adapters/$ADAPTER"
 if [ ! -d "$ADAPTER_DIR" ]; then
     echo "Adapter not found: $ADAPTER"
@@ -54,9 +54,9 @@ if [ ! -d "$ADAPTER_DIR" ]; then
     exit 1
 fi
 
-# 5. 启动
+# 5. Launch
 if [ ${#ROLES[@]} -eq 1 ]; then
-    # 单 role — 直接启动
+    # Single role — launch directly
     role_name="${ROLES[0]}"
     project_dir="$RUNTIME_DIR/agents/$role_name"
 
@@ -76,16 +76,16 @@ if [ ${#ROLES[@]} -eq 1 ]; then
         exit 1
     fi
 else
-    # 多 role — tmux 多 pane
+    # Multiple roles — tmux multi-pane
     SESSION="socialware-$(date +%s)"
     echo "Starting ${#ROLES[@]} roles in tmux session: $SESSION"
 
-    # 创建 tmux session with first role
+    # Create tmux session with first role
     first_role="${ROLES[0]}"
     first_dir="$RUNTIME_DIR/agents/$first_role"
     tmux new-session -d -s "$SESSION" "$ADAPTER_DIR/shell.sh $first_dir"
 
-    # 为其余 role 创建新 pane
+    # Create new panes for remaining roles
     for ((i=1; i<${#ROLES[@]}; i++)); do
         role_name="${ROLES[$i]}"
         project_dir="$RUNTIME_DIR/agents/$role_name"

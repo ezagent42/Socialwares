@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Kimi Code SDK adapter.
 
-参考:
+Reference:
 - CLI: https://moonshotai.github.io/kimi-cli/en/reference/kimi-command.html
 """
 from __future__ import annotations
@@ -18,7 +18,7 @@ class KimiCodeAdapter(BaseAdapter):
     """Kimi Code CLI adapter."""
 
     def launch_shell(self) -> None:
-        """通过 Kimi CLI 启动。"""
+        """Launch via Kimi CLI."""
         subprocess.run([
             "kimi",
             "--work-dir", str(self.config.project_dir),
@@ -26,7 +26,7 @@ class KimiCodeAdapter(BaseAdapter):
         ])
 
     def launch_sdk(self) -> None:
-        """Kimi Code 暂无独立 SDK，fallback 到 CLI。"""
+        """Kimi Code has no standalone SDK yet; falls back to CLI."""
         print(f"[Kimi] Launching {self.config.name} via CLI")
         self.launch_shell()
 

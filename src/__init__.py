@@ -1,1 +1,1 @@
-"""Socialware App 后端。"""
+"""Socialware App backend."""

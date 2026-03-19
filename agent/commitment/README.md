@@ -1,40 +1,40 @@
 # Commitment — What
 
-定义可追踪的承诺和评估标准。
+Defines trackable commitments and evaluation criteria.
 
-## 核心概念
+## Core Concept
 
-Commitment 是**声明式**的：描述"什么算达标"，不规定"怎么检查"。
+Commitment is **declarative**: it describes "what counts as meeting the standard", without prescribing "how to check".
 
-执行方式由 App 的 Biz 层 (`src/`) 决定，例如：
-- API middleware 自动检查
-- Cron 定时评估
-- Eval 脚本按需运行
-- Agent 自主检查
+Execution method is determined by the App's Biz layer (`src/`), for example:
+- API middleware auto-checks
+- Cron scheduled evaluations
+- Eval scripts run on demand
+- Agent self-checks
 
-## 文件
+## Files
 
-- `eval.yaml` — Commitment 声明
+- `eval.yaml` — Commitment declarations
 
-## eval.yaml 格式
+## eval.yaml Format
 
 ```yaml
 commitments:
   C1:
-    description: "描述承诺内容"
-    metric: metric_name          # 评估指标名
-    threshold: ">=4.5"           # 达标阈值 (格式自由)
-    debtor_role: reviewer        # 谁负责 (可选)
-    creditor_role: submitter     # 谁受益 (可选)
+    description: "Describe the commitment"
+    metric: metric_name          # Evaluation metric name
+    threshold: ">=4.5"           # Passing threshold (free format)
+    debtor_role: reviewer        # Who is responsible (optional)
+    creditor_role: submitter     # Who benefits (optional)
 ```
 
-Commitment 不限于时间 SLA，可以是任何可衡量的标准：
-- 时间: "72h 内完成审核"
-- 质量: "客户满意度 ≥ 4.5"
-- 数量: "每周完成 ≥ 3 个任务"
-- 自定义: 任何 App 特定的评估指标
+Commitments are not limited to time SLAs; they can be any measurable standard:
+- Time: "Complete review within 72h"
+- Quality: "Customer satisfaction ≥ 4.5"
+- Quantity: "Complete ≥ 3 tasks per week"
+- Custom: Any App-specific evaluation metric
 
-## deploy.sh 处理
+## deploy.sh Processing
 
-`eval.yaml` 会被复制到每个 role 的 `.runtime/agents/{name}/eval.yaml`，
-供 Agent 在运行时参考承诺标准。
+`eval.yaml` is copied to each role's `.runtime/agents/{name}/eval.yaml`,
+so the Agent can reference commitment standards at runtime.

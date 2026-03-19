@@ -1,25 +1,26 @@
-# Commitment — 可追踪的承诺/评估标准
+# Commitment — Trackable commitments / evaluation criteria
 #
-# 声明式定义: 描述"什么算达标"，不规定"怎么检查"。
-# 执行方式由 App 的 Biz 层决定 (API middleware / cron / eval 脚本)。
+# Declarative definition: describes "what counts as meeting the standard",
+# without prescribing "how to check".
+# Execution method is determined by the App's Biz layer (API middleware / cron / eval scripts).
 #
-# 示例:
+# Examples:
 #
 # commitments:
 #   C1:
-#     description: "审核者在任务提交后 72h 内完成审核"
+#     description: "Reviewer completes review within 72h after task submission"
 #     metric: time_to_review
 #     threshold: "72h"
 #     debtor_role: reviewer
 #     creditor_role: submitter
 #
 #   C2:
-#     description: "客户满意度 ≥ 4.5 星"
+#     description: "Customer satisfaction ≥ 4.5 stars"
 #     metric: customer_rating
 #     threshold: ">=4.5"
 #
 #   C3:
-#     description: "每周至少完成 3 个任务"
+#     description: "Complete at least 3 tasks per week"
 #     metric: tasks_completed_per_week
 #     threshold: ">=3"
 

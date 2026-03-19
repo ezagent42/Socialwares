@@ -4,7 +4,7 @@
 Launches agent programmatically using Claude Agent SDK.
 Used by src/start_agent.py for production deployment.
 
-参考:
+Reference:
 - CLI: https://docs.anthropic.com/en/docs/claude-code/cli-reference
 - SDK: https://docs.anthropic.com/en/docs/claude-code/sdk-reference
 """
@@ -23,7 +23,7 @@ class ClaudeAdapter(BaseAdapter):
     """Claude Agent SDK adapter."""
 
     def launch_shell(self) -> None:
-        """通过 CLI 启动 Claude Code TUI。"""
+        """Launch Claude Code TUI via CLI."""
         cmd = ["claude", "--dangerously-skip-permissions"]
 
         soul_path = self.config.project_dir / "SOUL.md"
@@ -33,13 +33,13 @@ class ClaudeAdapter(BaseAdapter):
         subprocess.run(cmd, cwd=str(self.config.project_dir))
 
     def launch_sdk(self) -> None:
-        """通过 Claude Agent SDK 程序化启动。"""
+        """Launch programmatically via Claude Agent SDK."""
         print(f"[Claude SDK] Launching {self.config.name}")
         print(f"[Claude SDK] Working dir: {self.config.project_dir}")
         print(f"[Claude SDK] SOUL.md: {len(self.config.soul)} chars")
 
-        # Claude Agent SDK 使用 claude_code_sdk
-        # 参考: https://docs.anthropic.com/en/docs/claude-code/sdk-reference
+        # Claude Agent SDK uses claude_code_sdk
+        # Reference: https://docs.anthropic.com/en/docs/claude-code/sdk-reference
         try:
             from claude_code_sdk import query
 

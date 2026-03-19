@@ -1,14 +1,14 @@
 # Scope — Where
 
-定义 App 级别的能力声明。
+Defines App-level capability declarations.
 
-## 文件
+## Files
 
-- `SOUL.md` — Agent 能力声明
-  - 对内: 定义 Agent 操作边界
-  - 对外: 公开描述，供其他 Agent 读取
+- `SOUL.md` — Agent capability declaration
+  - Internal: Defines Agent operation boundaries
+  - External: Public description, readable by other Agents
 
-## deploy.sh 处理
+## deploy.sh Processing
 
-`scope/SOUL.md` 会与每个 `role/{name}/SOUL.md` 合并，
-生成该 role 专属的完整 SOUL.md。
+`scope/SOUL.md` is merged with each `role/{name}/SOUL.md`
+to generate the complete SOUL.md specific to that role.

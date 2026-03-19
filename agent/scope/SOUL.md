@@ -1,12 +1,12 @@
 # Socialware App
 
-这是一个 Socialware App 模板。
+This is a Socialware App template.
 
-## 能力
+## Capabilities
 
-- 健康检查 (/health)
-- (在此添加你的 App 能力)
+- Health check (/health)
+- (Add your App capabilities here)
 
-## 边界
+## Boundaries
 
-- (在此定义 Agent 的操作边界)
+- (Define the Agent's operation boundaries here)

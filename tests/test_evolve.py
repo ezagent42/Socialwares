@@ -1,4 +1,4 @@
-"""测试 evolve 机制。"""
+"""Tests for the evolve mechanism."""
 from __future__ import annotations
 
 import os
@@ -16,7 +16,7 @@ CREATE_SCRIPT = REPO_ROOT / "scripts" / "create-my-socialware.py"
 
 @pytest.fixture
 def workspace():
-    """创建一个 test workspace 用于 evolve 测试。"""
+    """Create a test workspace for evolve tests."""
     room = "evolve-room"
     app = "evolve-app"
     ws_path = f"{room}/{app}"
@@ -37,17 +37,17 @@ def workspace():
 
 
 class TestEvolve:
-    """测试 evolve 机制。"""
+    """Tests for the evolve mechanism."""
 
     def test_evolve_script_exists(self):
         assert EVOLVE_SH.exists()
         assert os.access(str(EVOLVE_SH), os.X_OK)
 
     def test_evolve_no_changes(self, workspace):
-        """模板内容同步后应报告 no changes。"""
+        """Should report no changes after syncing template content."""
         ws_path, ws_dir = workspace
 
-        # create-my-socialware 会定制 SOUL.md，手动同步回模板内容
+        # create-my-socialware customizes SOUL.md, so manually sync back to template content
         for primitive in ["role", "scope", "commitment", "flow"]:
             src = REPO_ROOT / "agent" / primitive
             dst = ws_dir / "agent" / primitive
@@ -63,7 +63,7 @@ class TestEvolve:
         assert "No changes" in result.stdout
 
     def test_evolve_detects_agent_changes(self, workspace):
-        """修改 workspace 的 agent/ 后应检测到变更。"""
+        """Should detect changes after modifying the workspace's agent/ directory."""
         ws_path, ws_dir = workspace
 
         soul_path = ws_dir / "agent" / "scope" / "SOUL.md"
@@ -78,7 +78,7 @@ class TestEvolve:
         assert "agent/scope" in result.stdout
 
     def test_evolve_nonexistent_workspace(self):
-        """不存在的 workspace 应报错。"""
+        """A nonexistent workspace should return an error."""
         result = subprocess.run(
             [str(EVOLVE_SH), "nonexistent/app", "--check"],
             capture_output=True, text=True, cwd=str(REPO_ROOT),

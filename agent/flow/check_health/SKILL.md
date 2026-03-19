@@ -1,18 +1,18 @@
 ---
 name: check_health
-description: "检查 App 健康状态"
+description: "Check App health status"
 ---
 
-# 检查健康状态
+# Check Health Status
 
-## 触发
+## Trigger
 
-用户说 "检查状态"、"health check"、"App 是否正常" 等。
+User says "check status", "health check", "is the App running", etc.
 
-## 流程
+## Flow
 
-1. 调用 App API: `GET /health`
-2. 返回状态信息
+1. Call the App API: `GET /health`
+2. Return status information
 
 ## API
 

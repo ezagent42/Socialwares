@@ -1,30 +1,30 @@
 # Role — Who
 
-定义 Subagent 身份与权限。
+Defines Subagent identity and permissions.
 
-## 结构
+## Structure
 
-每个角色一个子目录，包含 `SOUL.md`:
+Each role has its own subdirectory containing a `SOUL.md`:
 
 ```
 role/
 ├── default/
-│   └── SOUL.md      ← Agent 身份描述
+│   └── SOUL.md      ← Agent identity description
 ├── admin/
 │   └── SOUL.md
 └── reviewer/
     └── SOUL.md
 ```
 
-## SOUL.md 内容
+## SOUL.md Contents
 
-描述该角色的:
-- 身份和名称
-- 拥有的权限 (哪些 action 可以触发)
-- 职责说明
+Describes the role's:
+- Identity and name
+- Granted permissions (which actions it can trigger)
+- Responsibility description
 
-## deploy.sh 处理
+## deploy.sh Processing
 
-`deploy.sh` 会为每个 role 生成独立的 `$PROJECT_DIR`:
-- 合并 `scope/SOUL.md` + `role/{name}/SOUL.md` → `.runtime/agents/{name}/SOUL.md`
-- 软连接 `flow/` 下所有 skill → `.runtime/agents/{name}/.claude/skills/`
+`deploy.sh` generates an independent `$PROJECT_DIR` for each role:
+- Merges `scope/SOUL.md` + `role/{name}/SOUL.md` → `.runtime/agents/{name}/SOUL.md`
+- Symlinks all skills under `flow/` → `.runtime/agents/{name}/.claude/skills/`

@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # Claude Code shell adapter — launch Claude TUI in role's PROJECT_DIR
 #
-# Claude Code 使用当前工作目录作为项目目录，没有 --project-dir 标志。
-# 权限跳过使用 --dangerously-skip-permissions (独立标志，不是 --permission-mode 的值)。
-# SOUL.md 通过 --append-system-prompt-file 注入。
+# Claude Code uses the current working directory as project directory; there is no --project-dir flag.
+# Permission bypass uses --dangerously-skip-permissions (standalone flag, not a value of --permission-mode).
+# SOUL.md is injected via --append-system-prompt-file.
 #
-# 参考: https://docs.anthropic.com/en/docs/claude-code/cli-reference
+# Reference: https://docs.anthropic.com/en/docs/claude-code/cli-reference
 set -euo pipefail
 
 PROJECT_DIR="${1:?Usage: shell.sh <project_dir>}"
 
 cd "$PROJECT_DIR"
 
-# 如果有 SOUL.md，作为 system prompt 追加
+# If SOUL.md exists, append it as system prompt
 if [ -f "SOUL.md" ]; then
     exec claude --dangerously-skip-permissions --append-system-prompt-file SOUL.md
 else

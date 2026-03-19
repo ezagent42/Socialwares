@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""生产模式 Agent 启动入口。
+"""Production mode agent launch entry point.
 
-App 后端调用此脚本，通过 adapter 以 SDK 模式启动 agent。
-与 agent/start.sh (开发模式 Shell 启动) 互补，不冲突。
+The app backend calls this script to launch agents via adapters in SDK mode.
+Complementary to agent/start.sh (dev mode shell launch), no conflict.
 
 Usage:
     python src/start_agent.py --role admin
@@ -18,7 +18,7 @@ from pathlib import Path
 
 
 def load_adapter(adapter_name: str, project_dir: Path):
-    """动态加载指定平台的 adapter。"""
+    """Dynamically load the adapter for the specified platform."""
     adapter_path = Path(__file__).parent.parent / "agent" / "adapters"
     sys.path.insert(0, str(adapter_path))
     sys.path.insert(0, str(adapter_path / adapter_name))
@@ -27,10 +27,10 @@ def load_adapter(adapter_name: str, project_dir: Path):
 
     config = RoleConfig.from_runtime(project_dir)
 
-    # 动态导入 adapter 模块
+    # Dynamically import the adapter module
     mod = importlib.import_module(f"{adapter_name}.sdk")
 
-    # 找到 BaseAdapter 的子类
+    # Find subclass of BaseAdapter
     for attr_name in dir(mod):
         attr = getattr(mod, attr_name)
         if (
@@ -44,7 +44,7 @@ def load_adapter(adapter_name: str, project_dir: Path):
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="启动 Socialware Agent (生产模式)")
+    parser = argparse.ArgumentParser(description="Launch Socialware Agent (production mode)")
     parser.add_argument("--role", required=True, help="Role name(s), comma-separated")
     parser.add_argument("--adapter", default="claude", help="Platform adapter")
     parser.add_argument(

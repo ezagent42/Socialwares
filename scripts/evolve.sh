@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# evolve.sh — Workspace 进化机制
+# evolve.sh — Workspace evolution mechanism
 #
-# 检查 workspace 中 agent/ 四原语的变更，
-# 决定是 workspace 特定适配 (.runtime/) 还是通用改进 (PR 回 main)。
+# Check for changes in the agent/ four primitives within the workspace,
+# and decide whether they are workspace-specific adaptations (.runtime/) or general improvements (PR back to main).
 #
 # Usage:
-#   ./scripts/evolve.sh <room/app>            # 检查变更
-#   ./scripts/evolve.sh <room/app> --check    # 同上
-#   ./scripts/evolve.sh <room/app> --pr       # 创建 PR
+#   ./scripts/evolve.sh <room/app>            # Check for changes
+#   ./scripts/evolve.sh <room/app> --check    # Same as above
+#   ./scripts/evolve.sh <room/app> --pr       # Create PR
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -29,7 +29,7 @@ echo "  Workspace: $WORKSPACE_DIR"
 echo "  Template:  $TEMPLATE_AGENT"
 echo ""
 
-# 比较 workspace agent/ 和模板 agent/ 的差异
+# Compare differences between workspace agent/ and template agent/
 CHANGES=0
 RUNTIME_CHANGES=0
 AGENT_CHANGES=0
@@ -37,7 +37,7 @@ AGENT_CHANGES=0
 echo "Checking for changes..."
 echo ""
 
-# 检查四原语差异 (agent/ 下的变更 → 可能是通用改进)
+# Check four primitives for differences (changes under agent/ -> potential general improvements)
 for primitive in role scope commitment flow; do
     template_dir="$TEMPLATE_AGENT/$primitive"
     workspace_dir_prim="$WORKSPACE_AGENT/$primitive"
@@ -46,7 +46,7 @@ for primitive in role scope commitment flow; do
         continue
     fi
 
-    # diff 两个目录 (忽略 README.md)
+    # diff two directories (ignoring README.md)
     diff_output=$(diff -rq \
         --exclude="README.md" \
         --exclude="__pycache__" \
@@ -62,7 +62,7 @@ for primitive in role scope commitment flow; do
     fi
 done
 
-# 检查 .runtime/ 中的变更 (workspace 特定，不触发 PR)
+# Check for changes in .runtime/ (workspace-specific, does not trigger PR)
 if [ -d "$WORKSPACE_DIR/.runtime" ]; then
     runtime_files=$(find "$WORKSPACE_DIR/.runtime" -newer "$WORKSPACE_DIR/.runtime" -type f 2>/dev/null | head -20)
     if [ -n "$runtime_files" ]; then
@@ -70,7 +70,7 @@ if [ -d "$WORKSPACE_DIR/.runtime" ]; then
     fi
 fi
 
-# 汇总
+# Summary
 echo "Summary:"
 echo "  Agent changes (→ PR candidate):  $AGENT_CHANGES primitives"
 echo "  Runtime changes (workspace-only): $RUNTIME_CHANGES"
@@ -81,13 +81,13 @@ if [ "$CHANGES" -eq 0 ]; then
     exit 0
 fi
 
-# 路由决策
+# Routing decision
 echo "Evolve routing:"
 if [ "$AGENT_CHANGES" -gt 0 ]; then
     echo "  agent/ changes detected → candidate for PR back to main"
     echo ""
 
-    # 将 room/app 中的 / 替换为 - 作为 branch 名
+    # Replace / in room/app with - for branch name
     BRANCH_NAME=$(echo "$WORKSPACE_PATH" | tr '/' '-')
 
     if [ "$ACTION" = "--pr" ]; then
@@ -96,7 +96,7 @@ if [ "$AGENT_CHANGES" -gt 0 ]; then
 
         git -C "$REPO_ROOT" checkout -b "$BRANCH"
 
-        # 复制 workspace 的四原语变更回模板
+        # Copy workspace four primitives changes back to template
         for primitive in role scope commitment flow; do
             workspace_dir_prim="$WORKSPACE_AGENT/$primitive"
             template_dir="$TEMPLATE_AGENT/$primitive"

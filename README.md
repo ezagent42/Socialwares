@@ -1,105 +1,105 @@
 # Socialwares
 
-Socialware App 脚手架模板 — Agent 交互可视化的 Web 应用。
+Socialware App scaffolding template — a web application for Agent interaction visualization.
 
-> 传统 App: UI → API → DB (数据库 CRUD 可视化)
-> Socialware: UI → Chat → Agent (Agent 交互可视化，从对话中渐进生长)
+> Traditional App: UI → API → DB (database CRUD visualization)
+> Socialware: UI → Chat → Agent (Agent interaction visualization, progressive growth from conversations)
 
-## 快速开始
+## Quick Start
 
 ```bash
-# 1. 克隆模板
+# 1. Clone the template
 git clone https://github.com/ezagent42/Socialwares.git
 cd Socialwares
 
-# 2. 配置 Claude Code 环境 (首次运行自动安装 agent-setup 插件)
+# 2. Set up Claude Code environment (agent-setup plugin auto-installs on first run)
 ./claude.sh
-# 进入 Claude Code 后执行 /agent-setup:init 完成配置，然后退出
+# Inside Claude Code, run /agent-setup:init to complete setup, then exit
 
-# 3. 安装依赖
+# 3. Install dependencies
 uv sync
 
-# 4. 创建你的 App (workspace/{room}/{app}/ 结构)
-uv run scripts/create-my-socialware.py --room my-team --app task-manager --description "任务管理"
+# 4. Create your App (workspace/{room}/{app}/ structure)
+uv run scripts/create-my-socialware.py --room my-team --app task-manager --description "Task Manager"
 
-# 5. 启动后端 API
+# 5. Start the backend API
 uv run uvicorn src.app:app --port 8001 &
 
-# 6. 启动 agent (CLI 模式，新终端)
+# 6. Start the agent (CLI mode, new terminal)
 ./agent/start.sh --role default --workspace .socialware/workspace/my-team/task-manager
 
-# 或直接用模板 (不创建 workspace)
+# Or use the template directly (without creating a workspace)
 ./agent/deploy.sh
 ./agent/start.sh --role default
 ```
 
-## 目录结构
+## Directory Structure
 
 ```
 socialwares/
-├── app/                      ← 前端 (Next.js: UI + Chat)
-├── src/                      ← 后端 (FastAPI: API + Agent SDK 启动)
-│   ├── app.py                ← FastAPI 入口
-│   └── start_agent.py        ← 生产模式 Agent 启动
-├── agent/                    ← 四原语 + 工具链
-│   ├── role/                 ← Who: Subagent 身份与权限
+├── app/                      ← Frontend (Next.js: UI + Chat)
+├── src/                      ← Backend (FastAPI: API + Agent SDK startup)
+│   ├── app.py                ← FastAPI entry point
+│   └── start_agent.py        ← SDK mode Agent startup
+├── agent/                    ← Four primitives + toolchain
+│   ├── role/                 ← Who: Subagent identity and permissions
 │   │   └── default/SOUL.md
-│   ├── scope/                ← Where: App 能力声明
+│   ├── scope/                ← Where: App capability declaration
 │   │   └── SOUL.md
-│   ├── commitment/           ← What: Eval 指标
+│   ├── commitment/           ← What: Eval metrics
 │   │   └── eval.yaml
-│   ├── flow/                 ← How: Skills (操作定义)
+│   ├── flow/                 ← How: Skills (operation definitions)
 │   │   └── check_health/SKILL.md
-│   ├── deploy.sh             ← 编译四原语 → .runtime/
-│   ├── start.sh              ← CLI 模式启动入口
-│   └── adapters/             ← 平台适配 (Claude/Codex/Kimi)
+│   ├── deploy.sh             ← Compile four primitives → .runtime/
+│   ├── start.sh              ← CLI mode startup entry point
+│   └── adapters/             ← Platform adapters (Claude/Codex/Kimi)
 ├── scripts/
-│   ├── create-my-socialware.py  ← 创建新 App 实例
-│   └── evolve.sh                ← Workspace 进化 → PR
-├── .socialware/workspace/    ← Workspace 实例
+│   ├── create-my-socialware.py  ← Create a new App instance
+│   └── evolve.sh                ← Workspace evolution → PR
+├── .socialware/workspace/    ← Workspace instances
 │   └── default/.gitkeep
-├── tests/                    ← 测试
-└── docs/                     ← 设计文档
+├── tests/                    ← Tests
+└── docs/                     ← Design documents
 ```
 
-## 四原语
+## Four Primitives
 
-每个 Socialware App 通过四个原语定义 Agent 行为。每个原语对应 `agent/` 下的一个目录：
+Each Socialware App defines Agent behavior through four primitives. Each primitive corresponds to a directory under `agent/`:
 
 ### Role — Who
 
-定义 Subagent 身份。每个角色一个子目录，包含 `SOUL.md` 描述身份和权限。
+Defines Subagent identity. Each role has its own subdirectory containing a `SOUL.md` that describes its identity and permissions.
 
 ```
 agent/role/
-├── admin/SOUL.md      ← 管理员 agent 身份
-└── reviewer/SOUL.md   ← 审核者 agent 身份
+├── admin/SOUL.md      ← Admin agent identity
+└── reviewer/SOUL.md   ← Reviewer agent identity
 ```
 
 ### Scope — Where
 
-定义 App 级别的能力声明。`SOUL.md` 描述 Agent 能做什么、边界在哪。
+Defines App-level capability declarations. `SOUL.md` describes what the Agent can do and where its boundaries are.
 
-- 对内: Agent 操作边界
-- 对外: 公开描述，供其他 Agent 读取
+- Internal: Agent operation boundaries
+- External: Public description, readable by other Agents
 
 ### Commitment — What
 
-定义可追踪的承诺和评估标准。声明式 — 描述"什么算达标"，不规定"怎么检查"。
+Defines trackable commitments and evaluation criteria. Declarative — describes "what counts as meeting the standard", without prescribing "how to check".
 
 ```yaml
 commitments:
   C1:
-    description: "客户满意度 ≥ 4.5"
+    description: "Customer satisfaction ≥ 4.5"
     metric: customer_rating
     threshold: ">=4.5"
 ```
 
-执行方式由 App 的 Biz 层决定 (API middleware / cron / eval 脚本)。
+Execution method is determined by the App's Biz layer (API middleware / cron / eval scripts).
 
 ### Flow — How
 
-定义 Agent 可执行的操作。每个操作一个子目录，包含 `SKILL.md` (Claude Code skill 格式)。
+Defines operations the Agent can execute. Each operation has its own subdirectory containing a `SKILL.md` (Claude Code skill format).
 
 ```
 agent/flow/
@@ -108,107 +108,107 @@ agent/flow/
 └── query_task/SKILL.md
 ```
 
-> 状态机由 App (`src/`) 管理，权限由 App API 检查。Flow 只定义"怎么做"。
+> State machines are managed by the App (`src/`), permissions are checked by the App API. Flow only defines "how to do it".
 
-## 工作流
+## Workflows
 
-### deploy.sh — 编译四原语
+### deploy.sh — Compile Four Primitives
 
-将 `agent/` 四原语编译为可运行的 `.runtime/` 结构：
+Compiles the `agent/` four primitives into a runnable `.runtime/` structure:
 
 ```bash
-./agent/deploy.sh                    # 编译到默认 workspace
-./agent/deploy.sh .socialware/workspace/my-app   # 编译到指定 workspace
+./agent/deploy.sh                    # Compile to default workspace
+./agent/deploy.sh .socialware/workspace/my-app   # Compile to specified workspace
 ```
 
-生成结构：
+Generated structure:
 
 ```
 .runtime/
-├── data/                    ← 共享数据 (Files/ + Sqlite/)
+├── data/                    ← Shared data (Files/ + Sqlite/)
 └── agents/
-    └── {role}/              ← 每个 role 的 $PROJECT_DIR
-        ├── .claude/skills/  ← 软连接自 agent/flow/
-        ├── SOUL.md          ← 合并: scope/SOUL.md + role/{name}/SOUL.md
-        └── eval.yaml        ← 复制自 agent/commitment/eval.yaml
+    └── {role}/              ← Each role's $PROJECT_DIR
+        ├── .claude/skills/  ← Symlinked from agent/flow/
+        ├── SOUL.md          ← Merged: scope/SOUL.md + role/{name}/SOUL.md
+        └── eval.yaml        ← Copied from agent/commitment/eval.yaml
 ```
 
-### start.sh — 启动 Agent
+### start.sh — Start Agent
 
 ```bash
-# 开发模式: Claude TUI
+# CLI mode: Claude TUI
 ./agent/start.sh --role default
 ./agent/start.sh --role admin --adapter codex
-./agent/start.sh --role admin,reviewer              # 多 role → tmux
+./agent/start.sh --role admin,reviewer              # Multiple roles → tmux
 
-# 指定 workspace
+# Specify workspace
 ./agent/start.sh --role admin --workspace .socialware/workspace/my-app
 
-# 生产模式: SDK
+# SDK mode
 python src/start_agent.py --role admin
 python src/start_agent.py --role admin --adapter codex
 ```
 
-### create-my-socialware — 创建新 App
+### create-my-socialware — Create a New App
 
 ```bash
-# 交互式
+# Interactive
 uv run scripts/create-my-socialware.py
 
-# 命令行参数
-uv run scripts/create-my-socialware.py --room my-team --app task-manager --description "任务管理"
+# Command-line arguments
+uv run scripts/create-my-socialware.py --room my-team --app task-manager --description "Task Manager"
 ```
 
-执行:
-1. 复制模板 (src/, app/, agent/ 四原语) → `.socialware/workspace/{room}/{app}/`
-2. 定制 scope/SOUL.md 和 role/SOUL.md
-3. 自动运行 deploy.sh
+What it does:
+1. Copies template (src/, app/, agent/ four primitives) → `.socialware/workspace/{room}/{app}/`
+2. Customizes scope/SOUL.md and role/SOUL.md
+3. Automatically runs deploy.sh
 
-### evolve.sh — Workspace 进化
+### evolve.sh — Workspace Evolution
 
 ```bash
-# 检查变更
+# Check changes
 ./scripts/evolve.sh my-team/task-manager --check
 
-# 创建 PR (将 workspace 改进回馈到模板)
+# Create PR (feed workspace improvements back to the template)
 ./scripts/evolve.sh my-team/task-manager --pr
 ```
 
-进化路由:
-- 修改在 `.runtime/` → workspace 特定适配，不触发 PR
-- 修改在 `agent/` → 通用改进，自动创建 PR 回 main
+Evolution routing:
+- Changes in `.runtime/` → workspace-specific adaptation, does not trigger a PR
+- Changes in `agent/` → generic improvements, automatically creates a PR back to main
 
-## 平台适配
+## Platform Adapters
 
-| 平台 | 命令 | 工作目录 | 权限跳过 |
-|------|------|---------|---------|
+| Platform | Command | Working Directory | Permission Skip |
+|----------|---------|-------------------|-----------------|
 | Claude Code | `claude` | `cd $dir` | `--dangerously-skip-permissions` |
 | Codex | `codex` | `--cd $dir` | `--full-auto` |
 | Kimi Code | `kimi` | `--work-dir $dir` | `--yolo` |
 
-## 渐进生长
+## Progressive Growth
 
 ```
-P1 定义 Agent → P2 完善 Flow → P3 完善 Commitment → P4 扩大 Scope → P5 扩充 Role
+P1 Define Agent → P2 Refine Flow → P3 Refine Commitment → P4 Expand Scope → P5 Expand Role
                                                                           ↓
-                                    P0 ← 触达单体边界 ← 创建新 App 或 /zchat 连接
+                                    P0 ← Reach monolith boundary ← Create new App or /zchat connection
 ```
 
-每次改进 materialize 为 Biz 层 (API + UI + DB) 增长。
+Each improvement materializes as growth in the Biz layer (API + UI + DB).
 
-## 开发
+## Development
 
 ```bash
-# 安装依赖
+# Install dependencies
 uv sync
 
-# 运行测试
+# Run tests
 uv run pytest -v
 
-# 启动后端
+# Start the backend
 uv run uvicorn src.app:app --port 8001
 
-# 启动 agent
+# Start the agent
 ./agent/deploy.sh && ./agent/start.sh --role default
 ```
 

@@ -1,14 +1,14 @@
-"""测试 deploy.sh 编译四原语 → .runtime/ 的完整性。
+"""Tests for deploy.sh compiling the four primitives into .runtime/.
 
-覆盖:
-- .runtime/ 目录结构正确生成
-- data/ 共享目录创建
-- per-role agents/ 目录创建
-- SOUL.md 正确合并 (scope + role)
-- flow/ skills 软连接正确指向源目录
-- commitment/eval.yaml 正确复制
-- 多次 deploy 幂等性
-- 缺失文件的容错
+Coverage:
+- .runtime/ directory structure is correctly generated
+- data/ shared directory creation
+- per-role agents/ directory creation
+- SOUL.md correctly merged (scope + role)
+- flow/ skills symlinks correctly point to source directories
+- commitment/eval.yaml correctly copied
+- Multiple deploy idempotency
+- Fault tolerance for missing files
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ DEPLOY_SH = AGENT_DIR / "deploy.sh"
 
 
 def run_deploy(workspace_path: str) -> subprocess.CompletedProcess:
-    """执行 deploy.sh 并返回结果。"""
+    """Execute deploy.sh and return the result."""
     return subprocess.run(
         [str(DEPLOY_SH), workspace_path],
         capture_output=True,
@@ -35,7 +35,7 @@ def run_deploy(workspace_path: str) -> subprocess.CompletedProcess:
 
 @pytest.fixture
 def workspace(tmp_path):
-    """创建临时 workspace 目录。"""
+    """Create a temporary workspace directory."""
     ws = tmp_path / "test-workspace"
     ws.mkdir()
     return ws
@@ -43,19 +43,19 @@ def workspace(tmp_path):
 
 @pytest.fixture
 def deployed(workspace):
-    """执行 deploy 并返回 .runtime/ 路径。"""
+    """Execute deploy and return the .runtime/ path."""
     result = run_deploy(str(workspace))
     assert result.returncode == 0, f"deploy.sh failed:\n{result.stderr}\n{result.stdout}"
     return workspace / ".runtime"
 
 
 # ---------------------------------------------------------------------------
-# 目录结构
+# Directory structure
 # ---------------------------------------------------------------------------
 
 
 class TestDirectoryStructure:
-    """测试 .runtime/ 目录结构。"""
+    """Tests for .runtime/ directory structure."""
 
     def test_data_dirs_created(self, deployed):
         assert (deployed / "data" / "Files").is_dir()
@@ -65,7 +65,7 @@ class TestDirectoryStructure:
         assert (deployed / "agents").is_dir()
 
     def test_role_dirs_match_agent_role(self, deployed):
-        """agents/ 下的子目录应与 agent/role/ 下的子目录一一对应。"""
+        """Subdirectories under agents/ should match those under agent/role/ one-to-one."""
         expected_roles = {
             d.name for d in (AGENT_DIR / "role").iterdir()
             if d.is_dir() and d.name != "__pycache__"
@@ -86,12 +86,12 @@ class TestDirectoryStructure:
 
 
 # ---------------------------------------------------------------------------
-# SOUL.md 合并
+# SOUL.md merging
 # ---------------------------------------------------------------------------
 
 
 class TestSoulMerge:
-    """测试 SOUL.md 合并: scope/SOUL.md + role/{name}/SOUL.md。"""
+    """Tests for SOUL.md merging: scope/SOUL.md + role/{name}/SOUL.md."""
 
     def test_soul_md_exists_for_each_role(self, deployed):
         for role_dir in (deployed / "agents").iterdir():
@@ -102,9 +102,9 @@ class TestSoulMerge:
             assert soul.stat().st_size > 0
 
     def test_soul_contains_scope_content(self, deployed):
-        """SOUL.md 应包含 scope/SOUL.md 的内容。"""
+        """SOUL.md should contain the content of scope/SOUL.md."""
         scope_content = (AGENT_DIR / "scope" / "SOUL.md").read_text()
-        # 取 scope 的第一行作为标志
+        # Use the first line of scope as a marker
         scope_marker = scope_content.strip().split("\n")[0]
 
         for role_dir in (deployed / "agents").iterdir():
@@ -116,7 +116,7 @@ class TestSoulMerge:
             )
 
     def test_soul_contains_role_content(self, deployed):
-        """SOUL.md 应包含该 role 的 SOUL.md 内容。"""
+        """SOUL.md should contain the role-specific SOUL.md content."""
         for role_dir in (deployed / "agents").iterdir():
             if not role_dir.is_dir():
                 continue
@@ -131,15 +131,15 @@ class TestSoulMerge:
 
 
 # ---------------------------------------------------------------------------
-# Flow Skills 软连接
+# Flow skills symlinks
 # ---------------------------------------------------------------------------
 
 
 class TestFlowSymlinks:
-    """测试 flow/ skills 软连接。"""
+    """Tests for flow/ skills symlinks."""
 
     def test_skills_are_symlinks(self, deployed):
-        """每个 skill 应该是软连接。"""
+        """Each skill should be a symlink."""
         for role_dir in (deployed / "agents").iterdir():
             if not role_dir.is_dir():
                 continue
@@ -150,7 +150,7 @@ class TestFlowSymlinks:
                 )
 
     def test_skills_point_to_agent_flow(self, deployed):
-        """软连接应指向 agent/flow/ 下的对应目录。"""
+        """Symlinks should point to the corresponding directory under agent/flow/."""
         for role_dir in (deployed / "agents").iterdir():
             if not role_dir.is_dir():
                 continue
@@ -159,7 +159,7 @@ class TestFlowSymlinks:
                 if not skill_link.is_symlink():
                     continue
                 target = Path(os.readlink(str(skill_link)))
-                # target 应该是 agent/flow/{skill_name}/ 的绝对路径
+                # target should be the absolute path of agent/flow/{skill_name}/
                 expected_source = AGENT_DIR / "flow" / skill_link.name
                 assert target.resolve() == expected_source.resolve(), (
                     f"Symlink {skill_link} points to {target}, "
@@ -167,7 +167,7 @@ class TestFlowSymlinks:
                 )
 
     def test_skills_match_flow_dirs(self, deployed):
-        """skills/ 下的条目应与 agent/flow/ 下的目录一一对应。"""
+        """Entries under skills/ should match directories under agent/flow/ one-to-one."""
         expected_skills = {
             d.name for d in (AGENT_DIR / "flow").iterdir()
             if d.is_dir() and d.name != "__pycache__"
@@ -184,7 +184,7 @@ class TestFlowSymlinks:
             )
 
     def test_skill_content_accessible_via_symlink(self, deployed):
-        """通过软连接应能读到 SKILL.md 内容。"""
+        """SKILL.md content should be readable through the symlink."""
         for role_dir in (deployed / "agents").iterdir():
             if not role_dir.is_dir():
                 continue
@@ -201,7 +201,7 @@ class TestFlowSymlinks:
 
 
 class TestCommitment:
-    """测试 commitment/eval.yaml 复制。"""
+    """Tests for commitment/eval.yaml copying."""
 
     def test_eval_yaml_copied_to_each_role(self, deployed):
         src = AGENT_DIR / "commitment" / "eval.yaml"
@@ -228,15 +228,15 @@ class TestCommitment:
 
 
 # ---------------------------------------------------------------------------
-# 幂等性
+# Idempotency
 # ---------------------------------------------------------------------------
 
 
 class TestIdempotency:
-    """测试多次 deploy 的幂等性。"""
+    """Tests for multiple deploy idempotency."""
 
     def test_double_deploy(self, workspace):
-        """连续两次 deploy 应成功且结果一致。"""
+        """Two consecutive deploys should succeed with consistent results."""
         r1 = run_deploy(str(workspace))
         assert r1.returncode == 0
 
@@ -244,12 +244,12 @@ class TestIdempotency:
         assert r2.returncode == 0
 
         runtime = workspace / ".runtime"
-        # 验证结构仍然正确
+        # Verify structure is still correct
         assert (runtime / "data" / "Files").is_dir()
         assert (runtime / "agents").is_dir()
 
     def test_deploy_updates_soul_on_change(self, workspace):
-        """修改 scope/SOUL.md 后重新 deploy，应更新 .runtime/ 中的 SOUL.md。"""
+        """After modifying scope/SOUL.md and redeploying, SOUL.md in .runtime/ should be updated."""
         r1 = run_deploy(str(workspace))
         assert r1.returncode == 0
 
@@ -269,12 +269,12 @@ class TestIdempotency:
 
 
 # ---------------------------------------------------------------------------
-# deploy.sh 基本验证
+# deploy.sh basic validation
 # ---------------------------------------------------------------------------
 
 
 class TestDeployScript:
-    """测试 deploy.sh 脚本本身。"""
+    """Tests for the deploy.sh script itself."""
 
     def test_deploy_sh_is_executable(self):
         assert os.access(str(DEPLOY_SH), os.X_OK)

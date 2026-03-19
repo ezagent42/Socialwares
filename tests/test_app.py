@@ -1,4 +1,4 @@
-"""测试 Socialware App API。"""
+"""Tests for the Socialware App API."""
 from fastapi.testclient import TestClient
 from src.app import app
 
