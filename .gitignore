@@ -28,6 +28,9 @@ out/
 *.db
 *.db-journal
 
+# Cache
+.pytest_cache/
+
 # OS
 .DS_Store
 Thumbs.db
