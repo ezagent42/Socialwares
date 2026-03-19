@@ -5,27 +5,26 @@
 # 决定是 workspace 特定适配 (.runtime/) 还是通用改进 (PR 回 main)。
 #
 # Usage:
-#   ./scripts/evolve.sh <workspace_name>
-#   ./scripts/evolve.sh my-app
-#   ./scripts/evolve.sh my-app --check    # 只检查，不执行
-#   ./scripts/evolve.sh my-app --pr       # 创建 PR
+#   ./scripts/evolve.sh <room/app>            # 检查变更
+#   ./scripts/evolve.sh <room/app> --check    # 同上
+#   ./scripts/evolve.sh <room/app> --pr       # 创建 PR
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-WORKSPACE_NAME="${1:?Usage: evolve.sh <workspace_name> [--check|--pr]}"
+WORKSPACE_PATH="${1:?Usage: evolve.sh <room/app> [--check|--pr]}"
 ACTION="${2:---check}"
 
-WORKSPACE_DIR="$REPO_ROOT/.socialware/workspace/$WORKSPACE_NAME"
+WORKSPACE_DIR="$REPO_ROOT/.socialware/workspace/$WORKSPACE_PATH"
 TEMPLATE_AGENT="$REPO_ROOT/agent"
 WORKSPACE_AGENT="$WORKSPACE_DIR/agent"
 
 if [ ! -d "$WORKSPACE_DIR" ]; then
-    echo "Error: workspace '$WORKSPACE_NAME' not found at $WORKSPACE_DIR"
+    echo "Error: workspace '$WORKSPACE_PATH' not found at $WORKSPACE_DIR"
     exit 1
 fi
 
-echo "Evolve: $WORKSPACE_NAME"
+echo "Evolve: $WORKSPACE_PATH"
 echo "  Workspace: $WORKSPACE_DIR"
 echo "  Template:  $TEMPLATE_AGENT"
 echo ""
@@ -88,9 +87,11 @@ if [ "$AGENT_CHANGES" -gt 0 ]; then
     echo "  agent/ changes detected → candidate for PR back to main"
     echo ""
 
+    # 将 room/app 中的 / 替换为 - 作为 branch 名
+    BRANCH_NAME=$(echo "$WORKSPACE_PATH" | tr '/' '-')
+
     if [ "$ACTION" = "--pr" ]; then
-        # 创建 branch 和 PR
-        BRANCH="evolve/$WORKSPACE_NAME-$(date +%Y%m%d-%H%M%S)"
+        BRANCH="evolve/$BRANCH_NAME-$(date +%Y%m%d-%H%M%S)"
         echo "Creating branch: $BRANCH"
 
         git -C "$REPO_ROOT" checkout -b "$BRANCH"
@@ -101,7 +102,6 @@ if [ "$AGENT_CHANGES" -gt 0 ]; then
             template_dir="$TEMPLATE_AGENT/$primitive"
 
             if [ -d "$workspace_dir_prim" ]; then
-                # 复制变更文件 (不覆盖 README.md)
                 rsync -av \
                     --exclude="README.md" \
                     --exclude="__pycache__" \
@@ -110,15 +110,15 @@ if [ "$AGENT_CHANGES" -gt 0 ]; then
         done
 
         git -C "$REPO_ROOT" add agent/
-        git -C "$REPO_ROOT" commit -m "evolve($WORKSPACE_NAME): update four primitives from workspace"
+        git -C "$REPO_ROOT" commit -m "evolve($WORKSPACE_PATH): update four primitives from workspace"
 
         echo ""
         echo "Branch '$BRANCH' created with changes."
         echo "To create PR:"
         echo "  git push -u origin $BRANCH"
-        echo "  gh pr create --title 'evolve($WORKSPACE_NAME): update four primitives'"
+        echo "  gh pr create --title 'evolve($WORKSPACE_PATH): update four primitives'"
     else
         echo "Run with --pr to create a branch and PR:"
-        echo "  ./scripts/evolve.sh $WORKSPACE_NAME --pr"
+        echo "  ./scripts/evolve.sh $WORKSPACE_PATH --pr"
     fi
 fi

@@ -15,13 +15,16 @@ cd Socialwares
 # 2. 安装依赖
 uv sync
 
-# 3. 创建你的 App
-uv run scripts/create-my-socialware.py --name my-app --role admin --description "我的应用"
+# 3. 创建你的 App (workspace/{room}/{app}/ 结构)
+uv run scripts/create-my-socialware.py --room my-team --app task-manager --description "任务管理"
 
-# 4. 启动 agent (开发模式)
-./agent/start.sh --role admin --workspace .socialware/workspace/my-app
+# 4. 启动后端 API
+uv run uvicorn src.app:app --port 8001 &
 
-# 5. 或直接用模板 (不创建 workspace)
+# 5. 启动 agent (CLI 模式，新终端)
+./agent/start.sh --role default --workspace .socialware/workspace/my-team/task-manager
+
+# 或直接用模板 (不创建 workspace)
 ./agent/deploy.sh
 ./agent/start.sh --role default
 ```

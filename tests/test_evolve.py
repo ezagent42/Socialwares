@@ -15,24 +15,25 @@ CREATE_SCRIPT = REPO_ROOT / "scripts" / "create-my-socialware.py"
 
 
 @pytest.fixture
-def workspace(tmp_path):
+def workspace():
     """创建一个 test workspace 用于 evolve 测试。"""
-    ws_name = "evolve-test"
-    ws_dir = REPO_ROOT / ".socialware" / "workspace" / ws_name
+    room = "evolve-room"
+    app = "evolve-app"
+    ws_path = f"{room}/{app}"
+    ws_dir = REPO_ROOT / ".socialware" / "workspace" / room / app
 
-    # 创建 workspace
     result = subprocess.run(
         [sys.executable, str(CREATE_SCRIPT),
-         "--name", ws_name, "--description", "Evolve Test", "--role", "default"],
+         "--room", room, "--app", app, "--description", "Evolve Test"],
         capture_output=True, text=True, cwd=str(REPO_ROOT),
     )
-    assert result.returncode == 0, f"Create failed: {result.stderr}"
+    assert result.returncode == 0, f"Create failed: {result.stderr}\n{result.stdout}"
 
-    yield ws_name, ws_dir
+    yield ws_path, ws_dir
 
-    # 清理
-    if ws_dir.exists():
-        shutil.rmtree(ws_dir)
+    room_dir = REPO_ROOT / ".socialware" / "workspace" / room
+    if room_dir.exists():
+        shutil.rmtree(room_dir)
 
 
 class TestEvolve:
@@ -44,10 +45,9 @@ class TestEvolve:
 
     def test_evolve_no_changes(self, workspace):
         """模板内容同步后应报告 no changes。"""
-        ws_name, ws_dir = workspace
+        ws_path, ws_dir = workspace
 
-        # create-my-socialware 会定制 SOUL.md，所以和模板不同。
-        # 手动同步回模板内容，模拟"无变更"场景。
+        # create-my-socialware 会定制 SOUL.md，手动同步回模板内容
         for primitive in ["role", "scope", "commitment", "flow"]:
             src = REPO_ROOT / "agent" / primitive
             dst = ws_dir / "agent" / primitive
@@ -56,7 +56,7 @@ class TestEvolve:
                 shutil.copytree(src, dst, ignore=shutil.ignore_patterns("README.md"))
 
         result = subprocess.run(
-            [str(EVOLVE_SH), ws_name, "--check"],
+            [str(EVOLVE_SH), ws_path, "--check"],
             capture_output=True, text=True, cwd=str(REPO_ROOT),
         )
         assert result.returncode == 0
@@ -64,14 +64,13 @@ class TestEvolve:
 
     def test_evolve_detects_agent_changes(self, workspace):
         """修改 workspace 的 agent/ 后应检测到变更。"""
-        ws_name, ws_dir = workspace
+        ws_path, ws_dir = workspace
 
-        # 修改 workspace 的 scope/SOUL.md
         soul_path = ws_dir / "agent" / "scope" / "SOUL.md"
         soul_path.write_text("# Modified\n\nThis scope has been evolved.\n")
 
         result = subprocess.run(
-            [str(EVOLVE_SH), ws_name, "--check"],
+            [str(EVOLVE_SH), ws_path, "--check"],
             capture_output=True, text=True, cwd=str(REPO_ROOT),
         )
         assert result.returncode == 0
@@ -81,7 +80,7 @@ class TestEvolve:
     def test_evolve_nonexistent_workspace(self):
         """不存在的 workspace 应报错。"""
         result = subprocess.run(
-            [str(EVOLVE_SH), "nonexistent", "--check"],
+            [str(EVOLVE_SH), "nonexistent/app", "--check"],
             capture_output=True, text=True, cwd=str(REPO_ROOT),
         )
         assert result.returncode != 0
