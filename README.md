@@ -12,16 +12,20 @@ Socialware App 脚手架模板 — Agent 交互可视化的 Web 应用。
 git clone https://github.com/ezagent42/Socialwares.git
 cd Socialwares
 
-# 2. 安装依赖
+# 2. 配置 Claude Code 环境 (首次运行自动安装 agent-setup 插件)
+./claude.sh
+# 进入 Claude Code 后执行 /agent-setup:init 完成配置，然后退出
+
+# 3. 安装依赖
 uv sync
 
-# 3. 创建你的 App (workspace/{room}/{app}/ 结构)
+# 4. 创建你的 App (workspace/{room}/{app}/ 结构)
 uv run scripts/create-my-socialware.py --room my-team --app task-manager --description "任务管理"
 
-# 4. 启动后端 API
+# 5. 启动后端 API
 uv run uvicorn src.app:app --port 8001 &
 
-# 5. 启动 agent (CLI 模式，新终端)
+# 6. 启动 agent (CLI 模式，新终端)
 ./agent/start.sh --role default --workspace .socialware/workspace/my-team/task-manager
 
 # 或直接用模板 (不创建 workspace)
