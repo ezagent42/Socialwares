@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
-"""OpenAI Agents SDK adapter."""
+"""OpenAI Codex/Agents SDK adapter.
+
+参考:
+- CLI: https://openai.github.io/codex/cli/reference
+- SDK: https://openai.github.io/openai-agents-python/
+"""
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -10,14 +16,33 @@ from base import BaseAdapter, RoleConfig
 
 
 class CodexAdapter(BaseAdapter):
-    """OpenAI Agents SDK adapter."""
+    """OpenAI Codex CLI / Agents SDK adapter."""
 
     def launch_shell(self) -> None:
-        import subprocess
-        subprocess.run(["codex", "--project-dir", str(self.config.project_dir)])
+        """通过 Codex CLI 启动。"""
+        subprocess.run([
+            "codex",
+            "--cd", str(self.config.project_dir),
+            "--full-auto",
+        ])
 
     def launch_sdk(self) -> None:
-        print(f"[Codex SDK] Mock — would launch {self.config.name}")
+        """通过 OpenAI Agents SDK 程序化启动。"""
+        print(f"[Codex SDK] Launching {self.config.name}")
+        print(f"[Codex SDK] Working dir: {self.config.project_dir}")
+
+        try:
+            from agents import Agent, Runner
+
+            agent = Agent(
+                name=self.config.name,
+                instructions=self.config.soul,
+            )
+            result = Runner.run_sync(agent, "You are ready. Wait for instructions.")
+            print(result.final_output)
+        except ImportError:
+            print("[Codex SDK] openai-agents not installed.")
+            print("  Install: pip install openai-agents")
 
 
 if __name__ == "__main__":

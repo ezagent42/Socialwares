@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
-"""KimiCode SDK adapter."""
+"""Kimi Code SDK adapter.
+
+参考:
+- CLI: https://moonshotai.github.io/kimi-cli/en/reference/kimi-command.html
+"""
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -10,13 +15,20 @@ from base import BaseAdapter, RoleConfig
 
 
 class KimiCodeAdapter(BaseAdapter):
-    """KimiCode SDK adapter."""
+    """Kimi Code CLI adapter."""
 
     def launch_shell(self) -> None:
-        print(f"[KimiCode] Shell mode not available yet")
+        """通过 Kimi CLI 启动。"""
+        subprocess.run([
+            "kimi",
+            "--work-dir", str(self.config.project_dir),
+            "--yolo",
+        ])
 
     def launch_sdk(self) -> None:
-        print(f"[KimiCode SDK] Mock — would launch {self.config.name}")
+        """Kimi Code 暂无独立 SDK，fallback 到 CLI。"""
+        print(f"[Kimi] Launching {self.config.name} via CLI")
+        self.launch_shell()
 
 
 if __name__ == "__main__":
@@ -25,4 +37,4 @@ if __name__ == "__main__":
     parser.add_argument("project_dir")
     args = parser.parse_args()
     config = RoleConfig.from_runtime(args.project_dir)
-    KimiCodeAdapter(config).launch_sdk()
+    KimiCodeAdapter(config).launch_shell()

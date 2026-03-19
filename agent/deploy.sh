@@ -10,7 +10,11 @@ REPO_ROOT="$(cd "$AGENT_DIR/.." && pwd)"
 
 # 默认 workspace
 WORKSPACE="${1:-.socialware/workspace/default}"
-RUNTIME_DIR="$REPO_ROOT/$WORKSPACE/.runtime"
+if [[ "$WORKSPACE" = /* ]]; then
+    RUNTIME_DIR="$WORKSPACE/.runtime"
+else
+    RUNTIME_DIR="$REPO_ROOT/$WORKSPACE/.runtime"
+fi
 
 echo "Deploying four primitives → $RUNTIME_DIR"
 echo ""

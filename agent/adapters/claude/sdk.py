@@ -3,9 +3,15 @@
 
 Launches agent programmatically using Claude Agent SDK.
 Used by src/start_agent.py for production deployment.
+
+参考:
+- CLI: https://docs.anthropic.com/en/docs/claude-code/cli-reference
+- SDK: https://docs.anthropic.com/en/docs/claude-code/sdk-reference
 """
 from __future__ import annotations
 
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -17,28 +23,40 @@ class ClaudeAdapter(BaseAdapter):
     """Claude Agent SDK adapter."""
 
     def launch_shell(self) -> None:
-        import subprocess
-        subprocess.run([
-            "claude",
-            "--project-dir", str(self.config.project_dir),
-            "--permission-mode", "bypassPermissions",
-        ])
+        """通过 CLI 启动 Claude Code TUI。"""
+        cmd = ["claude", "--dangerously-skip-permissions"]
+
+        soul_path = self.config.project_dir / "SOUL.md"
+        if soul_path.exists():
+            cmd.extend(["--append-system-prompt-file", str(soul_path)])
+
+        subprocess.run(cmd, cwd=str(self.config.project_dir))
 
     def launch_sdk(self) -> None:
+        """通过 Claude Agent SDK 程序化启动。"""
         print(f"[Claude SDK] Launching {self.config.name}")
-        print(f"[Claude SDK] PROJECT_DIR: {self.config.project_dir}")
+        print(f"[Claude SDK] Working dir: {self.config.project_dir}")
         print(f"[Claude SDK] SOUL.md: {len(self.config.soul)} chars")
 
-        # TODO: Replace with actual Claude Agent SDK
-        # from claude_agent_sdk import Agent
-        # agent = Agent(
-        #     model="claude-sonnet-4-6",
-        #     system_prompt=self.config.soul,
-        #     project_dir=str(self.config.project_dir),
-        # )
-        # agent.run()
+        # Claude Agent SDK 使用 claude_code_sdk
+        # 参考: https://docs.anthropic.com/en/docs/claude-code/sdk-reference
+        try:
+            from claude_code_sdk import query
 
-        print("[Claude SDK] Mock mode — SDK not installed yet")
+            result = query(
+                prompt="You are ready. Wait for instructions.",
+                options={
+                    "cwd": str(self.config.project_dir),
+                    "system_prompt": self.config.soul,
+                    "permission_mode": "plan",
+                },
+            )
+            print(result)
+        except ImportError:
+            print("[Claude SDK] claude_code_sdk not installed.")
+            print("  Install: pip install claude-code-sdk")
+            print(f"  Falling back to CLI mode...")
+            self.launch_shell()
 
 
 if __name__ == "__main__":

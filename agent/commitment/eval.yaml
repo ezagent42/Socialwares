@@ -1,15 +1,12 @@
-commitments:
-  C1:
-    description: "审核者在任务提交后 72h 内完成审核"
-    trigger_state: submitted
-    deadline_hours: 72
-    debtor_role: reviewer
-    creditor_role: submitter
-    escalation_role: admin
+# Commitment 示例 — 在此定义 Eval 指标和 SLA
+#
+# commitments:
+#   C1:
+#     description: "描述承诺内容"
+#     trigger_state: submitted
+#     deadline_hours: 72
+#     debtor_role: reviewer
+#     creditor_role: submitter
+#     escalation_role: admin
 
-  C2:
-    description: "管理员在 C1 违约后 24h 内 force_resolve"
-    trigger: C1_violation
-    deadline_hours: 24
-    debtor_role: admin
-    creditor_role: submitter
+commitments: {}
