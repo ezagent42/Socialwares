@@ -15,32 +15,33 @@ cd Socialwares
 # 2. Install dependencies
 uv sync
 
-# 3. Create your App (workspace/{room}/{app}/ structure)
+# 3. Create your App (copies template + auto-deploys)
 uv run scripts/create-my-socialware.py --room my-team --app task-manager --description "Task Manager"
 
 # 4. Enter your workspace (all development happens here)
 cd .socialware/workspace/my-team/task-manager
 
-# 5. Edit four primitives
+# 5. Start agent (ready to use — create already deployed)
+./agent/start.sh --role default
+
+# 6. Edit four primitives as you develop
 vim agent/scope/SOUL.md          # what your app can do
 vim agent/role/default/SOUL.md   # agent identity
 vim agent/flow/                  # add skills
 vim agent/flow/flow.yaml         # register actions per role
 
-# 6. Deploy and start
-./agent/deploy.sh                # compile agent/ → .runtime/
-./agent/start.sh --role default  # launch agent
+# 7. Start again (auto-deploys if agent/ changed)
+./agent/start.sh --role default
 
-# 7. Set up Claude Code environment (via dev role)
-./agent/start.sh --role dev      # start dev agent
-# In Claude Code: say "setup claude" → installs agent-setup plugin + settings
+# 8. Set up Claude Code environment (via dev role)
+./agent/start.sh --role dev
+# In Claude Code: say "setup claude" → installs agent-setup plugin
 ```
 
 ### Quick-Try (without creating a workspace)
 
 ```bash
-# From repo root — uses the template directly in default workspace
-./agent/deploy.sh
+# From repo root — auto-deploys on first start
 ./agent/start.sh --role default
 ```
 
@@ -141,10 +142,12 @@ agent/flow/
 ### deploy.sh — Compile Four Primitives
 
 Compiles the `agent/` four primitives into a runnable `.runtime/` structure.
+Idempotent: detects added/removed roles and skills. Safe to run multiple times.
 Workspace-local: reads `agent/` from its own directory.
 
 ```bash
-./agent/deploy.sh
+./agent/deploy.sh                # manual deploy
+# Or just run start.sh — it auto-deploys if agent/ changed
 ```
 
 Generated structure:
@@ -165,6 +168,7 @@ Generated structure:
 
 ### start.sh — Start Agent
 
+Auto-deploys if `.runtime/` is missing or `agent/` has been modified.
 Workspace-local: `cd` into your workspace first.
 
 ```bash
@@ -185,10 +189,12 @@ uv run scripts/create-my-socialware.py --room my-team --app task-manager --descr
 ```
 
 What it does:
-1. Copies template (src/, app/, agent/ + deploy.sh + start.sh + adapters/) → `.socialware/workspace/{room}/{app}/`
+1. Copies template (src/, app/, agent/, pyproject.toml) → `.socialware/workspace/{room}/{app}/`
 2. Customizes scope/SOUL.md and role/SOUL.md with your app name
+3. Runs initial deploy → `.runtime/` ready to use
 
-Then `cd` into the workspace and work there. deploy/start are workspace-local.
+Fails if workspace already exists (won't overwrite).
+Then `cd` into the workspace and work there — fully self-contained.
 
 ### claude.sh — Claude Code Environment Setup
 
@@ -260,8 +266,8 @@ uv run pytest -v
 # Start the backend
 uv run uvicorn src.app:app --port 8001
 
-# Deploy and start agent (from workspace or repo root)
-./agent/deploy.sh && ./agent/start.sh --role default
+# Start agent (auto-deploys if needed)
+./agent/start.sh --role default
 ```
 
 ## License

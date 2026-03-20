@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # deploy.sh — Compile four primitives -> .runtime/
 #
+# Idempotent: safe to run multiple times. Detects added/removed roles and skills.
 # Reads agent/ from the SAME directory as this script (workspace-local).
 # Reads flow.yaml to determine which actions each role can access.
-# Generates an isolated $PROJECT_DIR for each role.
 #
 # Usage (from within a workspace or repo root):
 #   ./agent/deploy.sh
@@ -23,9 +23,19 @@ echo ""
 mkdir -p "$RUNTIME_DIR/data/Files"
 mkdir -p "$RUNTIME_DIR/data/Sqlite"
 
-# 2. Parse flow.yaml to build role→actions mapping
-# If flow.yaml exists, only symlink actions allowed for each role.
-# If no flow.yaml, symlink all actions for all roles (backward compatible).
+# 2. Clean up removed roles — delete .runtime/agents/{role}/ if agent/role/{role}/ no longer exists
+if [ -d "$RUNTIME_DIR/agents" ]; then
+    for old_role_dir in "$RUNTIME_DIR"/agents/*/; do
+        [ -d "$old_role_dir" ] || continue
+        old_role_name=$(basename "$old_role_dir")
+        if [ ! -d "$AGENT_DIR/role/$old_role_name" ]; then
+            echo "  Removing deleted role: $old_role_name"
+            rm -rf "$old_role_dir"
+        fi
+    done
+fi
+
+# 3. Parse flow.yaml to build role→actions mapping
 get_actions_for_role() {
     local role_name="$1"
     if [ ! -f "$FLOW_YAML" ]; then
@@ -36,10 +46,18 @@ get_actions_for_role() {
         return
     fi
 
-    # Parse flow.yaml with Python for reliable YAML handling
     python3 - "$FLOW_YAML" "$role_name" << 'PYEOF'
-import sys, yaml
-from pathlib import Path
+import sys
+try:
+    import yaml
+except ImportError:
+    # pyyaml not installed — fallback to all actions
+    import os
+    flow_dir = os.path.dirname(sys.argv[1])
+    for d in os.listdir(flow_dir):
+        if os.path.isdir(os.path.join(flow_dir, d)):
+            print(d)
+    sys.exit(0)
 
 flow_yaml = sys.argv[1]
 role_name = sys.argv[2]
@@ -49,7 +67,6 @@ with open(flow_yaml) as f:
 
 actions = set()
 
-# Collect actions from state machine flows
 for flow_id, flow_def in (data.get("flows") or {}).items():
     if not isinstance(flow_def, dict):
         continue
@@ -60,7 +77,6 @@ for flow_id, flow_def in (data.get("flows") or {}).items():
         if "any" in roles or role_name in roles:
             actions.add(t["action"])
 
-# Collect direct actions
 for da in data.get("direct_actions", []):
     roles = da.get("role", [])
     if isinstance(roles, str):
@@ -73,7 +89,7 @@ for a in sorted(actions):
 PYEOF
 }
 
-# 3. Generate an isolated PROJECT_DIR for each role
+# 4. Generate an isolated PROJECT_DIR for each role
 for role_dir in "$AGENT_DIR"/role/*/; do
     [ -d "$role_dir" ] || continue
     role_name=$(basename "$role_dir")
@@ -81,7 +97,6 @@ for role_dir in "$AGENT_DIR"/role/*/; do
 
     echo "  Role: $role_name"
 
-    # Create directories
     mkdir -p "$role_runtime/.claude/skills"
     mkdir -p "$role_runtime/.claude/hooks"
 
@@ -97,7 +112,7 @@ for role_dir in "$AGENT_DIR"/role/*/; do
     # Get allowed actions for this role
     allowed_actions=$(get_actions_for_role "$role_name")
 
-    # Clear old skills
+    # Clear old skills (clean slate for idempotent rebuild)
     rm -rf "$role_runtime/.claude/skills/"*
 
     # Symlink allowed skills from flow/ (relative paths for portability)
@@ -106,7 +121,6 @@ for role_dir in "$AGENT_DIR"/role/*/; do
         [ -d "$skill_dir" ] || continue
         skill_name=$(basename "$skill_dir")
 
-        # Check if this action is allowed for this role
         if [ -n "$allowed_actions" ]; then
             echo "$allowed_actions" | grep -qx "$skill_name" || continue
         fi
