@@ -271,3 +271,38 @@ class TestDeployScript:
     def test_deploy_output_mentions_complete(self, workspace):
         result = run_deploy(workspace)
         assert "Deploy complete" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Hooks generated
+# ---------------------------------------------------------------------------
+
+
+class TestHooksGenerated:
+    """Test that deploy generates runtime hooks."""
+
+    def test_log_action_hook_exists(self, deployed, workspace):
+        for role_dir in (deployed / "agents").iterdir():
+            if not role_dir.is_dir():
+                continue
+            hook = role_dir / ".claude" / "hooks" / "log_action.sh"
+            assert hook.exists(), f"Missing log_action.sh for {role_dir.name}"
+            assert os.access(str(hook), os.X_OK), f"log_action.sh not executable for {role_dir.name}"
+
+    def test_check_violations_hook_exists(self, deployed, workspace):
+        for role_dir in (deployed / "agents").iterdir():
+            if not role_dir.is_dir():
+                continue
+            hook = role_dir / ".claude" / "hooks" / "check_violations.sh"
+            assert hook.exists(), f"Missing check_violations.sh for {role_dir.name}"
+            assert os.access(str(hook), os.X_OK), f"check_violations.sh not executable for {role_dir.name}"
+
+    def test_constraints_yaml_copied(self, deployed, workspace):
+        src = workspace / "agent" / "commitment" / "constraints.yaml"
+        if not src.exists():
+            pytest.skip("No constraints.yaml")
+        for role_dir in (deployed / "agents").iterdir():
+            if not role_dir.is_dir():
+                continue
+            dest = role_dir / "constraints.yaml"
+            assert dest.exists(), f"Missing constraints.yaml for {role_dir.name}"

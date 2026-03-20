@@ -119,7 +119,24 @@ Use the dev role to configure Claude Code plugins and settings:
 # This installs agent-setup plugin into .runtime/agents/dev/.claude/
 ```
 
-## Step 9: Use Different Platforms
+## Step 9: Use the Evolver
+
+After your app has been running and has some data:
+
+```bash
+./agent/start.sh --role evolver
+```
+
+```
+You: "diagnose"     → scan runtime data for problems
+You: "evaluate"     → run eval cases, check score
+You: "improve"      → fix issues based on evidence
+You: "auto-optimize" → automated improvement loop
+```
+
+See [docs/guides/using-evolver.md](../docs/guides/using-evolver.md) for full guide.
+
+## Step 10: Use Different Platforms
 
 ```bash
 ./agent/start.sh --role default                    # Claude Code (default)
@@ -127,20 +144,20 @@ Use the dev role to configure Claude Code plugins and settings:
 ./agent/start.sh --role default --adapter kimicode # Kimi Code
 ```
 
-## Step 10: Multi-Role
+## Step 11: Multi-Role
 
 ```bash
 # Multiple roles in tmux panes
 ./agent/start.sh --role default,dev
 ```
 
-## Step 11: Start Backend API
+## Step 12: Start Backend API
 
 ```bash
 uv run uvicorn src.app:app --port 8001
 ```
 
-## Step 12: Feed Improvements Back
+## Step 13: Feed Improvements Back
 
 When you improve Agent config in your workspace, you can PR it back to the template:
 

@@ -24,7 +24,7 @@ def scan_conversations(data_dir: Path) -> dict:
     """Scan conversation logs for patterns."""
     conv_dir = data_dir / "conversations"
     if not conv_dir.exists():
-        return {"total": 0, "errors": [], "tools": Counter()}
+        return {"total": 0, "errors": [], "tools": {}, "roles": {}, "error_rate": 0}
 
     total = 0
     errors = []

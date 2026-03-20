@@ -101,17 +101,7 @@ Defines the App's capability boundary and public identity via `SOUL.md`.
 
 ### Commitment — What
 
-Defines trackable commitments and evaluation criteria. Declarative — describes "what counts as meeting the standard", without prescribing "how to check".
-
-```yaml
-commitments:
-  C1:
-    description: "Customer satisfaction >= 4.5"
-    metric: customer_rating
-    threshold: ">=4.5"
-```
-
-Execution method is determined by the App's Biz layer (API middleware / cron / eval scripts).
+Defines constraints on flow transitions. Binds to state machine edges — enforces time, quality, or certainty requirements.
 
 ### Flow — How
 
@@ -244,6 +234,37 @@ python src/start_agent.py --role default --adapter codex
 2. `shell.sh` receives `$PROJECT_DIR` as first argument, `cd` into it, launch CLI
 3. `sdk.py` extends `BaseAdapter` from `agent/adapters/base.py`
 4. Use with `--adapter {name}`
+
+## Evolver
+
+Built-in role for improving your app based on runtime evidence. See [docs/guides/using-evolver.md](docs/guides/using-evolver.md).
+
+```bash
+./agent/start.sh --role evolver
+# "diagnose" → analyze problems
+# "evaluate" → run eval cases
+# "improve"  → apply fixes
+# "auto-optimize" → automated loop
+```
+
+## Constraints (Commitment)
+
+Constraints bind to flow edges (state machine transitions):
+
+```yaml
+# agent/commitment/constraints.yaml
+transition_constraints:
+  C1:
+    on: { flow: F1, from: submitted, action: review }
+    type: time
+    deadline: 72h
+    on_violation:
+      trigger_action: force_resolve
+      trigger_role: admin
+```
+
+Violations are queued in `.runtime/data/violations/` and reported on session start.
+See [agent/commitment/README.md](agent/commitment/README.md) for detection implementation guide.
 
 ## Progressive Growth
 
