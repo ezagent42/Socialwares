@@ -6,8 +6,30 @@ and launches the agent using the platform's SDK or CLI.
 from __future__ import annotations
 
 import abc
+import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
+
+
+def log_conversation(project_dir: Path, data: dict) -> None:
+    """Log agent interaction to .runtime/data/conversations/.
+
+    Called by SDK adapters during launch_sdk().
+    Shell mode uses PostToolUse hook instead.
+    """
+    # project_dir is .runtime/agents/{role}/
+    # conversations dir is .runtime/data/conversations/
+    log_dir = project_dir.parent.parent / "data" / "conversations"
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "role": project_dir.name,
+        **data,
+    }
+    with open(log_dir / "current.jsonl", "a") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
 @dataclass

@@ -9,7 +9,7 @@ Coverage:
 - per-role agents/ directory creation
 - SOUL.md correctly merged (scope + role)
 - flow/ skills symlinks correctly point to source directories
-- commitment/eval.yaml correctly copied
+- commitment/constraints.yaml correctly copied
 - Multiple deploy idempotency
 """
 from __future__ import annotations
@@ -202,29 +202,29 @@ class TestFlowSymlinks:
 
 
 class TestCommitment:
-    """Test commitment/eval.yaml copy."""
+    """Test commitment/constraints.yaml copy."""
 
     def test_eval_yaml_copied_to_each_role(self, deployed, workspace):
-        src = workspace / "agent" / "commitment" / "eval.yaml"
+        src = workspace / "agent" / "commitment" / "constraints.yaml"
         if not src.exists():
-            pytest.skip("No eval.yaml in agent/commitment/")
+            pytest.skip("No constraints.yaml in agent/commitment/")
 
         for role_dir in (deployed / "agents").iterdir():
             if not role_dir.is_dir():
                 continue
-            dest = role_dir / "eval.yaml"
+            dest = role_dir / "constraints.yaml"
             assert dest.exists()
 
     def test_eval_yaml_content_matches(self, deployed, workspace):
-        src = workspace / "agent" / "commitment" / "eval.yaml"
+        src = workspace / "agent" / "commitment" / "constraints.yaml"
         if not src.exists():
-            pytest.skip("No eval.yaml")
+            pytest.skip("No constraints.yaml")
 
         src_content = src.read_text()
         for role_dir in (deployed / "agents").iterdir():
             if not role_dir.is_dir():
                 continue
-            dest_content = (role_dir / "eval.yaml").read_text()
+            dest_content = (role_dir / "constraints.yaml").read_text()
             assert dest_content == src_content
 
 

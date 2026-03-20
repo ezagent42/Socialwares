@@ -133,9 +133,40 @@ for role_dir in "$AGENT_DIR"/role/*/; do
         skill_count=$((skill_count + 1))
     done
 
-    # Copy commitment eval configuration
-    if [ -f "$AGENT_DIR/commitment/eval.yaml" ]; then
-        cp "$AGENT_DIR/commitment/eval.yaml" "$role_runtime/eval.yaml"
+    # Generate PostToolUse conversation logging hook
+    cat > "$role_runtime/.claude/hooks/log_action.sh" << 'HOOKEOF'
+#!/usr/bin/env bash
+# PostToolUse hook — log tool calls to .runtime/data/conversations/
+set -euo pipefail
+INPUT=$(cat)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Navigate from .claude/hooks/ up to .runtime/
+RUNTIME_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+DATA_DIR="$(cd "$RUNTIME_DIR/../.." && pwd)/data/conversations"
+mkdir -p "$DATA_DIR"
+
+TIMESTAMP=$(python3 -c "from datetime import datetime, timezone; print(datetime.now(timezone.utc).isoformat())")
+TOOL_NAME=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tool_name','unknown'))" 2>/dev/null || echo "unknown")
+
+python3 -c "
+import json, sys
+data = json.loads(sys.stdin.read())
+entry = {
+    'timestamp': '$TIMESTAMP',
+    'role': '$(basename \"$RUNTIME_DIR\")',
+    'type': 'tool_call',
+    'tool': data.get('tool_name', 'unknown'),
+    'input': data.get('tool_input', {}),
+}
+with open('$DATA_DIR/current.jsonl', 'a') as f:
+    f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+" <<< "$INPUT" 2>/dev/null || true
+HOOKEOF
+    chmod +x "$role_runtime/.claude/hooks/log_action.sh"
+
+    # Copy commitment constraints configuration
+    if [ -f "$AGENT_DIR/commitment/constraints.yaml" ]; then
+        cp "$AGENT_DIR/commitment/constraints.yaml" "$role_runtime/constraints.yaml"
     fi
 
     # Copy flow.yaml for reference
