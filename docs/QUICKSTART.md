@@ -33,8 +33,7 @@ All Agent behavior is defined through four primitives in `agent/`:
 From the repo root — uses the template directly without creating a workspace:
 
 ```bash
-./agent/deploy.sh                # compile four primitives → .runtime/
-./agent/start.sh --role default  # launch agent (Claude Code TUI)
+./agent/start.sh --role default  # auto-deploys on first run, launches Claude Code TUI
 ```
 
 Try saying: "check health" — the agent runs the check_health skill.
@@ -49,8 +48,9 @@ uv run scripts/create-my-socialware.py \
     --description "Task management app"
 ```
 
-This copies the template into `.socialware/workspace/my-team/task-manager/`.
-**Does NOT deploy** — you edit four primitives first.
+This copies the template into `.socialware/workspace/my-team/task-manager/`,
+customizes SOUL.md with your app name, and runs initial deploy.
+Fails if workspace already exists (won't overwrite).
 
 ## Step 5: Enter Your Workspace
 
@@ -100,14 +100,14 @@ direct_actions:
   - { action: create_task,   role: [default], description: "Create a new task" }  # ← add this
 ```
 
-## Step 7: Deploy and Start
+## Step 7: Start Again
 
 ```bash
-./agent/deploy.sh                # compile agent/ → .runtime/
-./agent/start.sh --role default  # launch agent
+./agent/start.sh --role default  # auto-detects changes, re-deploys if needed
 ```
 
-After editing four primitives, always re-deploy before starting.
+`start.sh` checks if `agent/` has been modified since last deploy and auto-redeploys.
+You can also run `./agent/deploy.sh` manually to see what gets compiled.
 
 ## Step 8: Set Up Claude Code Environment
 
@@ -156,8 +156,8 @@ diff -rq agent/ ../../../agent/ --exclude=README.md --exclude=__pycache__
 ### Q: deploy.sh reports "No role found"
 Ensure `agent/role/` has at least one role directory (e.g. `default/`) with a `SOUL.md`.
 
-### Q: start.sh says ".runtime/ not found"
-Run `./agent/deploy.sh` first. start.sh does not auto-deploy.
+### Q: start.sh seems slow on first run
+It auto-deploys on first run (or when `agent/` has changed). Subsequent starts are fast.
 
 ### Q: How to add a new role?
 ```bash

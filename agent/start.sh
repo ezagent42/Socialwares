@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # start.sh — Launch agent from the current workspace
 #
+# Auto-deploys if .runtime/ is missing or agent/ has been modified.
 # Works relative to its own location: agent/ in the same directory tree.
-# No --workspace flag needed — just cd into your workspace and run.
 #
 # Usage (from within a workspace):
 #   ./agent/start.sh --role default
@@ -27,11 +27,30 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# 1. Check if .runtime/ exists; prompt to deploy if not
-if [ ! -d "$RUNTIME_DIR/agents" ]; then
-    echo "No .runtime/ found at $RUNTIME_DIR"
-    echo "Run ./agent/deploy.sh first."
-    exit 1
+# 1. Auto-deploy if .runtime/ missing or agent/ newer than .runtime/
+# Uses python3 for cross-platform compatibility (Windows/WSL/macOS)
+needs_deploy=$(python3 -c "
+import os, sys
+from pathlib import Path
+runtime = Path('$RUNTIME_DIR')
+agent = Path('$AGENT_DIR')
+if not (runtime / 'agents').is_dir():
+    print('true')
+    sys.exit()
+runtime_mtime = runtime.stat().st_mtime
+for p in agent.rglob('*'):
+    if '__pycache__' in str(p):
+        continue
+    if p.stat().st_mtime > runtime_mtime:
+        print('true')
+        sys.exit()
+print('false')
+")
+
+if [ "$needs_deploy" = true ]; then
+    echo "Detected changes. Running deploy.sh..."
+    "$AGENT_DIR/deploy.sh"
+    echo ""
 fi
 
 # 2. Determine which roles to start
@@ -59,7 +78,6 @@ fi
 
 # 5. Launch
 if [ ${#ROLES[@]} -eq 1 ]; then
-    # Single role — launch directly
     role_name="${ROLES[0]}"
     project_dir="$RUNTIME_DIR/agents/$role_name"
 
@@ -79,7 +97,6 @@ if [ ${#ROLES[@]} -eq 1 ]; then
         exit 1
     fi
 else
-    # Multiple roles — tmux multi-pane
     SESSION="socialware-$(date +%s)"
     echo "Starting ${#ROLES[@]} roles in tmux session: $SESSION"
 

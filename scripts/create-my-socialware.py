@@ -2,8 +2,8 @@
 """create-my-socialware — Create a new Socialware App instance.
 
 Similar to mix phx.new or npx create-next-app.
-Copies the template to .socialware/workspace/{room}/{app}/.
-Does NOT deploy — the developer does that after editing four primitives.
+Copies the template to .socialware/workspace/{room}/{app}/,
+customizes four primitives, and runs initial deploy.
 
 Usage:
     uv run scripts/create-my-socialware.py
@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -68,7 +69,6 @@ def create_workspace(room: str, app: str, description: str) -> Path:
             shutil.copytree(prim_src, prim_dst, ignore=shutil.ignore_patterns("__pycache__", "README.md"))
             print(f"  Copied agent/{primitive}/")
 
-    # Copy deploy.sh, start.sh
     for script in ["deploy.sh", "start.sh"]:
         script_src = agent_src / script
         script_dst = agent_dst / script
@@ -76,12 +76,22 @@ def create_workspace(room: str, app: str, description: str) -> Path:
             shutil.copy2(script_src, script_dst)
     print(f"  Copied agent/deploy.sh, agent/start.sh")
 
-    # Copy adapters/
     adapters_src = agent_src / "adapters"
     adapters_dst = agent_dst / "adapters"
     if adapters_src.exists():
         shutil.copytree(adapters_src, adapters_dst, ignore=shutil.ignore_patterns("__pycache__"))
         print(f"  Copied agent/adapters/")
+
+    # Copy pyproject.toml for independent dependency management
+    pyproject_src = REPO_ROOT / "pyproject.toml"
+    if pyproject_src.exists():
+        pyproject_dst = workspace_dir / "pyproject.toml"
+        shutil.copy2(pyproject_src, pyproject_dst)
+        # Rewrite project name
+        content = pyproject_dst.read_text()
+        content = content.replace('name = "socialwares"', f'name = "{app}"')
+        pyproject_dst.write_text(content)
+        print(f"  Copied pyproject.toml (name: {app})")
 
     return workspace_dir
 
@@ -89,7 +99,6 @@ def create_workspace(room: str, app: str, description: str) -> Path:
 def customize_workspace(workspace_dir: Path, app: str, description: str) -> None:
     """Customize the four primitives in the workspace."""
 
-    # Rewrite scope/SOUL.md
     scope_soul = workspace_dir / "agent" / "scope" / "SOUL.md"
     scope_soul.write_text(f"""# {app}
 
@@ -106,7 +115,6 @@ def customize_workspace(workspace_dir: Path, app: str, description: str) -> None
 """)
     print(f"  Customized agent/scope/SOUL.md")
 
-    # Rewrite default role SOUL.md
     role_soul = workspace_dir / "agent" / "role" / "default" / "SOUL.md"
     if role_soul.exists():
         role_soul.write_text(f"""# Default Agent
@@ -123,6 +131,28 @@ You are the Agent for {app}.
 Operate {app} according to user instructions.
 """)
         print(f"  Customized agent/role/default/SOUL.md")
+
+
+def run_deploy(workspace_dir: Path) -> bool:
+    """Run deploy.sh from within the workspace."""
+    deploy_sh = workspace_dir / "agent" / "deploy.sh"
+    if not deploy_sh.exists():
+        print(f"  Warning: deploy.sh not found, skipping initial deploy")
+        return False
+
+    result = subprocess.run(
+        [str(deploy_sh)],
+        capture_output=True,
+        text=True,
+        cwd=str(workspace_dir),
+    )
+
+    if result.returncode == 0:
+        print(f"  Initial deploy complete")
+        return True
+    else:
+        print(f"  Deploy failed: {result.stderr}")
+        return False
 
 
 def main() -> None:
@@ -151,6 +181,10 @@ def main() -> None:
 
     # 2. Customize
     customize_workspace(workspace_dir, app, description)
+    print()
+
+    # 3. Initial deploy
+    run_deploy(workspace_dir)
 
     ws_rel = f".socialware/workspace/{room}/{app}"
     print()
@@ -163,10 +197,9 @@ def main() -> None:
     print(f"  # Edit four primitives")
     print(f"  vim agent/scope/SOUL.md")
     print(f"  vim agent/role/default/SOUL.md")
-    print(f"  vim agent/flow/")
+    print(f"  vim agent/flow/flow.yaml")
     print()
-    print(f"  # Deploy and start")
-    print(f"  ./agent/deploy.sh")
+    print(f"  # Start agent (auto-deploys if agent/ changed)")
     print(f"  ./agent/start.sh --role default")
     print()
 

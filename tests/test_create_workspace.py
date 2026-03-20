@@ -68,19 +68,14 @@ class TestCreateWorkspace:
             role_soul = (workspace_dir / "agent" / "role" / "default" / "SOUL.md").read_text()
             assert app in role_soul
 
-            # Check NO auto-deploy (no .runtime/)
-            assert not (workspace_dir / ".runtime").exists(), \
-                ".runtime/ should not exist — create only copies, does not deploy"
-
-            # Verify deploy works from within workspace
-            deploy_result = subprocess.run(
-                [str(workspace_dir / "agent" / "deploy.sh")],
-                capture_output=True,
-                text=True,
-                cwd=str(workspace_dir),
-            )
-            assert deploy_result.returncode == 0
+            # Check auto-deploy ran (.runtime/ should exist)
+            assert (workspace_dir / ".runtime").is_dir(), \
+                ".runtime/ should exist — create runs initial deploy"
             assert (workspace_dir / ".runtime" / "agents" / "default").is_dir()
+
+            # Check pyproject.toml copied with app name
+            pyproject = (workspace_dir / "pyproject.toml").read_text()
+            assert app in pyproject
 
         finally:
             room_dir = REPO_ROOT / ".socialware" / "workspace" / room

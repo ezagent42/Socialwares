@@ -245,7 +245,7 @@ if [ -z "$TMUX" ]; then
     fi
 
     # --- Prompt for session name ---
-    UUID_SHORT=$(uuidgen | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
+    UUID_SHORT=$(python3 -c "import uuid; print(str(uuid.uuid4())[:8])")
     case "$MODE" in
         1)
             DEFAULT_NAME="${SESSION_PREFIX}-$(date +%m%d)-${UUID_SHORT}"
@@ -311,7 +311,7 @@ if [ -z "$RUN_MODE" ]; then
         exit 1
     fi
 
-    UUID_SHORT=$(uuidgen | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
+    UUID_SHORT=$(python3 -c "import uuid; print(str(uuid.uuid4())[:8])")
     case "$RUN_MODE" in
         1)
             # No extra name needed for simple interactive
