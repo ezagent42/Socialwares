@@ -140,16 +140,15 @@ Use the dev role to configure Claude Code plugins and settings:
 uv run uvicorn src.app:app --port 8001
 ```
 
-## Step 12: Evolve
+## Step 12: Feed Improvements Back
 
-When you improve Agent config in your workspace, feed it back to the template:
+When you improve Agent config in your workspace, you can PR it back to the template:
 
 ```bash
-# Check what changed vs template
-./scripts/evolve.sh check my-team/task-manager
+# Compare your workspace agent/ with the template
+diff -rq agent/ ../../../agent/ --exclude=README.md --exclude=__pycache__
 
-# Create PR back to main
-./scripts/evolve.sh my-team/task-manager --pr
+# If improvements are general, create a branch and PR manually
 ```
 
 ## FAQ

@@ -29,16 +29,15 @@ Inside Claude Code, run `/agent-setup:init` to interactively configure:
 
 ### From a Workspace (via dev role)
 
-The dev role's `setup_claude` skill uses claude.sh to configure the workspace's `.runtime/agents/dev/.claude/`:
+The dev role's `setup_claude` skill installs agent-setup directly (no claude.sh needed):
 
 ```bash
 cd .socialware/workspace/my-team/my-app
 ./agent/deploy.sh
 ./agent/start.sh --role dev
 # In Claude Code: say "setup claude"
+# This runs: claude plugin marketplace add + claude plugin install
 ```
-
-This installs agent-setup into the dev role's isolated PROJECT_DIR.
 
 ## Modes
 
@@ -94,7 +93,7 @@ CONTEXT7_API_KEY=...
 | | `claude.sh` | `agent/start.sh` |
 |---|---|---|
 | **Purpose** | Bootstrap Claude Code environment (plugins, hooks, MCP) | Launch agent with specific role and SOUL.md |
-| **Working dir** | Repo root (or wherever claude.sh lives) | .runtime/agents/{role}/ |
+| **Working dir** | Repo root | .runtime/agents/{role}/ |
 | **Installs plugins** | Yes (agent-setup) | No |
 | **Uses SOUL.md** | No | Yes (--append-system-prompt-file) |
 | **When** | First-time setup, plugin management | Daily agent usage |
