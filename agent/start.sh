@@ -28,13 +28,24 @@ while [[ $# -gt 0 ]]; do
 done
 
 # 1. Auto-deploy if .runtime/ missing or agent/ newer than .runtime/
-needs_deploy=false
-
-if [ ! -d "$RUNTIME_DIR/agents" ]; then
-    needs_deploy=true
-elif [ -n "$(find "$AGENT_DIR" -newer "$RUNTIME_DIR" -not -path '*/__pycache__/*' 2>/dev/null | head -1)" ]; then
-    needs_deploy=true
-fi
+# Uses python3 for cross-platform compatibility (Windows/WSL/macOS)
+needs_deploy=$(python3 -c "
+import os, sys
+from pathlib import Path
+runtime = Path('$RUNTIME_DIR')
+agent = Path('$AGENT_DIR')
+if not (runtime / 'agents').is_dir():
+    print('true')
+    sys.exit()
+runtime_mtime = runtime.stat().st_mtime
+for p in agent.rglob('*'):
+    if '__pycache__' in str(p):
+        continue
+    if p.stat().st_mtime > runtime_mtime:
+        print('true')
+        sys.exit()
+print('false')
+")
 
 if [ "$needs_deploy" = true ]; then
     echo "Detected changes. Running deploy.sh..."
