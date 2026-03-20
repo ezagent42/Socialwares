@@ -23,17 +23,15 @@ All Agent behavior is defined through four primitives in `agent/`:
 
 | Primitive | Directory | Purpose | Key File |
 |-----------|-----------|---------|----------|
-| **Role** (Who) | `agent/role/` | Agent identity and permissions | `SOUL.md` |
+| **Role** (Who) | `agent/role/` | Agent identities (default, dev, evolver) | `SOUL.md` |
 | **Scope** (Where) | `agent/scope/` | App capability boundaries | `SOUL.md` |
-| **Commitment** (What) | `agent/commitment/` | Eval metrics | `eval.yaml` |
-| **Flow** (How) | `agent/flow/` | Actions the agent can perform | `flow.yaml` + `SKILL.md` |
+| **Commitment** (What) | `agent/commitment/` | Constraints on flow edges | `constraints.yaml` |
+| **Flow** (How) | `agent/flow/` | Actions + action registry | `flow.yaml` + `SKILL.md` |
 
 ## Step 3: Quick-Try the Template
 
-From the repo root — uses the template directly without creating a workspace:
-
 ```bash
-./agent/start.sh --role default  # auto-deploys on first run, launches Claude Code TUI
+./agent/start.sh --role default  # auto-deploys on first run
 ```
 
 Try saying: "check health" — the agent runs the check_health skill.
@@ -41,16 +39,13 @@ Try saying: "check health" — the agent runs the check_health skill.
 ## Step 4: Create Your Own App
 
 ```bash
-# From repo root:
 uv run scripts/create-my-socialware.py \
     --room my-team \
     --app task-manager \
     --description "Task management app"
 ```
 
-This copies the template into `.socialware/workspace/my-team/task-manager/`,
-customizes SOUL.md with your app name, and runs initial deploy.
-Fails if workspace already exists (won't overwrite).
+Copies template + customizes SOUL.md + auto-deploys. Fails if workspace already exists.
 
 ## Step 5: Enter Your Workspace
 
@@ -58,12 +53,12 @@ Fails if workspace already exists (won't overwrite).
 cd .socialware/workspace/my-team/task-manager
 ```
 
-**All development happens here.** The workspace is self-contained.
+All development happens here. The workspace is self-contained (has its own agent/, src/, deploy.sh, start.sh).
 
 ## Step 6: Edit Four Primitives
 
 ```bash
-# What your app can do
+# App capabilities + boundaries
 vim agent/scope/SOUL.md
 
 # Agent identity
@@ -71,33 +66,11 @@ vim agent/role/default/SOUL.md
 
 # Add a new skill
 mkdir -p agent/flow/create_task
-cat > agent/flow/create_task/SKILL.md << 'EOF'
----
-name: create_task
-description: "Create a new task"
----
-
-# Create Task
-
-## Trigger
-User says "create task", "new task", etc.
-
-## Flow
-1. Get task title and description from user
-2. Call API: POST /tasks
-3. Return result
-EOF
+vim agent/flow/create_task/SKILL.md
 
 # Register the action in flow.yaml
 vim agent/flow/flow.yaml
-```
-
-Add to `flow.yaml`:
-```yaml
-direct_actions:
-  - { action: check_health,  role: [default, dev], description: "Check app health" }
-  - { action: setup_claude,  role: [dev], description: "Configure Claude Code" }
-  - { action: create_task,   role: [default], description: "Create a new task" }  # ← add this
+# Add: - { action: create_task, role: [default], description: "Create a new task" }
 ```
 
 ## Step 7: Start Again
@@ -109,34 +82,30 @@ direct_actions:
 `start.sh` checks if `agent/` has been modified since last deploy and auto-redeploys.
 You can also run `./agent/deploy.sh` manually to see what gets compiled.
 
-## Step 8: Set Up Claude Code Environment
+### What deploy.sh generates:
 
-Use the dev role to configure Claude Code plugins and settings:
+```
+.runtime/
+├── data/
+│   ├── conversations/    ← Agent interaction logs (JSONL, auto-captured)
+│   └── violations/       ← Constraint violation queue (JSONL, app writes)
+└── agents/{role}/
+    ├── .claude/skills/   ← Symlinked from agent/flow/ (filtered by flow.yaml)
+    ├── .claude/hooks/    ← log_action.sh (conversation logging)
+    │                       + check_violations.sh (violation notifications)
+    ├── SOUL.md           ← Merged: scope + role
+    └── constraints.yaml  ← Copied from commitment/
+```
+
+## Step 8: Set Up Claude Code Environment
 
 ```bash
 ./agent/start.sh --role dev
-# In Claude Code, say: "setup claude"
-# This installs agent-setup plugin into .runtime/agents/dev/.claude/
+# In Claude Code: say "setup claude"
+# Installs agent-setup plugin + hooks + MCP
 ```
 
-## Step 9: Use the Evolver
-
-After your app has been running and has some data:
-
-```bash
-./agent/start.sh --role evolver
-```
-
-```
-You: "diagnose"     → scan runtime data for problems
-You: "evaluate"     → run eval cases, check score
-You: "improve"      → fix issues based on evidence
-You: "auto-optimize" → automated improvement loop
-```
-
-See [docs/guides/using-evolver.md](../docs/guides/using-evolver.md) for full guide.
-
-## Step 10: Use Different Platforms
+## Step 9: Use Different Platforms
 
 ```bash
 ./agent/start.sh --role default                    # Claude Code (default)
@@ -144,28 +113,39 @@ See [docs/guides/using-evolver.md](../docs/guides/using-evolver.md) for full gui
 ./agent/start.sh --role default --adapter kimicode # Kimi Code
 ```
 
-## Step 11: Multi-Role
+## Step 10: Multiple Roles
 
 ```bash
-# Multiple roles in tmux panes
-./agent/start.sh --role default,dev
+./agent/start.sh --role default,dev    # tmux panes
 ```
 
-## Step 12: Start Backend API
+## Step 11: Start Backend API
 
 ```bash
 uv run uvicorn src.app:app --port 8001
 ```
 
-## Step 13: Feed Improvements Back
+## Step 12: Use the Evolver
 
-When you improve Agent config in your workspace, you can PR it back to the template:
+After your app has been running and has some data in `.runtime/data/`:
 
 ```bash
-# Compare your workspace agent/ with the template
-diff -rq agent/ ../../../agent/ --exclude=README.md --exclude=__pycache__
+./agent/start.sh --role evolver
+```
 
-# If improvements are general, create a branch and PR manually
+```
+You: "diagnose"        → scan conversations + violations → report
+You: "evaluate"        → run eval cases → score
+You: "improve"         → propose + apply four-primitive changes
+You: "auto-optimize"   → automated evolution loop
+```
+
+See [docs/guides/using-evolver.md](guides/using-evolver.md) for full guide.
+
+## Step 13: Run Tests
+
+```bash
+uv run pytest -v    # 36 tests
 ```
 
 ## FAQ
@@ -180,17 +160,22 @@ It auto-deploys on first run (or when `agent/` has changed). Subsequent starts a
 ```bash
 mkdir agent/role/admin
 vim agent/role/admin/SOUL.md
-# Add the role to flow.yaml actions
-vim agent/flow/flow.yaml
-./agent/deploy.sh  # re-deploy
+vim agent/flow/flow.yaml    # add the role to action permissions
+./agent/deploy.sh           # or just start.sh (auto-deploys)
 ```
 
-### Q: Which skills does each role get?
-`deploy.sh` reads `flow.yaml` and only symlinks actions allowed for that role.
-Check `flow.yaml` to see the role→action mapping.
+### Q: What data does the evolver read?
+- `.runtime/data/conversations/*.jsonl` — agent interaction logs (auto-captured by hooks)
+- `.runtime/data/violations/*.jsonl` — constraint violations (written by your app backend)
+- `agent/flow/evolve_eval/eval_cases.yaml` — your benchmark test cases
+
+### Q: How do conversation logs get captured?
+- **Shell mode** (start.sh): PostToolUse hook `log_action.sh` auto-captures every tool call
+- **SDK mode** (start_agent.py): adapter's `log_conversation()` function
 
 ## Next Steps
 
 - Read [README.md](../README.md) for full architecture
+- Read [docs/guides/using-evolver.md](guides/using-evolver.md) for evolver guide
+- Read [docs/designs/progressive-dev-guide-example.md](designs/progressive-dev-guide-example.md) for P1→P5 example
 - Check `docs/designs/` for architecture decisions
-- Add more skills in `agent/flow/` and register them in `flow.yaml`
