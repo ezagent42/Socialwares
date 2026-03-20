@@ -68,8 +68,7 @@ socialwares/
 │   ├── start.sh              ← Launch agent (workspace-local)
 │   └── adapters/             ← Platform adapters (Claude/Codex/Kimi)
 ├── scripts/
-│   ├── create-my-socialware.py  ← Create a new App instance
-│   └── evolve.sh                ← Workspace evolution → PR
+│   └── create-my-socialware.py  ← Create a new App instance
 ├── claude.sh                 ← Claude Code launcher (agent-setup bootstrap)
 ├── .socialware/workspace/    ← Workspace instances
 │   └── default/.gitkeep
@@ -191,19 +190,20 @@ What it does:
 
 Then `cd` into the workspace and work there. deploy/start are workspace-local.
 
-### evolve.sh — Workspace Evolution
+### claude.sh — Claude Code Environment Setup
+
+Bootstraps Claude Code with the [agent-setup](https://github.com/ezagent42/agent-setup) plugin system.
+See [docs/CLAUDE-SH.md](docs/CLAUDE-SH.md) for full documentation.
 
 ```bash
-# Check changes
-./scripts/evolve.sh my-team/task-manager --check
-
-# Create PR (feed workspace improvements back to the template)
-./scripts/evolve.sh my-team/task-manager --pr
+./claude.sh                      # From repo root: first-time setup
+# Inside Claude Code: /agent-setup:init
 ```
 
-Evolution routing:
-- Changes in `.runtime/` → workspace-specific adaptation, does not trigger a PR
-- Changes in `agent/` → generic improvements, automatically creates a PR back to main
+Or via the dev role in a workspace:
+```bash
+./agent/start.sh --role dev      # Setup via setup_claude skill
+```
 
 ## Platform Adapters
 
