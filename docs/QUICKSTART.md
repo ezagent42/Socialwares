@@ -1,15 +1,15 @@
-# Socialwares 快速入门
+# Quickstart
 
-从零开始，5 分钟创建并运行一个 Socialware App。
+Create and run a Socialware App in 5 minutes.
 
-## 前置条件
+## Prerequisites
 
 - Python >= 3.12
-- [uv](https://docs.astral.sh/uv/) (Python 包管理)
-- [Claude Code](https://claude.ai/code) 或其他支持的 AI 编码工具 (Codex / Kimi Code)
+- [uv](https://docs.astral.sh/uv/) (Python package manager)
+- [Claude Code](https://claude.ai/code) or Codex / Kimi Code
 - Git
 
-## 第一步：获取模板
+## Step 1: Get the Template
 
 ```bash
 git clone https://github.com/ezagent42/Socialwares.git
@@ -17,166 +17,163 @@ cd Socialwares
 uv sync
 ```
 
-## 第二步：理解四原语
+## Step 2: Understand Four Primitives
 
-Socialware 通过四个原语定义 Agent 行为，全部位于 `agent/` 目录：
+All Agent behavior is defined through four primitives in `agent/`:
 
-| 原语 | 目录 | 作用 | 核心文件 |
-|------|------|------|---------|
-| **Role** (Who) | `agent/role/` | 定义 Agent 身份和权限 | `SOUL.md` |
-| **Scope** (Where) | `agent/scope/` | 定义 App 能力边界 | `SOUL.md` |
-| **Commitment** (What) | `agent/commitment/` | 定义评估指标 | `eval.yaml` |
-| **Flow** (How) | `agent/flow/` | 定义可执行操作 | `SKILL.md` |
+| Primitive | Directory | Purpose | Key File |
+|-----------|-----------|---------|----------|
+| **Role** (Who) | `agent/role/` | Agent identity and permissions | `SOUL.md` |
+| **Scope** (Where) | `agent/scope/` | App capability boundaries | `SOUL.md` |
+| **Commitment** (What) | `agent/commitment/` | Eval metrics | `eval.yaml` |
+| **Flow** (How) | `agent/flow/` | Actions the agent can perform | `flow.yaml` + `SKILL.md` |
 
-## 第三步：直接启动 (使用默认模板)
+## Step 3: Quick-Try the Template
 
-最简启动 — 不创建 workspace，直接使用模板默认配置：
+From the repo root — uses the template directly without creating a workspace:
 
 ```bash
-# 编译四原语到 .runtime/
-./agent/deploy.sh
-
-# 启动 agent (开发模式, Claude Code TUI)
-./agent/start.sh --role default
+./agent/deploy.sh                # compile four primitives → .runtime/
+./agent/start.sh --role default  # launch agent (Claude Code TUI)
 ```
 
-`start.sh` 会自动检测 `.runtime/`，如果不存在会先执行 `deploy.sh`。
+Try saying: "check health" — the agent runs the check_health skill.
 
-## 第四步：创建自己的 App
+## Step 4: Create Your Own App
 
 ```bash
-# 交互式创建
-uv run scripts/create-my-socialware.py
-
-# 或用命令行参数
+# From repo root:
 uv run scripts/create-my-socialware.py \
-    --name my-app \
-    --role admin \
-    --description "我的任务管理应用"
+    --room my-team \
+    --app task-manager \
+    --description "Task management app"
 ```
 
-这会在 `.socialware/workspace/my-app/` 下生成完整的 App 实例。
+This copies the template into `.socialware/workspace/my-team/task-manager/`.
+**Does NOT deploy** — you edit four primitives first.
 
-## 第五步：定制你的 Agent
-
-### 编辑 Role (身份)
+## Step 5: Enter Your Workspace
 
 ```bash
-# 编辑 agent 身份描述
-vim agent/role/default/SOUL.md
+cd .socialware/workspace/my-team/task-manager
 ```
 
-内容示例：
+**All development happens here.** The workspace is self-contained.
 
-```markdown
-# Default Agent
-
-你是一个任务管理助手。你可以帮助用户创建、查询和管理任务。
-
-## 权限
-- 可以读写 data/ 目录
-- 可以调用所有 flow 中定义的操作
-```
-
-### 编辑 Scope (能力边界)
+## Step 6: Edit Four Primitives
 
 ```bash
+# What your app can do
 vim agent/scope/SOUL.md
-```
 
-### 添加 Flow (操作)
+# Agent identity
+vim agent/role/default/SOUL.md
 
-```bash
-# 创建新操作
+# Add a new skill
 mkdir -p agent/flow/create_task
+cat > agent/flow/create_task/SKILL.md << 'EOF'
+---
+name: create_task
+description: "Create a new task"
+---
+
+# Create Task
+
+## Trigger
+User says "create task", "new task", etc.
+
+## Flow
+1. Get task title and description from user
+2. Call API: POST /tasks
+3. Return result
+EOF
+
+# Register the action in flow.yaml
+vim agent/flow/flow.yaml
 ```
 
-编辑 `agent/flow/create_task/SKILL.md`：
-
-```markdown
-# create_task
-
-创建一个新任务。
-
-## 步骤
-1. 获取任务标题和描述
-2. 写入 data/tasks.json
-3. 返回任务 ID
+Add to `flow.yaml`:
+```yaml
+direct_actions:
+  - { action: check_health,  role: [default, dev], description: "Check app health" }
+  - { action: setup_claude,  role: [dev], description: "Configure Claude Code" }
+  - { action: create_task,   role: [default], description: "Create a new task" }  # ← add this
 ```
 
-### 重新编译
-
-修改四原语后需要重新 deploy：
+## Step 7: Deploy and Start
 
 ```bash
-./agent/deploy.sh
+./agent/deploy.sh                # compile agent/ → .runtime/
+./agent/start.sh --role default  # launch agent
 ```
 
-## 第六步：使用不同平台
+After editing four primitives, always re-deploy before starting.
+
+## Step 8: Set Up Claude Code Environment
+
+Use the dev role to configure Claude Code plugins and settings:
 
 ```bash
-# Claude Code (默认)
-./agent/start.sh --role default
-
-# Codex
-./agent/start.sh --role default --adapter codex
-
-# Kimi Code
-./agent/start.sh --role default --adapter kimicode
+./agent/start.sh --role dev
+# In Claude Code, say: "setup claude"
+# This installs agent-setup plugin into .runtime/agents/dev/.claude/
 ```
 
-## 第七步：多 Role 启动
+## Step 9: Use Different Platforms
 
 ```bash
-# 用逗号分隔多个 role，自动打开 tmux 多 pane
-./agent/start.sh --role admin,reviewer
+./agent/start.sh --role default                    # Claude Code (default)
+./agent/start.sh --role default --adapter codex    # Codex
+./agent/start.sh --role default --adapter kimicode # Kimi Code
 ```
 
-## 第八步：启动后端 API
+## Step 10: Multi-Role
 
 ```bash
-# 启动 FastAPI 后端
+# Multiple roles in tmux panes
+./agent/start.sh --role default,dev
+```
+
+## Step 11: Start Backend API
+
+```bash
 uv run uvicorn src.app:app --port 8001
 ```
 
-## 第九步：运行测试
+## Step 12: Feed Improvements Back
+
+When you improve Agent config in your workspace, you can PR it back to the template:
 
 ```bash
-uv run pytest -v
+# Compare your workspace agent/ with the template
+diff -rq agent/ ../../../agent/ --exclude=README.md --exclude=__pycache__
+
+# If improvements are general, create a branch and PR manually
 ```
 
-## 第十步：进化
+## FAQ
 
-当你在 workspace 中改进了 Agent，可以将改进回馈到模板：
+### Q: deploy.sh reports "No role found"
+Ensure `agent/role/` has at least one role directory (e.g. `default/`) with a `SOUL.md`.
 
+### Q: start.sh says ".runtime/ not found"
+Run `./agent/deploy.sh` first. start.sh does not auto-deploy.
+
+### Q: How to add a new role?
 ```bash
-# 检查 workspace 变更
-./scripts/evolve.sh my-app --check
-
-# 创建 PR
-./scripts/evolve.sh my-app --pr
+mkdir agent/role/admin
+vim agent/role/admin/SOUL.md
+# Add the role to flow.yaml actions
+vim agent/flow/flow.yaml
+./agent/deploy.sh  # re-deploy
 ```
 
-## 常见问题
+### Q: Which skills does each role get?
+`deploy.sh` reads `flow.yaml` and only symlinks actions allowed for that role.
+Check `flow.yaml` to see the role→action mapping.
 
-### Q: deploy.sh 报错 "No role found"
+## Next Steps
 
-确保 `agent/role/` 下至少有一个角色目录（如 `default/`），且包含 `SOUL.md` 文件。
-
-### Q: start.sh 找不到 adapter
-
-检查 `--adapter` 参数是否为支持的值：`claude`、`codex`、`kimicode`。
-
-### Q: 如何切换到生产模式？
-
-使用 SDK 模式启动：
-
-```bash
-python src/start_agent.py --role admin
-```
-
-## 下一步
-
-- 阅读 [README.md](../README.md) 了解完整架构
-- 查看 `docs/designs/` 下的设计文档了解架构决策
-- 在 `agent/flow/` 中添加更多操作来扩展 Agent 能力
+- Read [README.md](../README.md) for full architecture
+- Check `docs/designs/` for architecture decisions
+- Add more skills in `agent/flow/` and register them in `flow.yaml`

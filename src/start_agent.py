@@ -2,10 +2,13 @@
 """Production mode agent launch entry point.
 
 The app backend calls this script to launch agents via adapters in SDK mode.
-Complementary to agent/start.sh (dev mode shell launch), no conflict.
+Complementary to agent/start.sh (CLI mode shell launch), no conflict.
 
-Usage:
-    python src/start_agent.py --role admin
+Works relative to its own location — workspace-local, same as deploy.sh/start.sh.
+Looks for .runtime/ in the parent directory of src/.
+
+Usage (from within a workspace):
+    python src/start_agent.py --role default
     python src/start_agent.py --role admin,reviewer
     python src/start_agent.py --role admin --adapter codex
 """
@@ -19,7 +22,9 @@ from pathlib import Path
 
 def load_adapter(adapter_name: str, project_dir: Path):
     """Dynamically load the adapter for the specified platform."""
-    adapter_path = Path(__file__).parent.parent / "agent" / "adapters"
+    # Adapter lives in agent/adapters/ relative to workspace root
+    app_root = Path(__file__).parent.parent
+    adapter_path = app_root / "agent" / "adapters"
     sys.path.insert(0, str(adapter_path))
     sys.path.insert(0, str(adapter_path / adapter_name))
 
@@ -47,15 +52,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Launch Socialware Agent (production mode)")
     parser.add_argument("--role", required=True, help="Role name(s), comma-separated")
     parser.add_argument("--adapter", default="claude", help="Platform adapter")
-    parser.add_argument(
-        "--workspace",
-        default=".socialware/workspace/default",
-        help="Workspace path",
-    )
     args = parser.parse_args()
 
-    repo_root = Path(__file__).parent.parent
-    runtime_dir = repo_root / args.workspace / ".runtime"
+    # Workspace-local: .runtime/ is in parent of src/
+    app_root = Path(__file__).parent.parent
+    runtime_dir = app_root / ".runtime"
 
     if not runtime_dir.exists():
         print(f"Error: .runtime/ not found at {runtime_dir}")

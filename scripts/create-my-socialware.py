@@ -2,7 +2,8 @@
 """create-my-socialware — Create a new Socialware App instance.
 
 Similar to mix phx.new or npx create-next-app.
-Copies the template to .socialware/workspace/{room}/{app}/ and customizes the four primitives.
+Copies the template to .socialware/workspace/{room}/{app}/.
+Does NOT deploy — the developer does that after editing four primitives.
 
 Usage:
     uv run scripts/create-my-socialware.py
@@ -13,7 +14,6 @@ from __future__ import annotations
 
 import argparse
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
@@ -56,7 +56,7 @@ def create_workspace(room: str, app: str, description: str) -> Path:
         shutil.copytree(app_src, app_dst, ignore=shutil.ignore_patterns("node_modules", ".next"))
         print(f"  Copied app/")
 
-    # Copy agent/ four primitives
+    # Copy agent/ (four primitives + deploy + start + adapters)
     agent_src = REPO_ROOT / "agent"
     agent_dst = workspace_dir / "agent"
     agent_dst.mkdir()
@@ -68,17 +68,20 @@ def create_workspace(room: str, app: str, description: str) -> Path:
             shutil.copytree(prim_src, prim_dst, ignore=shutil.ignore_patterns("__pycache__", "README.md"))
             print(f"  Copied agent/{primitive}/")
 
-    # Copy deploy.sh, start.sh, adapters/
+    # Copy deploy.sh, start.sh
     for script in ["deploy.sh", "start.sh"]:
         script_src = agent_src / script
         script_dst = agent_dst / script
         if script_src.exists():
             shutil.copy2(script_src, script_dst)
+    print(f"  Copied agent/deploy.sh, agent/start.sh")
 
+    # Copy adapters/
     adapters_src = agent_src / "adapters"
     adapters_dst = agent_dst / "adapters"
     if adapters_src.exists():
         shutil.copytree(adapters_src, adapters_dst, ignore=shutil.ignore_patterns("__pycache__"))
+        print(f"  Copied agent/adapters/")
 
     return workspace_dir
 
@@ -103,7 +106,7 @@ def customize_workspace(workspace_dir: Path, app: str, description: str) -> None
 """)
     print(f"  Customized agent/scope/SOUL.md")
 
-    # Rewrite default role SOUL.md (keep as 'default', do not rename)
+    # Rewrite default role SOUL.md
     role_soul = workspace_dir / "agent" / "role" / "default" / "SOUL.md"
     if role_soul.exists():
         role_soul.write_text(f"""# Default Agent
@@ -120,25 +123,6 @@ You are the Agent for {app}.
 Operate {app} according to user instructions.
 """)
         print(f"  Customized agent/role/default/SOUL.md")
-
-
-def run_deploy(workspace_dir: Path) -> bool:
-    """Run deploy.sh."""
-    deploy_sh = REPO_ROOT / "agent" / "deploy.sh"
-
-    result = subprocess.run(
-        [str(deploy_sh), str(workspace_dir)],
-        capture_output=True,
-        text=True,
-        cwd=str(REPO_ROOT),
-    )
-
-    if result.returncode == 0:
-        print(f"  Deploy complete")
-        return True
-    else:
-        print(f"  Deploy failed: {result.stderr}")
-        return False
 
 
 def main() -> None:
@@ -167,10 +151,6 @@ def main() -> None:
 
     # 2. Customize
     customize_workspace(workspace_dir, app, description)
-    print()
-
-    # 3. Deploy
-    run_deploy(workspace_dir)
 
     ws_rel = f".socialware/workspace/{room}/{app}"
     print()
@@ -178,17 +158,16 @@ def main() -> None:
     print(f"Created '{room}/{app}' at {ws_rel}/")
     print()
     print("Next steps:")
-    print(f"  # Start agent (dev mode)")
-    print(f"  ./agent/start.sh --role default --workspace {ws_rel}")
+    print(f"  cd {ws_rel}")
     print()
     print(f"  # Edit four primitives")
-    print(f"  vim {ws_rel}/agent/scope/SOUL.md")
-    print(f"  vim {ws_rel}/agent/role/default/SOUL.md")
-    print(f"  vim {ws_rel}/agent/flow/")
+    print(f"  vim agent/scope/SOUL.md")
+    print(f"  vim agent/role/default/SOUL.md")
+    print(f"  vim agent/flow/")
     print()
-    print(f"  # Add new roles (P5 incremental growth)")
-    print(f"  mkdir {ws_rel}/agent/role/admin")
-    print(f"  vim {ws_rel}/agent/role/admin/SOUL.md")
+    print(f"  # Deploy and start")
+    print(f"  ./agent/deploy.sh")
+    print(f"  ./agent/start.sh --role default")
     print()
 
 
