@@ -11,54 +11,39 @@ User says "setup claude", "configure environment", "install plugins" etc.
 
 ## What It Does
 
-Runs the `claude.sh` bootstrap script within the current workspace's dev role
-PROJECT_DIR (`.runtime/agents/dev/`). This installs:
-
-- **agent-setup plugin** — hooks, commands, skills
-- **settings.json** — permission mode, enabled plugins
-- **mcp.json** — MCP server configuration
-- **hooks/** — enforce-tools (block pip/npm), session-start health check
+Installs the [agent-setup](https://github.com/ezagent42/agent-setup) plugin
+into the current role's PROJECT_DIR. This adds hooks, commands, skills, and MCP config.
 
 ## Flow
 
-1. Verify `.runtime/agents/dev/` exists (deploy must have been run)
-2. Copy `claude.sh` from repo root to `.runtime/agents/dev/`
-3. Execute `claude.sh` from within `.runtime/agents/dev/`
-4. agent-setup plugin installs into `.runtime/agents/dev/.claude/`
-5. Run `/agent-setup:init` to complete interactive configuration
+1. Register the agent-setup marketplace (one-time per machine)
+2. Install the agent-setup plugin for this project
+3. Run `/agent-setup:init` to interactively configure hooks, plugins, MCP
 
-## Usage
+## Commands to Execute
 
 ```bash
-# From within the workspace:
-# 1. Deploy first
-./agent/deploy.sh
+# Step 1: Register marketplace
+claude plugin marketplace add https://github.com/ezagent42/agent-setup
 
-# 2. Start as dev role
-./agent/start.sh --role dev
+# Step 2: Install plugin
+claude plugin install agent-setup@agent-setup --scope project
 
-# 3. In Claude Code, say:
-#    "Setup Claude environment"
-#    Or manually:
-#    /agent-setup:init
+# Step 3: Interactive configuration (inside Claude Code)
+/agent-setup:init
 ```
 
-## Manual Alternative
+## What Gets Installed
 
-If you prefer not to use this skill, you can configure manually:
+After `/agent-setup:init`:
 
-```bash
-cd .runtime/agents/dev
-# Copy claude.sh from repo root
-cp ../../../claude.sh .
-# Run it
-./claude.sh
-# Inside Claude Code: /agent-setup:init
-```
+- **Hooks** — enforce-tools (block pip/npm), session-start health check
+- **Plugins** — superpowers, impeccable, etc. (user selects)
+- **MCP** — context7 and other MCP servers
+- **Settings** — permission mode, enabled plugins
 
 ## Notes
 
-- This configures the dev role's `.claude/` only, not other roles
+- This configures the current role's `.claude/` only, not other roles
 - Each role has its own isolated `.claude/` directory
-- After setup, the dev role has full agent-setup capabilities (hooks, skills, MCP)
-- Other roles (default, admin, etc.) keep their minimal `.claude/` from deploy.sh
+- No dependency on `claude.sh` — runs the plugin commands directly
