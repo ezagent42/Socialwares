@@ -93,10 +93,11 @@ agent/role/
 
 ### Scope — Where
 
-Defines App-level capability declarations. `SOUL.md` describes what the Agent can do and where its boundaries are.
+Defines the App's capability boundary and public identity via `SOUL.md`.
 
-- Internal: Agent operation boundaries
-- External: Public description, readable by other Agents
+- **Internal (boundary)**: What the Agent can and cannot do — constrains behavior
+- **External (declaration)**: Public description — other Agents read this to decide whether to delegate tasks here
+- **Participation**: Who can join, minimum members (absorbed from SwSim's "Arena" concept)
 
 ### Commitment — What
 
