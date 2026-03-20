@@ -162,9 +162,12 @@ class TestFlowSymlinks:
                 expected_source = workspace / "agent" / "flow" / skill_link.name
                 assert skill_link.resolve() == expected_source.resolve()
 
-    def test_skills_match_flow_dirs(self, deployed, workspace):
-        """skills/ entries should match agent/flow/ directories."""
-        expected_skills = {
+    def test_skills_subset_of_flow_dirs(self, deployed, workspace):
+        """Each role's skills should be a subset of agent/flow/ directories.
+
+        With flow.yaml role filtering, not every role gets every skill.
+        """
+        all_skills = {
             d.name for d in (workspace / "agent" / "flow").iterdir()
             if d.is_dir() and d.name != "__pycache__"
         }
@@ -174,7 +177,13 @@ class TestFlowSymlinks:
             actual_skills = {
                 s.name for s in (role_dir / ".claude" / "skills").iterdir()
             }
-            assert actual_skills == expected_skills
+            assert actual_skills <= all_skills, (
+                f"Role {role_dir.name} has skills not in flow/: "
+                f"{actual_skills - all_skills}"
+            )
+            assert len(actual_skills) > 0, (
+                f"Role {role_dir.name} has no skills"
+            )
 
     def test_skill_content_accessible_via_symlink(self, deployed):
         for role_dir in (deployed / "agents").iterdir():
