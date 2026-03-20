@@ -164,6 +164,58 @@ with open('$DATA_DIR/current.jsonl', 'a') as f:
 HOOKEOF
     chmod +x "$role_runtime/.claude/hooks/log_action.sh"
 
+    # Generate SessionStart violations check hook
+    cat > "$role_runtime/.claude/hooks/check_violations.sh" << HOOKEOF2
+#!/usr/bin/env bash
+# SessionStart hook — check for unresolved constraint violations
+set -euo pipefail
+SCRIPT_DIR="\$(cd "\$(dirname "\$0")" && pwd)"
+RUNTIME_DIR="\$(cd "\$SCRIPT_DIR/../.." && pwd)"
+VIOLATIONS_DIR="\$(cd "\$RUNTIME_DIR/../.." && pwd)/data/violations"
+ROLE_NAME="$role_name"
+
+if [ ! -d "\$VIOLATIONS_DIR" ]; then
+    cat <<JSONEOF
+{
+  "hookSpecificOutput": {
+    "hookEventName": "SessionStart",
+    "additionalContext": "No violations directory found."
+  }
+}
+JSONEOF
+    exit 0
+fi
+
+# Count unresolved violations for this role
+COUNT=\$(python3 -c "
+import json, glob, sys
+count = 0
+details = []
+for f in glob.glob('\$VIOLATIONS_DIR/*.jsonl'):
+    for line in open(f):
+        try:
+            v = json.loads(line.strip())
+            if not v.get('resolved', False) and v.get('trigger_role') == '\$ROLE_NAME':
+                count += 1
+                details.append(f\"{v.get('constraint','?')}: {v.get('description','')}\")
+        except: pass
+if count > 0:
+    print(f'{count} unresolved violation(s): ' + '; '.join(details[:3]))
+else:
+    print('No pending violations.')
+" 2>/dev/null || echo "No pending violations.")
+
+cat <<JSONEOF
+{
+  "hookSpecificOutput": {
+    "hookEventName": "SessionStart",
+    "additionalContext": "\$COUNT"
+  }
+}
+JSONEOF
+HOOKEOF2
+    chmod +x "$role_runtime/.claude/hooks/check_violations.sh"
+
     # Copy commitment constraints configuration
     if [ -f "$AGENT_DIR/commitment/constraints.yaml" ]; then
         cp "$AGENT_DIR/commitment/constraints.yaml" "$role_runtime/constraints.yaml"
