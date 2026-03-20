@@ -1,22 +1,23 @@
 #!/usr/bin/env bash
 # deploy.sh — Compile four primitives -> .runtime/
-# Generate an isolated $PROJECT_DIR for each role (with .claude/skills/, SOUL.md)
-# .runtime/data/ is the shared data directory
-# .runtime/agents/{role}/ is the isolated environment for each role
+#
+# Reads agent/ from the SAME directory as this script (workspace-local).
+# Generates an isolated $PROJECT_DIR for each role.
+#
+# Usage (from within a workspace):
+#   ./agent/deploy.sh
+#
+# Or from repo root for the template:
+#   ./agent/deploy.sh
 set -euo pipefail
 
 AGENT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_ROOT="$(cd "$AGENT_DIR/.." && pwd)"
+APP_ROOT="$(cd "$AGENT_DIR/.." && pwd)"
+RUNTIME_DIR="$APP_ROOT/.runtime"
 
-# Default workspace
-WORKSPACE="${1:-.socialware/workspace/default}"
-if [[ "$WORKSPACE" = /* ]]; then
-    RUNTIME_DIR="$WORKSPACE/.runtime"
-else
-    RUNTIME_DIR="$REPO_ROOT/$WORKSPACE/.runtime"
-fi
-
-echo "Deploying four primitives → $RUNTIME_DIR"
+echo "Deploying four primitives"
+echo "  Source: $AGENT_DIR"
+echo "  Target: $RUNTIME_DIR"
 echo ""
 
 # 1. Create .runtime/ directory structure
@@ -44,20 +45,15 @@ for role_dir in "$AGENT_DIR"/role/*/; do
         cat "$role_dir/SOUL.md" 2>/dev/null || true
     } > "$role_runtime/SOUL.md"
 
-    # Symlink each skill from flow/ (using relative paths for cross-machine portability)
+    # Symlink each skill from flow/ (relative paths for portability)
     for skill_dir in "$AGENT_DIR"/flow/*/; do
         [ -d "$skill_dir" ] || continue
         skill_name=$(basename "$skill_dir")
         link="$role_runtime/.claude/skills/$skill_name"
 
-        # Calculate relative path from link location to skill_dir
-        # link: .runtime/agents/{role}/.claude/skills/{skill}
-        # target: agent/flow/{skill}/
-        # relative: ../../../../../agent/flow/{skill}
         link_dir=$(dirname "$link")
         target=$(python3 -c "import os.path; print(os.path.relpath('$skill_dir', '$link_dir'))")
 
-        # Remove old symlink
         [ -L "$link" ] && rm "$link"
         [ -d "$link" ] && rm -rf "$link"
 

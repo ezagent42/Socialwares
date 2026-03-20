@@ -22,15 +22,21 @@ uv sync
 # 4. Create your App (workspace/{room}/{app}/ structure)
 uv run scripts/create-my-socialware.py --room my-team --app task-manager --description "Task Manager"
 
-# 5. Start the backend API
-uv run uvicorn src.app:app --port 8001 &
+# 5. Enter your workspace (all development happens here)
+cd .socialware/workspace/my-team/task-manager
 
-# 6. Start the agent (CLI mode, new terminal)
-./agent/start.sh --role default --workspace .socialware/workspace/my-team/task-manager
+# 6. Edit four primitives
+vim agent/scope/SOUL.md          # what your app can do
+vim agent/role/default/SOUL.md   # agent identity
+vim agent/flow/                  # add skills
 
-# Or use the template directly (without creating a workspace)
-./agent/deploy.sh
-./agent/start.sh --role default
+# 7. Deploy and start
+./agent/deploy.sh                # compile agent/ → .runtime/
+./agent/start.sh --role default  # launch agent
+
+# Or quick-try the template without creating a workspace:
+# (from repo root)
+./agent/deploy.sh && ./agent/start.sh --role default
 ```
 
 ## Directory Structure
@@ -117,9 +123,11 @@ agent/flow/
 Compiles the `agent/` four primitives into a runnable `.runtime/` structure:
 
 ```bash
-./agent/deploy.sh                    # Compile to default workspace
-./agent/deploy.sh .socialware/workspace/my-app   # Compile to specified workspace
+# From within a workspace (or repo root for template):
+./agent/deploy.sh
 ```
+
+deploy.sh reads `agent/` from its own directory — workspace-local, not the repo root template.
 
 Generated structure:
 
@@ -136,16 +144,10 @@ Generated structure:
 ### start.sh — Start Agent
 
 ```bash
-# CLI mode: Claude TUI
+# From within a workspace (cd into it first):
 ./agent/start.sh --role default
 ./agent/start.sh --role admin --adapter codex
 ./agent/start.sh --role admin,reviewer              # Multiple roles → tmux
-
-# Specify workspace
-./agent/start.sh --role admin --workspace .socialware/workspace/my-app
-
-# SDK mode
-python src/start_agent.py --role admin
 python src/start_agent.py --role admin --adapter codex
 ```
 
@@ -160,9 +162,10 @@ uv run scripts/create-my-socialware.py --room my-team --app task-manager --descr
 ```
 
 What it does:
-1. Copies template (src/, app/, agent/ four primitives) → `.socialware/workspace/{room}/{app}/`
-2. Customizes scope/SOUL.md and role/SOUL.md
-3. Automatically runs deploy.sh
+1. Copies template (src/, app/, agent/ + deploy.sh + start.sh + adapters/) → `.socialware/workspace/{room}/{app}/`
+2. Customizes scope/SOUL.md and role/SOUL.md with your app name
+
+Then `cd` into the workspace and work there. deploy/start are workspace-local.
 
 ### evolve.sh — Workspace Evolution
 
