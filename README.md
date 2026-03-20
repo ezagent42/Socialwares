@@ -12,31 +12,36 @@ Socialware App scaffolding template — a web application for Agent interaction 
 git clone https://github.com/ezagent42/Socialwares.git
 cd Socialwares
 
-# 2. Set up Claude Code environment (agent-setup plugin auto-installs on first run)
-./claude.sh
-# Inside Claude Code, run /agent-setup:init to complete setup, then exit
-
-# 3. Install dependencies
+# 2. Install dependencies
 uv sync
 
-# 4. Create your App (workspace/{room}/{app}/ structure)
+# 3. Create your App (workspace/{room}/{app}/ structure)
 uv run scripts/create-my-socialware.py --room my-team --app task-manager --description "Task Manager"
 
-# 5. Enter your workspace (all development happens here)
+# 4. Enter your workspace (all development happens here)
 cd .socialware/workspace/my-team/task-manager
 
-# 6. Edit four primitives
+# 5. Edit four primitives
 vim agent/scope/SOUL.md          # what your app can do
 vim agent/role/default/SOUL.md   # agent identity
 vim agent/flow/                  # add skills
+vim agent/flow/flow.yaml         # register actions per role
 
-# 7. Deploy and start
+# 6. Deploy and start
 ./agent/deploy.sh                # compile agent/ → .runtime/
 ./agent/start.sh --role default  # launch agent
 
-# Or quick-try the template without creating a workspace:
-# (from repo root)
-./agent/deploy.sh && ./agent/start.sh --role default
+# 7. Set up Claude Code environment (via dev role)
+./agent/start.sh --role dev      # start dev agent
+# In Claude Code: say "setup claude" → installs agent-setup plugin + settings
+```
+
+### Quick-Try (without creating a workspace)
+
+```bash
+# From repo root — uses the template directly in default workspace
+./agent/deploy.sh
+./agent/start.sh --role default
 ```
 
 ## Directory Structure
@@ -48,20 +53,24 @@ socialwares/
 │   ├── app.py                ← FastAPI entry point
 │   └── start_agent.py        ← SDK mode Agent startup
 ├── agent/                    ← Four primitives + toolchain
-│   ├── role/                 ← Who: Subagent identity and permissions
-│   │   └── default/SOUL.md
+│   ├── role/                 ← Who: Subagent identities
+│   │   ├── default/SOUL.md   ← Default app user role
+│   │   └── dev/SOUL.md       ← Developer role (project nav + env setup)
 │   ├── scope/                ← Where: App capability declaration
 │   │   └── SOUL.md
 │   ├── commitment/           ← What: Eval metrics
 │   │   └── eval.yaml
-│   ├── flow/                 ← How: Skills (operation definitions)
-│   │   └── check_health/SKILL.md
+│   ├── flow/                 ← How: Skills + action registry
+│   │   ├── flow.yaml         ← Action registry (state machines + direct actions)
+│   │   ├── check_health/     ← Skill: check app health (default + dev)
+│   │   └── setup_claude/     ← Skill: configure Claude Code env (dev only)
 │   ├── deploy.sh             ← Compile four primitives → .runtime/
-│   ├── start.sh              ← CLI mode startup entry point
+│   ├── start.sh              ← Launch agent (workspace-local)
 │   └── adapters/             ← Platform adapters (Claude/Codex/Kimi)
 ├── scripts/
 │   ├── create-my-socialware.py  ← Create a new App instance
 │   └── evolve.sh                ← Workspace evolution → PR
+├── claude.sh                 ← Claude Code launcher (agent-setup bootstrap)
 ├── .socialware/workspace/    ← Workspace instances
 │   └── default/.gitkeep
 ├── tests/                    ← Tests
@@ -74,12 +83,12 @@ Each Socialware App defines Agent behavior through four primitives. Each primiti
 
 ### Role — Who
 
-Defines Subagent identity. Each role has its own subdirectory containing a `SOUL.md` that describes its identity and permissions.
+Defines Subagent identities. Each role has its own subdirectory with `SOUL.md`.
 
 ```
 agent/role/
-├── admin/SOUL.md      ← Admin agent identity
-└── reviewer/SOUL.md   ← Reviewer agent identity
+├── default/SOUL.md   ← App user role
+└── dev/SOUL.md       ← Developer role (env setup, project navigation)
 ```
 
 ### Scope — Where
@@ -96,7 +105,7 @@ Defines trackable commitments and evaluation criteria. Declarative — describes
 ```yaml
 commitments:
   C1:
-    description: "Customer satisfaction ≥ 4.5"
+    description: "Customer satisfaction >= 4.5"
     metric: customer_rating
     threshold: ">=4.5"
 ```
@@ -105,29 +114,39 @@ Execution method is determined by the App's Biz layer (API middleware / cron / e
 
 ### Flow — How
 
-Defines operations the Agent can execute. Each operation has its own subdirectory containing a `SKILL.md` (Claude Code skill format).
+Defines operations the Agent can execute. Two parts:
+
+**flow.yaml** — action registry (which actions exist, who can use them):
+
+```yaml
+direct_actions:
+  - { action: check_health, role: [default, dev], description: "Check app health" }
+  - { action: setup_claude, role: [dev], description: "Configure Claude Code" }
+```
+
+**{action}/SKILL.md** — how to execute each action:
 
 ```
 agent/flow/
-├── create_task/SKILL.md
-├── review_task/SKILL.md
-└── query_task/SKILL.md
+├── flow.yaml               ← Action registry
+├── check_health/SKILL.md   ← default + dev roles
+└── setup_claude/SKILL.md   ← dev role only
 ```
 
-> State machines are managed by the App (`src/`), permissions are checked by the App API. Flow only defines "how to do it".
+`deploy.sh` reads `flow.yaml` and only symlinks actions allowed for each role.
+
+> State machines are managed by the App (`src/`), permissions are checked by the App API. Flow defines "what actions exist and how to execute them".
 
 ## Workflows
 
 ### deploy.sh — Compile Four Primitives
 
-Compiles the `agent/` four primitives into a runnable `.runtime/` structure:
+Compiles the `agent/` four primitives into a runnable `.runtime/` structure.
+Workspace-local: reads `agent/` from its own directory.
 
 ```bash
-# From within a workspace (or repo root for template):
 ./agent/deploy.sh
 ```
-
-deploy.sh reads `agent/` from its own directory — workspace-local, not the repo root template.
 
 Generated structure:
 
@@ -135,20 +154,25 @@ Generated structure:
 .runtime/
 ├── data/                    ← Shared data (Files/ + Sqlite/)
 └── agents/
-    └── {role}/              ← Each role's $PROJECT_DIR
-        ├── .claude/skills/  ← Symlinked from agent/flow/
-        ├── SOUL.md          ← Merged: scope/SOUL.md + role/{name}/SOUL.md
-        └── eval.yaml        ← Copied from agent/commitment/eval.yaml
+    ├── default/             ← default role's $PROJECT_DIR
+    │   ├── .claude/skills/  ← check_health only (per flow.yaml)
+    │   ├── SOUL.md          ← Merged: scope + role/default
+    │   └── eval.yaml
+    └── dev/                 ← dev role's $PROJECT_DIR
+        ├── .claude/skills/  ← check_health + setup_claude
+        ├── SOUL.md          ← Merged: scope + role/dev
+        └── eval.yaml
 ```
 
 ### start.sh — Start Agent
 
+Workspace-local: `cd` into your workspace first.
+
 ```bash
-# From within a workspace (cd into it first):
-./agent/start.sh --role default
-./agent/start.sh --role admin --adapter codex
-./agent/start.sh --role admin,reviewer              # Multiple roles → tmux
-python src/start_agent.py --role admin --adapter codex
+./agent/start.sh --role default              # App user role
+./agent/start.sh --role dev                  # Developer role (env setup)
+./agent/start.sh --role admin --adapter codex  # Different platform
+./agent/start.sh --role admin,reviewer       # Multiple roles → tmux
 ```
 
 ### create-my-socialware — Create a New App
@@ -236,7 +260,7 @@ uv run pytest -v
 # Start the backend
 uv run uvicorn src.app:app --port 8001
 
-# Start the agent
+# Deploy and start agent (from workspace or repo root)
 ./agent/deploy.sh && ./agent/start.sh --role default
 ```
 
