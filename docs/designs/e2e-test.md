@@ -864,7 +864,76 @@ ls .runtime/agents/reviewer/.claude/skills/
 # Exit: Ctrl+b then d (detach), then tmux kill-session
 ```
 
-### 10.11 Use evolver to inspect the app
+### 10.11 Test evolve_improve (manual mode)
+
+| | |
+|---|---|
+| **Action** | Start evolver, do a full diagnose → improve cycle |
+| **Purpose** | Verify conversational improvement workflow |
+| **Verify** | Evolver reads diagnostic data, proposes changes, applies them |
+
+```bash
+./agent/start.sh --role evolver
+# In Claude Code:
+#   "diagnose"
+#   → Evolver runs diagnose.py → shows report
+#   → "No conversation data yet" (normal for new app)
+#
+#   "evaluate"
+#   → Evolver runs run_eval.py → "Score: 3/3 (100%)"
+#
+#   "The check_health skill description is too brief. Improve it."
+#   → Evolver should:
+#     1. Read agent/flow/check_health/SKILL.md
+#     2. Propose an improvement
+#     3. Ask for approval
+#     4. On "yes" → edit the file → run deploy.sh
+#
+#   "evaluate" again
+#   → Should still be 3/3 (improvement didn't break anything)
+#
+#   Exit: Ctrl+C
+
+# Verify the file was actually changed:
+cat agent/flow/check_health/SKILL.md
+# Should show the improvement evolver made
+git diff agent/flow/check_health/SKILL.md
+# Should show the diff
+git checkout agent/flow/check_health/SKILL.md  # restore original
+```
+
+### 10.12 Test evolve_auto (automated loop)
+
+| | |
+|---|---|
+| **Action** | Run the automated evolution loop |
+| **Purpose** | Verify EvoSkill-based auto-optimization works |
+| **Verify** | Loop runs, reports score, creates backup |
+
+```bash
+uv run uvicorn src.app:app --port 8001 &
+sleep 2
+
+# Run auto loop directly (outside of agent, to verify script)
+uv run agent/flow/evolve_auto/scripts/run_loop.py \
+  --eval-cases agent/flow/evolve_eval/eval_cases.yaml \
+  --base-url http://localhost:8001 \
+  --iterations 2
+# Expected:
+#   Initial score: 100% (all cases pass)
+#   No failures — nothing to improve
+#   (This is correct — app already passes all eval cases)
+
+kill %1
+
+# Also test via evolver conversation:
+./agent/start.sh --role evolver
+# "auto-optimize, run 2 iterations"
+# → Evolver should run the loop script and report results
+# Exit: Ctrl+C
+```
+
+### 10.13 Use evolver to inspect the app
 
 | | |
 |---|---|
@@ -882,7 +951,7 @@ ls .runtime/agents/reviewer/.claude/skills/
 
 ---
 
-## 11. Cleanup
+## 12. Cleanup
 
 ```bash
 cd ../../../..     # back to repo root
