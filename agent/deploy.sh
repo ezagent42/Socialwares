@@ -101,6 +101,9 @@ for role_file in "$AGENT_DIR"/role/*.md; do
     mkdir -p "$role_runtime/.claude/skills"
     mkdir -p "$role_runtime/.claude/hooks"
 
+    # Write workspace root marker (so agent can find workspace root from .runtime/)
+    echo "$APP_ROOT" > "$role_runtime/.workspace_root"
+
     # Merge SOUL.md: scope/scope.md + role/{name}.md
     {
         cat "$AGENT_DIR/scope/scope.md" 2>/dev/null || true
@@ -127,10 +130,9 @@ for role_file in "$AGENT_DIR"/role/*.md; do
         fi
 
         link="$role_runtime/.claude/skills/$skill_name"
-        link_dir=$(dirname "$link")
-        target=$(python3 -c "import os.path; print(os.path.relpath('$skill_dir', '$link_dir'))")
 
-        ln -s "$target" "$link"
+        # Copy skill directory (not symlink — prevents accidental template modification)
+        cp -r "$skill_dir" "$link"
         skill_count=$((skill_count + 1))
     done
 
@@ -216,6 +218,36 @@ cat <<JSONEOF
 JSONEOF
 HOOKEOF2
     chmod +x "$role_runtime/.claude/hooks/check_violations.sh"
+
+    # Generate .claude/settings.local.json to register hooks
+    cat > "$role_runtime/.claude/settings.local.json" << SETTINGSEOF
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$role_runtime/.claude/hooks/log_action.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$role_runtime/.claude/hooks/check_violations.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
+SETTINGSEOF
 
     # Copy commitment constraints configuration
     if [ -f "$AGENT_DIR/commitment/constraints.yaml" ]; then

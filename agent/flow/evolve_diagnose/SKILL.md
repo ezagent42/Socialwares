@@ -11,6 +11,14 @@ User says "diagnose", "what's wrong", "analyze problems", "check issues" etc.
 
 ## Flow
 
+**Working directory**: Agent runs from .runtime/agents/evolver/.
+Read .workspace_root to find workspace root, then cd there before running scripts.
+
+```bash
+WORKSPACE_ROOT=$(cat .workspace_root)
+cd "$WORKSPACE_ROOT"
+```
+
 1. Run `scripts/diagnose.py` to scan all runtime data sources
 2. Read the diagnostic report
 3. Interpret findings and explain to the developer

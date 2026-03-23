@@ -15,6 +15,9 @@ Run `evolve_diagnose` and/or `evolve_eval` first to gather evidence.
 
 ## Flow
 
+**Working directory**: Read .workspace_root to find workspace root.
+Only modify files inside the workspace — NEVER modify template files at the repo root.
+
 1. Review the diagnostic report (.runtime/data/last_diagnosis.txt)
 2. Review eval results (agent/flow/evolve_eval/last_eval_results.json)
 3. Map each problem to a specific primitive:

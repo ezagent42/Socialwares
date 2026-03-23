@@ -8,7 +8,7 @@ Coverage:
 - data/ shared directory creation
 - per-role agents/ directory creation
 - SOUL.md correctly merged (scope + role)
-- flow/ skills symlinks correctly point to source directories
+- flow/ skills are copies (not symlinks) of source directories
 - commitment/constraints.yaml correctly copied
 - Multiple deploy idempotency
 """
@@ -135,32 +135,45 @@ class TestSoulMerge:
 
 
 # ---------------------------------------------------------------------------
-# Flow skills symlinks
+# Flow skills (copies, not symlinks)
 # ---------------------------------------------------------------------------
 
 
-class TestFlowSymlinks:
-    """Test flow/ skills symlinks."""
+class TestFlowSkills:
+    """Test flow/ skills are proper copies."""
 
-    def test_skills_are_symlinks(self, deployed):
+    def test_skills_are_directories(self, deployed):
         for role_dir in (deployed / "agents").iterdir():
             if not role_dir.is_dir():
                 continue
             skills_dir = role_dir / ".claude" / "skills"
             for skill in skills_dir.iterdir():
-                assert skill.is_symlink(), f"{skill} should be a symlink"
+                assert skill.is_dir(), f"{skill} should be a directory"
+                assert not skill.is_symlink(), f"{skill} should not be a symlink"
 
-    def test_skills_point_to_agent_flow(self, deployed, workspace):
-        """Symlinks should resolve to agent/flow/ directories."""
+    def test_skills_content_matches_agent_flow(self, deployed, workspace):
+        """Copied skill content should match agent/flow/ source directories."""
         for role_dir in (deployed / "agents").iterdir():
             if not role_dir.is_dir():
                 continue
             skills_dir = role_dir / ".claude" / "skills"
-            for skill_link in skills_dir.iterdir():
-                if not skill_link.is_symlink():
+            for skill_dir in skills_dir.iterdir():
+                if not skill_dir.is_dir():
                     continue
-                expected_source = workspace / "agent" / "flow" / skill_link.name
-                assert skill_link.resolve() == expected_source.resolve()
+                expected_source = workspace / "agent" / "flow" / skill_dir.name
+                assert expected_source.is_dir(), (
+                    f"Source flow dir missing for {skill_dir.name}"
+                )
+                # Verify files in the copy match the source
+                for src_file in expected_source.iterdir():
+                    if src_file.is_file():
+                        dest_file = skill_dir / src_file.name
+                        assert dest_file.exists(), (
+                            f"Missing {src_file.name} in copied skill {skill_dir.name}"
+                        )
+                        assert dest_file.read_text() == src_file.read_text(), (
+                            f"Content mismatch for {src_file.name} in {skill_dir.name}"
+                        )
 
     def test_skills_subset_of_flow_dirs(self, deployed, workspace):
         """Each role's skills should be a subset of agent/flow/ directories.
@@ -185,12 +198,12 @@ class TestFlowSymlinks:
                 f"Role {role_dir.name} has no skills"
             )
 
-    def test_skill_content_accessible_via_symlink(self, deployed):
+    def test_skill_content_accessible(self, deployed):
         for role_dir in (deployed / "agents").iterdir():
             if not role_dir.is_dir():
                 continue
-            for skill_link in (role_dir / ".claude" / "skills").iterdir():
-                skill_md = skill_link / "SKILL.md"
+            for skill_dir in (role_dir / ".claude" / "skills").iterdir():
+                skill_md = skill_dir / "SKILL.md"
                 if skill_md.exists():
                     content = skill_md.read_text()
                     assert len(content) > 0
@@ -306,3 +319,37 @@ class TestHooksGenerated:
                 continue
             dest = role_dir / "constraints.yaml"
             assert dest.exists(), f"Missing constraints.yaml for {role_dir.name}"
+
+    def test_settings_local_json_exists(self, deployed, workspace):
+        """settings.local.json must exist to register hooks with Claude Code."""
+        for role_dir in (deployed / "agents").iterdir():
+            if not role_dir.is_dir():
+                continue
+            settings = role_dir / ".claude" / "settings.local.json"
+            assert settings.exists(), f"Missing settings.local.json for {role_dir.name}"
+            import json
+            data = json.loads(settings.read_text())
+            assert "hooks" in data
+            assert "PostToolUse" in data["hooks"]
+            assert "SessionStart" in data["hooks"]
+
+    def test_workspace_root_marker(self, deployed, workspace):
+        """Each role should have .workspace_root pointing to workspace root."""
+        for role_dir in (deployed / "agents").iterdir():
+            if not role_dir.is_dir():
+                continue
+            marker = role_dir / ".workspace_root"
+            assert marker.exists(), f"Missing .workspace_root for {role_dir.name}"
+            root_path = marker.read_text().strip()
+            assert str(workspace) == root_path
+
+    def test_skills_are_copies_not_symlinks(self, deployed):
+        """Skills should be copies, not symlinks (prevents template modification)."""
+        for role_dir in (deployed / "agents").iterdir():
+            if not role_dir.is_dir():
+                continue
+            skills_dir = role_dir / ".claude" / "skills"
+            for skill in skills_dir.iterdir():
+                assert not skill.is_symlink(), (
+                    f"{skill} should be a copy, not a symlink"
+                )

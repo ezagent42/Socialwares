@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -19,10 +20,7 @@ from pathlib import Path
 
 def run_eval(eval_cases: Path, base_url: str) -> dict:
     """Run eval cases and return results."""
-    eval_script = eval_cases.parent.parent / "evolve_eval" / "scripts" / "run_eval.py"
-    if not eval_script.exists():
-        # Try relative to current dir
-        eval_script = Path("agent/flow/evolve_eval/scripts/run_eval.py")
+    eval_script = Path("agent/flow/evolve_eval/scripts/run_eval.py")
 
     result = subprocess.run(
         [sys.executable, str(eval_script), "--cases", str(eval_cases), "--base-url", base_url],
@@ -40,6 +38,7 @@ def run_eval(eval_cases: Path, base_url: str) -> dict:
 def run_diagnose(data_dir: Path, constraints: Path) -> str:
     """Run diagnostic and return report."""
     diag_script = Path("agent/flow/evolve_diagnose/scripts/diagnose.py")
+
     result = subprocess.run(
         [sys.executable, str(diag_script), "--data-dir", str(data_dir), "--constraints", str(constraints)],
         capture_output=True, text=True,
@@ -53,6 +52,12 @@ def get_failures(eval_results: dict) -> list[dict]:
 
 
 def main() -> None:
+    # Find workspace root
+    workspace_root_file = Path(".workspace_root")
+    if workspace_root_file.exists():
+        workspace_root = Path(workspace_root_file.read_text().strip())
+        os.chdir(workspace_root)
+
     parser = argparse.ArgumentParser(description="Automated evolution loop")
     parser.add_argument("--eval-cases", required=True, help="Path to eval_cases.yaml")
     parser.add_argument("--base-url", default="http://localhost:8001", help="App base URL")

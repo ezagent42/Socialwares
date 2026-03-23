@@ -11,6 +11,14 @@ User says "evaluate", "run eval", "check performance", "test the app" etc.
 
 ## Flow
 
+**Working directory**: Agent runs from .runtime/agents/evolver/.
+Read .workspace_root to find workspace root, then cd there before running scripts.
+
+```bash
+WORKSPACE_ROOT=$(cat .workspace_root)
+cd "$WORKSPACE_ROOT"
+```
+
 1. Run `scripts/run_eval.py` with the eval_cases.yaml file
 2. Report results: pass/fail per case, overall score
 3. Compare with previous scores if available

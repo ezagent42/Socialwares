@@ -26,6 +26,8 @@ For each iteration:
 ## Usage
 
 ```bash
+WORKSPACE_ROOT=$(cat .workspace_root)
+cd "$WORKSPACE_ROOT"
 uv run agent/flow/evolve_auto/scripts/run_loop.py \
   --eval-cases agent/flow/evolve_eval/eval_cases.yaml \
   --base-url http://localhost:8001 \
@@ -33,6 +35,14 @@ uv run agent/flow/evolve_auto/scripts/run_loop.py \
 ```
 
 ## Flow
+
+**Working directory**: Agent runs from .runtime/agents/evolver/.
+Read .workspace_root to find workspace root, then cd there before running scripts.
+
+```bash
+WORKSPACE_ROOT=$(cat .workspace_root)
+cd "$WORKSPACE_ROOT"
+```
 
 1. Developer says "auto-optimize, run 5 iterations"
 2. Evolver runs `scripts/run_loop.py --iterations 5`
