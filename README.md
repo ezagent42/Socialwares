@@ -97,8 +97,8 @@ Subagent identities. Each role gets its own `.md` file and a filtered set of ski
 | Role | Purpose | Skills |
 |------|---------|--------|
 | `default` | App user | check_health |
-| `dev` | Developer (env setup) | check_health, setup_claude |
-| `evolver` | Diagnose + improve | diagnose, eval, improve, auto |
+| `dev` | Developer (env setup) | check_health, setup_claude, inspect |
+| `evolver` | Diagnose + improve | check_health, inspect, diagnose, eval, improve, auto |
 
 ### Scope — Where
 

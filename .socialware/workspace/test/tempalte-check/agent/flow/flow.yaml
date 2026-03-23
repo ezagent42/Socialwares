@@ -24,7 +24,7 @@ flows: {}
 
 direct_actions:
   - action: check_health
-    role: [default, dev, evolver]
+    role: [default, dev]
     description: "Check app health status"
 
   - action: setup_claude

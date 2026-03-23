@@ -82,7 +82,7 @@ cat .runtime/agents/default/SOUL.md
 # From within workspace:
 ls .runtime/agents/default/.claude/skills/ | wc -l   # Expected: 1 (check_health)
 ls .runtime/agents/dev/.claude/skills/ | wc -l        # Expected: 3 (check_health, setup_claude, inspect)
-ls .runtime/agents/evolver/.claude/skills/ | wc -l     # Expected: 6 (all evolve_* + check_health + inspect)
+ls .runtime/agents/evolver/.claude/skills/ | wc -l     # Expected: 6 (check_health, inspect, evolve_diagnose/eval/improve/auto)
 ```
 
 ### 1.5 Make start (from workspace)
@@ -108,12 +108,12 @@ make start
 |---|---|
 | **Action** | Run `make deploy` twice from within workspace |
 | **Purpose** | Verify Make skips rebuild when nothing changed |
-| **Verify** | Second run says "nothing to be done" |
+| **Verify** | Both runs say "nothing to be done" (create already deployed) |
 
 ```bash
-# From within workspace:
-make deploy    # first run: rebuilds
-make deploy    # second run: should say "make: '.runtime/.deploy_stamp' is up to date."
+# From within workspace (create already deployed, so both show up-to-date):
+make deploy    # "Nothing to be done for 'deploy'." (create already deployed)
+make deploy    # same result
 ```
 
 ### 1.7 Make change detection
@@ -127,8 +127,9 @@ make deploy    # second run: should say "make: '.runtime/.deploy_stamp' is up to
 ```bash
 # From within workspace:
 echo "# test" >> agent/scope/scope.md
-make deploy    # should rebuild
-git checkout agent/scope/scope.md   # restore
+make deploy    # should rebuild (runs deploy.sh)
+# Restore: remove the line we added
+sed -i '$ d' agent/scope/scope.md
 ```
 
 ---
