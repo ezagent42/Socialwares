@@ -1,0 +1,28 @@
+# Eval cases — correct answer set for measuring agent/app performance.
+# Grows with your app through progressive phases.
+#
+# Each case makes an HTTP request to the running app and checks the response.
+
+cases:
+  # P1: basic health
+  - description: "Health check returns ok"
+    method: GET
+    endpoint: /health
+    expected_status: 200
+    expected_body: '{"status":"ok"}'
+
+  # P2: add task CRUD cases as you build them
+  # - description: "Create task returns 200"
+  #   method: POST
+  #   endpoint: /tasks
+  #   body: '{"title": "test"}'
+  #   headers: {"X-Identity": "admin"}
+  #   expected_status: 200
+
+  # P5: add role-based cases
+  # - description: "Reviewer cannot create task"
+  #   method: POST
+  #   endpoint: /tasks
+  #   headers: {"X-Identity": "reviewer"}
+  #   body: '{"title": "test"}'
+  #   expected_status: 403
