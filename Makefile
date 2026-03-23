@@ -13,3 +13,11 @@ create: ## Create new workspace: make create ROOM=my-team APP=my-app DESC="descr
 
 test: ## Run template tests
 	uv run pytest -v
+
+deploy start clean: ## Not available at root — cd into a workspace first
+	@echo "Error: '$@' is a workspace command, not a root command."
+	@echo ""
+	@echo "  make create ROOM=my-team APP=my-app    # create workspace first"
+	@echo "  cd .socialware/workspace/my-team/my-app  # then cd into it"
+	@echo "  make $@                                  # then run $@"
+	@exit 1
