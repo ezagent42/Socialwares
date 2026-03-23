@@ -15,24 +15,31 @@ cd Socialwares
 uv sync
 ```
 
-## Step 2: Quick-Try the Template
+## Step 2: Create Your App
 
 ```bash
-make start                   # auto-deploys, launches agent as default role
+make create ROOM=my-team APP=task-manager DESC="Task Manager"
+```
+
+This copies the template (including a workspace `Makefile`), customizes SOUL files, and runs initial deploy. Fails if workspace already exists.
+
+## Step 3: Enter Your Workspace
+
+All development — deploy, start, edit — happens inside the workspace:
+
+```bash
+cd .socialware/workspace/my-team/task-manager
+```
+
+## Step 4: Start the Agent
+
+```bash
+make start                   # launches agent as default role
 ```
 
 Try: "check health" — the agent runs the check_health skill.
 
-## Step 3: Create Your Own App
-
-```bash
-uv run scripts/create-my-socialware.py --room my-team --app task-manager --description "Task Manager"
-cd .socialware/workspace/my-team/task-manager
-```
-
-This copies the template, customizes SOUL files, runs initial deploy. Fails if workspace already exists.
-
-## Step 4: Develop
+## Step 5: Develop
 
 ```bash
 # Edit four primitives
@@ -44,50 +51,56 @@ vim agent/flow/flow.yaml           # register new actions
 mkdir agent/flow/create_task
 vim agent/flow/create_task/SKILL.md
 
-# Deploy and start
+# Redeploy and start (from within workspace)
 make deploy                        # only rebuilds if files changed
 make start ROLE=default
 ```
 
-## Step 5: Set Up Claude Code Environment
+## Step 6: Set Up Claude Code Environment
 
 ```bash
+# From within workspace:
 make start ROLE=dev
 # In Claude Code: "setup claude"
 ```
 
-## Step 6: Use Different Platforms
+## Step 7: Use Different Platforms
 
 ```bash
+# From within workspace:
 ./agent/start.sh --role default --adapter codex
 ./agent/start.sh --role default --adapter kimicode
 ```
 
-## Step 7: Multiple Roles
+## Step 8: Multiple Roles
 
 ```bash
+# From within workspace:
 ./agent/start.sh --role default,dev    # tmux panes
 ```
 
-## Step 8: Start Backend API
+## Step 9: Start Backend API
 
 ```bash
+# From within workspace:
 uv run uvicorn src.app:app --port 8001
 ```
 
-## Step 9: Run Tests
+## Step 10: Run Template Tests
 
 ```bash
+# From repo root:
 make test
 ```
 
 ## FAQ
 
 ### Q: make deploy does nothing
-Source files haven't changed. Run `make clean && make deploy` to force rebuild.
+Source files haven't changed. Run `make clean && make deploy` from within your workspace to force rebuild.
 
 ### Q: How to add a new role?
 ```bash
+# From within workspace:
 vim agent/role/admin.md            # create role file
 vim agent/flow/flow.yaml           # add role to action permissions
 make deploy

@@ -15,38 +15,23 @@ cd Socialwares
 # 2. Install dependencies
 uv sync
 
-# 3. Create your App (copies template + auto-deploys)
-uv run scripts/create-my-socialware.py --room my-team --app task-manager --description "Task Manager"
+# 3. Create your App
+make create ROOM=my-team APP=task-manager DESC="Task Manager"
 
 # 4. Enter your workspace (all development happens here)
 cd .socialware/workspace/my-team/task-manager
 
-# 5. Start agent (ready to use — create already deployed)
-./agent/start.sh --role default
+# 5. Start agent (ready — create already deployed)
+make start
 
 # 6. Edit four primitives as you develop
-vim agent/scope/scope.md           # app capabilities + boundaries
-vim agent/role/default.md          # agent identity
-vim agent/flow/flow.yaml           # register actions per role
-vim agent/flow/                    # add skills
+vim agent/scope/scope.md
+vim agent/role/default.md
+vim agent/flow/flow.yaml
 
-# 7. Redeploy after editing, then start
-make deploy                        # or ./agent/deploy.sh
-./agent/start.sh --role default
-
-# 8. Set up Claude Code environment (via dev role)
-./agent/start.sh --role dev
-# In Claude Code: say "setup claude"
-
-# 9. Diagnose and improve (via evolver role, after app has runtime data)
-./agent/start.sh --role evolver
-# "diagnose" → "evaluate" → "improve" or "auto-optimize"
-```
-
-### Quick-Try (without creating a workspace)
-
-```bash
-make start                         # deploys if needed, then starts default role
+# 7. Redeploy and start
+make deploy
+make start ROLE=default
 ```
 
 ## Directory Structure
@@ -78,14 +63,27 @@ socialwares/
 │   ├── deploy.sh                 ← Compile four primitives → .runtime/
 │   ├── start.sh                  ← Launch agent (requires deploy first)
 │   └── adapters/                 ← Platform adapters (Claude/Codex/Kimi)
-├── Makefile                      ← Entry point: make deploy / make start
+├── Makefile                      ← Root: make create + make test only
 ├── scripts/
 │   └── create-my-socialware.py   ← Create new App instance
 ├── claude.sh                     ← Claude Code launcher (agent-setup)
-├── .socialware/workspace/        ← Workspace instances
+├── .socialware/workspace/        ← Workspace instances (each has its own Makefile)
 ├── tests/
 └── docs/
     └── guides/                   ← User guides (architecture, quickstart, etc.)
+```
+
+Each workspace has its own `Makefile` (copied from `agent/Makefile.template` during `make create`):
+
+```
+.socialware/workspace/{room}/{app}/
+├── Makefile                      ← make deploy / make start / make clean
+├── agent/                        ← Four primitives + toolchain
+│   └── Makefile.template         ← Template for workspace Makefile
+├── src/
+├── app/
+├── .runtime/                     ← Deploy output (gitignored)
+└── pyproject.toml
 ```
 
 ## Four Primitives
@@ -155,6 +153,8 @@ Each action has a `SKILL.md` (+ optional `scripts/`). `deploy.sh` reads `flow.ya
 
 ### deploy.sh
 
+Run from within a workspace. Not available at repo root.
+
 Compiles `agent/` four primitives into `.runtime/`. Idempotent — detects added/removed roles and skills.
 
 What it generates per role:
@@ -187,6 +187,8 @@ What it generates per role:
 
 ### start.sh
 
+Run from within a workspace. Not available at repo root.
+
 Launches agent. Requires `.runtime/` to exist (run `make deploy` or `./agent/deploy.sh` first).
 
 ```bash
@@ -200,10 +202,10 @@ Launches agent. Requires `.runtime/` to exist (run `make deploy` or `./agent/dep
 ### create-my-socialware
 
 ```bash
-uv run scripts/create-my-socialware.py --room my-team --app task-manager --description "Task Manager"
+make create ROOM=my-team APP=task-manager DESC="Task Manager"
 ```
 
-Copies template → workspace, customizes scope.md and role files, runs initial deploy. Fails if workspace already exists.
+Copies template → workspace (including `Makefile` from `agent/Makefile.template`), customizes scope.md and role files, runs initial deploy. Fails if workspace already exists.
 
 ### claude.sh
 
@@ -243,6 +245,7 @@ Built-in role for improving your app based on runtime evidence.
 | `evolve_auto` | Auto | Automated loop: evaluate → diagnose → propose → apply → re-evaluate |
 
 ```bash
+# From within a workspace:
 ./agent/start.sh --role evolver
 # "diagnose"       → analyze runtime data
 # "evaluate"       → run eval cases, report score
@@ -271,16 +274,17 @@ P1 Define Agent → P2 Refine Flow → P3 Refine Commitment → P4 Expand Scope 
                                          P0 ← Reach boundary ← New App or /zchat
 ```
 
-Each phase: edit agent/ → `make deploy` → start → grow src/ → repeat.
+Each phase: edit agent/ → `make deploy` → start → grow src/ → repeat (all from within a workspace).
 See [docs/designs/progressive-dev-guide-example.md](docs/designs/progressive-dev-guide-example.md) for detailed example.
 
 ## Development
 
 ```bash
-uv sync                            # Install dependencies
-uv run pytest -v                   # Run tests (36 tests)
-uv run uvicorn src.app:app --port 8001  # Start backend
-./agent/start.sh --role default    # Start agent
+uv sync
+make test        # run template tests
+make create ROOM=dev APP=sandbox DESC="Development sandbox"
+cd .socialware/workspace/dev/sandbox
+make deploy && make start
 ```
 
 ## License

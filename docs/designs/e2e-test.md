@@ -12,31 +12,36 @@ uv sync
 
 ---
 
-## 1. Template Quick-Try
+## 1. Template Deploy via Workspace
 
-### 1.1 Make deploy from template
+Deploy and start only happen inside workspaces — never at the repo root. `.runtime/` never exists at repo root.
+
+### 1.1 Create a workspace and verify deploy
 
 | | |
 |---|---|
-| **Action** | `make deploy` |
-| **Purpose** | Verify deploy.sh compiles four primitives to .runtime/ |
-| **Verify** | `.runtime/agents/default/` exists, `.runtime/agents/dev/` exists, `.runtime/agents/evolver/` exists |
+| **Action** | `make create` then verify .runtime/ inside workspace |
+| **Purpose** | Verify create copies template, deploys into workspace |
+| **Verify** | Workspace has `.runtime/agents/default/`, `dev/`, `evolver/` |
 
 ```bash
-make deploy
+make create ROOM=test APP=template-check DESC="Template verification"
+cd .socialware/workspace/test/template-check
+
 ls .runtime/agents/
 # Expected: default  dev  evolver
 ```
 
-### 1.2 Check .runtime/ structure
+### 1.2 Check .runtime/ structure (inside workspace)
 
 | | |
 |---|---|
-| **Action** | Inspect .runtime/ contents |
+| **Action** | Inspect .runtime/ contents inside workspace |
 | **Purpose** | Verify deploy generates correct structure per role |
 | **Verify** | Each role has: .claude/skills/, .claude/hooks/, SOUL.md, constraints.yaml, flow.yaml |
 
 ```bash
+# From within workspace:
 ls .runtime/agents/default/
 # Expected: .claude  SOUL.md  constraints.yaml  flow.yaml
 
@@ -60,6 +65,7 @@ ls .runtime/agents/default/.claude/hooks/
 | **Verify** | Contains content from both scope/scope.md and role/default.md |
 
 ```bash
+# From within workspace:
 cat .runtime/agents/default/SOUL.md
 # Should contain scope content ("Socialware App") AND role content ("Default Agent")
 ```
@@ -73,20 +79,22 @@ cat .runtime/agents/default/SOUL.md
 | **Verify** | default has fewer skills than evolver |
 
 ```bash
+# From within workspace:
 ls .runtime/agents/default/.claude/skills/ | wc -l   # Expected: 1 (check_health)
 ls .runtime/agents/dev/.claude/skills/ | wc -l        # Expected: 3 (check_health, setup_claude, inspect)
 ls .runtime/agents/evolver/.claude/skills/ | wc -l     # Expected: 6 (all evolve_* + check_health + inspect)
 ```
 
-### 1.5 Make start (template)
+### 1.5 Make start (from workspace)
 
 | | |
 |---|---|
-| **Action** | `make start` |
+| **Action** | `make start` from within workspace |
 | **Purpose** | Verify agent launches in default role |
 | **Verify** | Claude Code TUI opens, SOUL.md loaded, skills available |
 
 ```bash
+# From within workspace:
 make start
 # In Claude Code:
 #   - Type "/" → should see "check_health" in skill list
@@ -98,11 +106,12 @@ make start
 
 | | |
 |---|---|
-| **Action** | Run `make deploy` twice |
+| **Action** | Run `make deploy` twice from within workspace |
 | **Purpose** | Verify Make skips rebuild when nothing changed |
 | **Verify** | Second run says "nothing to be done" |
 
 ```bash
+# From within workspace:
 make deploy    # first run: rebuilds
 make deploy    # second run: should say "make: '.runtime/.deploy_stamp' is up to date."
 ```
@@ -111,11 +120,12 @@ make deploy    # second run: should say "make: '.runtime/.deploy_stamp' is up to
 
 | | |
 |---|---|
-| **Action** | Edit a file, run `make deploy` |
+| **Action** | Edit a file, run `make deploy` from within workspace |
 | **Purpose** | Verify Make detects source changes |
 | **Verify** | Redeploys after edit |
 
 ```bash
+# From within workspace:
 echo "# test" >> agent/scope/scope.md
 make deploy    # should rebuild
 git checkout agent/scope/scope.md   # restore
@@ -293,6 +303,7 @@ cd ../../../..
 | **Verify** | constraints.yaml exists in each role's .runtime/ |
 
 ```bash
+# From within workspace:
 cat .runtime/agents/default/constraints.yaml
 # Should match agent/commitment/constraints.yaml
 ```
@@ -327,6 +338,7 @@ kill %1
 | **Verify** | check_violations.sh is executable |
 
 ```bash
+# From within workspace:
 ls -la .runtime/agents/default/.claude/hooks/check_violations.sh
 # Expected: -rwxr-xr-x
 ```
@@ -344,6 +356,7 @@ ls -la .runtime/agents/default/.claude/hooks/check_violations.sh
 | **Verify** | log_action.sh is executable |
 
 ```bash
+# From within workspace:
 ls -la .runtime/agents/default/.claude/hooks/log_action.sh
 # Expected: -rwxr-xr-x
 ```
@@ -356,11 +369,12 @@ ls -la .runtime/agents/default/.claude/hooks/log_action.sh
 
 | | |
 |---|---|
-| **Action** | `./agent/start.sh --role evolver` |
+| **Action** | `make start ROLE=evolver` from within workspace |
 | **Purpose** | Verify evolver role launches with correct skills |
 | **Verify** | Claude Code opens, evolve skills available |
 
 ```bash
+# From within workspace:
 make start ROLE=evolver
 # In Claude Code:
 #   Type "/" → should see: evolve_diagnose, evolve_eval, evolve_improve, evolve_auto, inspect
@@ -449,11 +463,12 @@ ls -la agent/adapters/kimicode/shell.sh # executable
 
 | | |
 |---|---|
-| **Action** | `make test` |
+| **Action** | `make test` (from repo root) |
 | **Purpose** | Verify all automated tests pass |
 | **Verify** | 36 tests pass |
 
 ```bash
+# From repo root:
 make test
 # Expected: 36 passed
 ```
@@ -956,5 +971,5 @@ kill %1
 ```bash
 cd ../../../..     # back to repo root
 rm -rf .socialware/workspace/demo
-make clean
+rm -rf .socialware/workspace/test
 ```

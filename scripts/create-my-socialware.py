@@ -82,6 +82,13 @@ def create_workspace(room: str, app: str, description: str) -> Path:
         shutil.copytree(adapters_src, adapters_dst, ignore=shutil.ignore_patterns("__pycache__"))
         print(f"  Copied agent/adapters/")
 
+    # Copy Makefile template
+    makefile_src = agent_src / "Makefile.template"
+    makefile_dst = workspace_dir / "Makefile"
+    if makefile_src.exists():
+        shutil.copy2(makefile_src, makefile_dst)
+        print(f"  Copied Makefile")
+
     # Copy pyproject.toml for independent dependency management
     pyproject_src = REPO_ROOT / "pyproject.toml"
     if pyproject_src.exists():
@@ -199,8 +206,9 @@ def main() -> None:
     print(f"  vim agent/role/default.md")
     print(f"  vim agent/flow/flow.yaml")
     print()
-    print(f"  # Start agent (auto-deploys if agent/ changed)")
-    print(f"  ./agent/start.sh --role default")
+    print(f"  # Deploy and start")
+    print(f"  make deploy")
+    print(f"  make start ROLE=default")
     print()
 
 

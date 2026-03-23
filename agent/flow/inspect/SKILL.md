@@ -12,24 +12,26 @@ User says "inspect", "show structure", "how does this work", "project layout", "
 ## Project Structure
 
 ```
-workspace/
-├── app/                          ← Frontend (Next.js: UI + Chat)
-├── src/                          ← Backend (FastAPI)
-│   ├── app.py                    ← API entry point
-│   └── start_agent.py            ← SDK mode launch
-├── agent/                        ← Four primitives + toolchain
-│   ├── role/                     ← Who: {name}.md files
-│   ├── scope/                    ← Where: scope.md
-│   ├── commitment/               ← What: constraints.yaml
-│   ├── flow/                     ← How: flow.yaml + {action}/SKILL.md
-│   ├── deploy.sh                 ← Compile → .runtime/
-│   ├── start.sh                  ← Launch agent
-│   └── adapters/                 ← Claude/Codex/Kimi
-├── .runtime/                     ← Deploy output (gitignored)
-│   ├── data/conversations/       ← Agent interaction logs
-│   ├── data/violations/          ← Constraint violation queue
-│   └── agents/{role}/            ← Per-role $PROJECT_DIR
-└── Makefile                      ← make deploy / make start
+workspace/                            ← all dev happens here (cd into workspace)
+├── Makefile                          ← make deploy / make start / make clean
+├── app/                              ← Frontend (Next.js: UI + Chat)
+├── src/                              ← Backend (FastAPI)
+│   ├── app.py                        ← API entry point
+│   └── start_agent.py                ← SDK mode launch
+├── agent/                            ← Four primitives + toolchain
+│   ├── role/                         ← Who: {name}.md files
+│   ├── scope/                        ← Where: scope.md
+│   ├── commitment/                   ← What: constraints.yaml
+│   ├── flow/                         ← How: flow.yaml + {action}/SKILL.md
+│   ├── deploy.sh                     ← Compile → .runtime/
+│   ├── start.sh                      ← Launch agent
+│   ├── Makefile.template             ← Source for workspace Makefile
+│   └── adapters/                     ← Claude/Codex/Kimi
+├── .runtime/                         ← Deploy output (gitignored, workspace-only)
+│   ├── data/conversations/           ← Agent interaction logs
+│   ├── data/violations/              ← Constraint violation queue
+│   └── agents/{role}/                ← Per-role $PROJECT_DIR
+└── pyproject.toml                    ← Independent dependencies
 ```
 
 ## Four Primitives
@@ -71,9 +73,13 @@ make deploy
 ## Key Commands
 
 ```bash
+# From within workspace:
 make deploy              # Compile four primitives → .runtime/
 make start ROLE=default  # Launch agent (auto-deploys if needed)
 make start ROLE=evolver  # Launch evolver
-make test                # Run tests
 make clean               # Remove .runtime/
+
+# From repo root (template-level only):
+make create ROOM=x APP=y DESC="..."  # Create new workspace
+make test                             # Run template tests
 ```

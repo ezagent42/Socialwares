@@ -68,6 +68,11 @@ class TestCreateWorkspace:
             role_soul = (workspace_dir / "agent" / "role" / "default.md").read_text()
             assert app in role_soul
 
+            # Check Makefile copied
+            assert (workspace_dir / "Makefile").exists(), "Makefile should be copied to workspace"
+            makefile_content = (workspace_dir / "Makefile").read_text()
+            assert "deploy" in makefile_content
+
             # Check auto-deploy ran (.runtime/ should exist)
             assert (workspace_dir / ".runtime").is_dir(), \
                 ".runtime/ should exist — create runs initial deploy"

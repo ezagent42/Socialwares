@@ -49,19 +49,22 @@ See [designs/progressive-dev-guide-example.md](../designs/progressive-dev-guide-
 
 ## Workspace Model
 
-Each workspace is a self-contained copy of the template:
+Each workspace is a self-contained copy of the template. Deploy and start only happen inside workspaces — never at the repo root.
 
 ```
 .socialware/workspace/
 └── {room}/{app}/              ← cd here to develop
+    ├── Makefile               ← make deploy / make start / make clean
     ├── src/                   ← your app code
     ├── agent/                 ← your four primitives
+    │   └── Makefile.template  ← source for workspace Makefile
     ├── .runtime/              ← deploy output (gitignored)
-    ├── pyproject.toml         ← independent dependencies
-    └── Makefile               ← make deploy / make start
+    └── pyproject.toml         ← independent dependencies
 ```
 
 - **Room** = organizational group (team, project)
 - **Workspace** = one app instance within a room
+- Each workspace has its own `Makefile` (copied from `agent/Makefile.template` during `make create`)
 - Each workspace has its own dependencies (pyproject.toml)
-- `.runtime/` is gitignored — per-workspace runtime data
+- `.runtime/` is gitignored — only exists inside workspaces, never at repo root
+- Root Makefile only provides `make create` and `make test`
