@@ -140,12 +140,12 @@ sed -i '$ d' agent/scope/scope.md
 
 | | |
 |---|---|
-| **Action** | `uv run scripts/create-my-socialware.py --room test --app hello --description "Test App"` |
+| **Action** | `make create ROOM=test APP=hello DESC="Test App"` |
 | **Purpose** | Verify workspace creation with room/app structure |
 | **Verify** | Directory created, files copied, SOUL files customized, auto-deployed |
 
 ```bash
-uv run scripts/create-my-socialware.py --room test --app hello --description "Test App"
+make create ROOM=test APP=hello DESC="Test App"
 
 # Check structure
 ls .socialware/workspace/test/hello/
@@ -172,7 +172,7 @@ ls .socialware/workspace/test/hello/.runtime/agents/
 | **Verify** | Exits with error |
 
 ```bash
-uv run scripts/create-my-socialware.py --room test --app hello --description "Test"
+make create ROOM=test APP=hello DESC="Test"
 # Expected: error message, non-zero exit code
 ```
 
@@ -489,7 +489,7 @@ Build a complete Todo app from scratch, testing every feature along the way.
 | **Verify** | Workspace created, auto-deployed, all files present |
 
 ```bash
-uv run scripts/create-my-socialware.py --room demo --app todo --description "Simple todo list"
+make create ROOM=demo APP=todo DESC="Simple todo list"
 cd .socialware/workspace/demo/todo
 
 ls agent/role/        # default.md  dev.md  evolver.md  README.md
