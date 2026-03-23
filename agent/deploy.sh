@@ -23,12 +23,12 @@ echo ""
 mkdir -p "$RUNTIME_DIR/data/Files"
 mkdir -p "$RUNTIME_DIR/data/Sqlite"
 
-# 2. Clean up removed roles — delete .runtime/agents/{role}/ if agent/role/{role}/ no longer exists
+# 2. Clean up removed roles — delete .runtime/agents/{role}/ if agent/role/{role}.md no longer exists
 if [ -d "$RUNTIME_DIR/agents" ]; then
     for old_role_dir in "$RUNTIME_DIR"/agents/*/; do
         [ -d "$old_role_dir" ] || continue
         old_role_name=$(basename "$old_role_dir")
-        if [ ! -d "$AGENT_DIR/role/$old_role_name" ]; then
+        if [ ! -f "$AGENT_DIR/role/$old_role_name.md" ]; then
             echo "  Removing deleted role: $old_role_name"
             rm -rf "$old_role_dir"
         fi
@@ -90,9 +90,10 @@ PYEOF
 }
 
 # 4. Generate an isolated PROJECT_DIR for each role
-for role_dir in "$AGENT_DIR"/role/*/; do
-    [ -d "$role_dir" ] || continue
-    role_name=$(basename "$role_dir")
+for role_file in "$AGENT_DIR"/role/*.md; do
+    [ -f "$role_file" ] || continue
+    role_name=$(basename "$role_file" .md)
+    [ "$role_name" = "README" ] && continue
     role_runtime="$RUNTIME_DIR/agents/$role_name"
 
     echo "  Role: $role_name"
@@ -100,13 +101,13 @@ for role_dir in "$AGENT_DIR"/role/*/; do
     mkdir -p "$role_runtime/.claude/skills"
     mkdir -p "$role_runtime/.claude/hooks"
 
-    # Merge SOUL.md: scope/SOUL.md + role/{name}/SOUL.md
+    # Merge SOUL.md: scope/scope.md + role/{name}.md
     {
-        cat "$AGENT_DIR/scope/SOUL.md" 2>/dev/null || true
+        cat "$AGENT_DIR/scope/scope.md" 2>/dev/null || true
         echo ""
         echo "---"
         echo ""
-        cat "$role_dir/SOUL.md" 2>/dev/null || true
+        cat "$role_file" 2>/dev/null || true
     } > "$role_runtime/SOUL.md"
 
     # Get allowed actions for this role

@@ -99,8 +99,8 @@ def create_workspace(room: str, app: str, description: str) -> Path:
 def customize_workspace(workspace_dir: Path, app: str, description: str) -> None:
     """Customize the four primitives in the workspace."""
 
-    scope_soul = workspace_dir / "agent" / "scope" / "SOUL.md"
-    scope_soul.write_text(f"""# {app}
+    scope_file = workspace_dir / "agent" / "scope" / "scope.md"
+    scope_file.write_text(f"""# {app}
 
 {description}
 
@@ -113,11 +113,11 @@ def customize_workspace(workspace_dir: Path, app: str, description: str) -> None
 
 - (Define the Agent's operational boundaries here)
 """)
-    print(f"  Customized agent/scope/SOUL.md")
+    print(f"  Customized agent/scope/scope.md")
 
-    role_soul = workspace_dir / "agent" / "role" / "default" / "SOUL.md"
-    if role_soul.exists():
-        role_soul.write_text(f"""# Default Agent
+    role_file = workspace_dir / "agent" / "role" / "default.md"
+    if role_file.exists():
+        role_file.write_text(f"""# Default Agent
 
 You are the Agent for {app}.
 
@@ -130,7 +130,7 @@ You are the Agent for {app}.
 
 Operate {app} according to user instructions.
 """)
-        print(f"  Customized agent/role/default/SOUL.md")
+        print(f"  Customized agent/role/default.md")
 
 
 def run_deploy(workspace_dir: Path) -> bool:
@@ -195,8 +195,8 @@ def main() -> None:
     print(f"  cd {ws_rel}")
     print()
     print(f"  # Edit four primitives")
-    print(f"  vim agent/scope/SOUL.md")
-    print(f"  vim agent/role/default/SOUL.md")
+    print(f"  vim agent/scope/scope.md")
+    print(f"  vim agent/role/default.md")
     print(f"  vim agent/flow/flow.yaml")
     print()
     print(f"  # Start agent (auto-deploys if agent/ changed)")

@@ -1,11 +1,11 @@
 # Default Agent
 
-You are the default Agent for this Socialware App.
+Default app user role.
 
 ## Identity
 
 - Role: default
-- Permissions: All operations
+- Permissions: all operations
 
 ## Responsibilities
 

@@ -1,6 +1,6 @@
 # Scope — Where
 
-Defines the App's capability boundary and public identity via SOUL.md.
+Defines the App's capability boundary and public identity via scope.md.
 
 ## What Scope Means
 
@@ -16,9 +16,9 @@ minimum participants) with the Agent's identity declaration.
 
 ## Files
 
-- `SOUL.md` — the single source of truth for what this App is and what it can do
+- `scope.md` — the single source of truth for what this App is and what it can do
 
-## SOUL.md Content
+## scope.md Content
 
 ```markdown
 # App Name
@@ -38,11 +38,11 @@ Short description of the app.
 
 ## deploy.sh Processing
 
-`scope/SOUL.md` is merged with each `role/{name}/SOUL.md`
+`scope/scope.md` is merged with each `role/{name}.md`
 to generate the complete SOUL.md specific to that role:
 
 ```
-scope/SOUL.md (app-level: what the app does)
-  + role/{name}/SOUL.md (role-level: who this agent is)
+scope/scope.md (app-level: what the app does)
+  + role/{name}.md (role-level: who this agent is)
   = .runtime/agents/{name}/SOUL.md (combined identity)
 ```

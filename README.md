@@ -25,12 +25,13 @@ cd .socialware/workspace/my-team/task-manager
 ./agent/start.sh --role default
 
 # 6. Edit four primitives as you develop
-vim agent/scope/SOUL.md            # app capabilities + boundaries
-vim agent/role/default/SOUL.md     # agent identity
+vim agent/scope/scope.md           # app capabilities + boundaries
+vim agent/role/default.md          # agent identity
 vim agent/flow/flow.yaml           # register actions per role
 vim agent/flow/                    # add skills
 
-# 7. Start again (auto-deploys if agent/ changed)
+# 7. Redeploy after editing, then start
+make deploy                        # or ./agent/deploy.sh
 ./agent/start.sh --role default
 
 # 8. Set up Claude Code environment (via dev role)
@@ -45,7 +46,7 @@ vim agent/flow/                    # add skills
 ### Quick-Try (without creating a workspace)
 
 ```bash
-./agent/start.sh --role default    # auto-deploys on first start
+make start                         # deploys if needed, then starts default role
 ```
 
 ## Directory Structure
@@ -58,30 +59,33 @@ socialwares/
 │   └── start_agent.py            ← SDK mode Agent startup
 ├── agent/                        ← Four primitives + toolchain
 │   ├── role/                     ← Who: Subagent identities
-│   │   ├── default/SOUL.md       ← App user role
-│   │   ├── dev/SOUL.md           ← Developer role (env setup)
-│   │   └── evolver/SOUL.md       ← Evolver role (diagnose + improve)
+│   │   ├── default.md            ← App user role
+│   │   ├── dev.md                ← Developer role (env setup)
+│   │   └── evolver.md            ← Evolver role (diagnose + improve)
 │   ├── scope/                    ← Where: App capability boundary
-│   │   └── SOUL.md
+│   │   └── scope.md
 │   ├── commitment/               ← What: Constraints on flow edges
 │   │   └── constraints.yaml
 │   ├── flow/                     ← How: Skills + action registry
 │   │   ├── flow.yaml             ← Action registry (roles → actions)
 │   │   ├── check_health/         ← default + dev + evolver
+│   │   ├── inspect/              ← default + dev + evolver
 │   │   ├── setup_claude/         ← dev only
 │   │   ├── evolve_diagnose/      ← evolver only (+ scripts/diagnose.py)
 │   │   ├── evolve_eval/          ← evolver only (+ scripts/run_eval.py)
 │   │   ├── evolve_improve/       ← evolver only
 │   │   └── evolve_auto/          ← evolver only (+ scripts/run_loop.py)
 │   ├── deploy.sh                 ← Compile four primitives → .runtime/
-│   ├── start.sh                  ← Launch agent (auto-deploys if needed)
+│   ├── start.sh                  ← Launch agent (requires deploy first)
 │   └── adapters/                 ← Platform adapters (Claude/Codex/Kimi)
+├── Makefile                      ← Entry point: make deploy / make start
 ├── scripts/
 │   └── create-my-socialware.py   ← Create new App instance
 ├── claude.sh                     ← Claude Code launcher (agent-setup)
 ├── .socialware/workspace/        ← Workspace instances
 ├── tests/
 └── docs/
+    └── guides/                   ← User guides (architecture, quickstart, etc.)
 ```
 
 ## Four Primitives
@@ -90,7 +94,7 @@ Each Socialware App defines Agent behavior through four primitives in `agent/`:
 
 ### Role — Who
 
-Subagent identities. Each role gets its own `SOUL.md` and a filtered set of skills (from flow.yaml).
+Subagent identities. Each role gets its own `.md` file and a filtered set of skills (from flow.yaml).
 
 | Role | Purpose | Skills |
 |------|---------|--------|
@@ -100,7 +104,7 @@ Subagent identities. Each role gets its own `SOUL.md` and a filtered set of skil
 
 ### Scope — Where
 
-App capability boundary via `scope/SOUL.md`.
+App capability boundary via `scope/scope.md`.
 
 - **Internal**: What the Agent can and cannot do (constrains behavior)
 - **External**: Public description (other Agents read this to decide delegation)
@@ -157,7 +161,7 @@ What it generates per role:
 - `.claude/skills/` — symlinks to allowed flow/ actions (per flow.yaml)
 - `.claude/hooks/log_action.sh` — PostToolUse hook for conversation logging
 - `.claude/hooks/check_violations.sh` — SessionStart hook for violation notifications
-- `SOUL.md` — merged scope/SOUL.md + role/{name}/SOUL.md
+- `SOUL.md` — merged scope/scope.md + role/{name}.md
 - `constraints.yaml` — copied from commitment/
 - `flow.yaml` — copied for reference
 
@@ -183,7 +187,7 @@ What it generates per role:
 
 ### start.sh
 
-Launches agent. Auto-deploys if `.runtime/` is missing or `agent/` has been modified.
+Launches agent. Requires `.runtime/` to exist (run `make deploy` or `./agent/deploy.sh` first).
 
 ```bash
 ./agent/start.sh --role default              # App user
@@ -199,11 +203,11 @@ Launches agent. Auto-deploys if `.runtime/` is missing or `agent/` has been modi
 uv run scripts/create-my-socialware.py --room my-team --app task-manager --description "Task Manager"
 ```
 
-Copies template → workspace, customizes SOUL.md, runs initial deploy. Fails if workspace already exists.
+Copies template → workspace, customizes scope.md and role files, runs initial deploy. Fails if workspace already exists.
 
 ### claude.sh
 
-First-time Claude Code environment setup. See [docs/CLAUDE-SH.md](docs/CLAUDE-SH.md).
+First-time Claude Code environment setup. See [docs/guides/005-claude-setup.md](docs/guides/005-claude-setup.md).
 
 ## Runtime Data
 
@@ -267,7 +271,7 @@ P1 Define Agent → P2 Refine Flow → P3 Refine Commitment → P4 Expand Scope 
                                          P0 ← Reach boundary ← New App or /zchat
 ```
 
-Each phase: edit agent/ → start (auto-deploy) → grow src/ → repeat.
+Each phase: edit agent/ → `make deploy` → start → grow src/ → repeat.
 See [docs/designs/progressive-dev-guide-example.md](docs/designs/progressive-dev-guide-example.md) for detailed example.
 
 ## Development

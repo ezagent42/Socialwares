@@ -74,10 +74,10 @@ class TestDirectoryStructure:
         assert (deployed / "agents").is_dir()
 
     def test_role_dirs_match_agent_role(self, deployed, workspace):
-        """agents/ subdirectories should match agent/role/ subdirectories."""
+        """agents/ subdirectories should match agent/role/*.md files."""
         expected_roles = {
-            d.name for d in (workspace / "agent" / "role").iterdir()
-            if d.is_dir() and d.name != "__pycache__"
+            f.stem for f in (workspace / "agent" / "role").iterdir()
+            if f.is_file() and f.suffix == ".md" and f.name != "README.md"
         }
         actual_roles = {
             d.name for d in (deployed / "agents").iterdir()
@@ -100,7 +100,7 @@ class TestDirectoryStructure:
 
 
 class TestSoulMerge:
-    """Test SOUL.md merge: scope/SOUL.md + role/{name}/SOUL.md."""
+    """Test SOUL.md merge: scope/scope.md + role/{name}.md."""
 
     def test_soul_md_exists_for_each_role(self, deployed):
         for role_dir in (deployed / "agents").iterdir():
@@ -111,8 +111,8 @@ class TestSoulMerge:
             assert soul.stat().st_size > 0
 
     def test_soul_contains_scope_content(self, deployed, workspace):
-        """SOUL.md should contain content from scope/SOUL.md."""
-        scope_content = (workspace / "agent" / "scope" / "SOUL.md").read_text()
+        """SOUL.md should contain content from scope/scope.md."""
+        scope_content = (workspace / "agent" / "scope" / "scope.md").read_text()
         scope_marker = scope_content.strip().split("\n")[0]
 
         for role_dir in (deployed / "agents").iterdir():
@@ -122,11 +122,11 @@ class TestSoulMerge:
             assert scope_marker in soul
 
     def test_soul_contains_role_content(self, deployed, workspace):
-        """SOUL.md should contain content from role/{name}/SOUL.md."""
+        """SOUL.md should contain content from role/{name}.md."""
         for role_dir in (deployed / "agents").iterdir():
             if not role_dir.is_dir():
                 continue
-            role_soul_src = workspace / "agent" / "role" / role_dir.name / "SOUL.md"
+            role_soul_src = workspace / "agent" / "role" / (role_dir.name + ".md")
             if not role_soul_src.exists():
                 continue
             role_content = role_soul_src.read_text().strip().split("\n")[0]

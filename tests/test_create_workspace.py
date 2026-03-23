@@ -51,8 +51,8 @@ class TestCreateWorkspace:
             assert workspace_dir.exists()
             assert (workspace_dir / "src").is_dir()
             assert (workspace_dir / "agent").is_dir()
-            assert (workspace_dir / "agent" / "scope" / "SOUL.md").exists()
-            assert (workspace_dir / "agent" / "role" / "default" / "SOUL.md").exists()
+            assert (workspace_dir / "agent" / "scope" / "scope.md").exists()
+            assert (workspace_dir / "agent" / "role" / "default.md").exists()
             assert (workspace_dir / "agent" / "flow").is_dir()
             assert (workspace_dir / "agent" / "commitment").is_dir()
 
@@ -62,10 +62,10 @@ class TestCreateWorkspace:
             assert (workspace_dir / "agent" / "adapters").is_dir()
 
             # Check customized content
-            scope_soul = (workspace_dir / "agent" / "scope" / "SOUL.md").read_text()
+            scope_soul = (workspace_dir / "agent" / "scope" / "scope.md").read_text()
             assert app in scope_soul
 
-            role_soul = (workspace_dir / "agent" / "role" / "default" / "SOUL.md").read_text()
+            role_soul = (workspace_dir / "agent" / "role" / "default.md").read_text()
             assert app in role_soul
 
             # Check auto-deploy ran (.runtime/ should exist)

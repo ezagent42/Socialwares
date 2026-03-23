@@ -1,30 +1,41 @@
 # Role — Who
 
-Defines Subagent identity and permissions.
+Defines Subagent identities. Each role is a single `.md` file.
 
 ## Structure
 
-Each role has its own subdirectory containing a `SOUL.md`:
-
 ```
 role/
-├── default/
-│   └── SOUL.md      ← Agent identity description
-├── admin/
-│   └── SOUL.md
-└── reviewer/
-    └── SOUL.md
+├── README.md
+├── default.md    ← App user role
+├── dev.md        ← Developer role
+└── evolver.md    ← Evolver role
 ```
 
-## SOUL.md Contents
+## File Format
 
-Describes the role's:
-- Identity and name
-- Granted permissions (which actions it can trigger)
-- Responsibility description
+Each role file follows a consistent template:
+
+```markdown
+# {Role Name} Agent
+
+{One-line description}
+
+## Identity
+
+- Role: {name}
+- Permissions: {list}
+
+## Responsibilities
+
+{Numbered list of responsibilities}
+```
+
+Role files define **identity only** — operational details belong in flow/ skills.
 
 ## deploy.sh Processing
 
-`deploy.sh` generates an independent `$PROJECT_DIR` for each role:
-- Merges `scope/SOUL.md` + `role/{name}/SOUL.md` → `.runtime/agents/{name}/SOUL.md`
-- Symlinks all skills under `flow/` → `.runtime/agents/{name}/.claude/skills/`
+For each `role/*.md` file, deploy.sh:
+1. Creates `.runtime/agents/{role_name}/`
+2. Merges `scope/scope.md` + `role/{name}.md` → `.runtime/agents/{name}/SOUL.md`
+3. Symlinks allowed flow/ skills (per flow.yaml)
