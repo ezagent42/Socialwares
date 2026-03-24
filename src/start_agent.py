@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
-"""Production mode agent launch entry point.
+"""SDK mode agent launch — programmatic with full conversation logging.
 
-The app backend calls this script to launch agents via adapters in SDK mode.
-Complementary to agent/start.sh (CLI mode shell launch), no conflict.
-
-Works relative to its own location — workspace-local, same as deploy.sh/start.sh.
-Looks for .runtime/ in the parent directory of src/.
+Complementary to agent/start.sh (TUI mode). Use for:
+- Production: app backend spawns agents via SDK
+- Evolver: automated conversation testing
 
 Usage (from within a workspace):
-    python src/start_agent.py --role default
-    python src/start_agent.py --role admin,reviewer
-    python src/start_agent.py --role admin --adapter codex
+    uv run src/start_agent.py --role default
+    uv run src/start_agent.py --role default --adapter codex
+    uv run src/start_agent.py --role default --prompt "check health"
 """
 from __future__ import annotations
 
 import argparse
+import asyncio
 import importlib
 import sys
 from pathlib import Path
@@ -22,20 +21,25 @@ from pathlib import Path
 
 def load_adapter(adapter_name: str, project_dir: Path):
     """Dynamically load the adapter for the specified platform."""
-    # Adapter lives in agent/adapters/ relative to workspace root
     app_root = Path(__file__).parent.parent
     adapter_path = app_root / "agent" / "adapters"
     sys.path.insert(0, str(adapter_path))
     sys.path.insert(0, str(adapter_path / adapter_name))
 
+    # Handle kimicode → kimicode directory
+    actual_name = adapter_name
+    if adapter_name == "kimi":
+        actual_name = "kimicode"
+        sys.path.insert(0, str(adapter_path / actual_name))
+
     from base import RoleConfig
 
     config = RoleConfig.from_runtime(project_dir)
 
-    # Dynamically import the adapter module
-    mod = importlib.import_module(f"{adapter_name}.sdk")
+    # Import adapter module
+    mod = importlib.import_module(f"{actual_name}.sdk")
 
-    # Find subclass of BaseAdapter
+    # Find adapter class
     for attr_name in dir(mod):
         attr = getattr(mod, attr_name)
         if (
@@ -45,35 +49,77 @@ def load_adapter(adapter_name: str, project_dir: Path):
         ):
             return attr(config)
 
-    raise RuntimeError(f"No adapter class found in {adapter_name}/sdk.py")
+    raise RuntimeError(f"No adapter class found in {actual_name}/sdk.py")
+
+
+async def run_sdk(adapter, prompt: str, workspace_root: Path, role: str, adapter_name: str) -> None:
+    """Run SDK mode: send prompt, collect messages, save session."""
+    from base import save_session
+
+    messages = []
+    print(f"[SDK] Sending prompt to {role} via {adapter_name}...")
+    print()
+
+    try:
+        async for message in adapter.launch_sdk(prompt):
+            # Serialize message
+            if hasattr(message, "__dict__"):
+                msg_dict = {"type": type(message).__name__}
+                for k, v in message.__dict__.items():
+                    msg_dict[k] = str(v) if not isinstance(v, (str, int, float, bool, list, dict, type(None))) else v
+            elif isinstance(message, dict):
+                msg_dict = message
+            else:
+                msg_dict = {"type": "raw", "content": str(message)}
+
+            messages.append(msg_dict)
+            # Print text content if present
+            content = msg_dict.get("content", "")
+            if content and isinstance(content, str):
+                print(content)
+
+    except NotImplementedError as e:
+        print(f"[SDK] Error: {e}")
+        return
+    except KeyboardInterrupt:
+        print("\n[SDK] Interrupted.")
+
+    # Save session
+    if messages:
+        session_file = save_session(workspace_root, role, adapter_name, messages)
+        print(f"\n[SDK] Session saved: {session_file}")
+        print(f"[SDK] Messages: {len(messages)}")
+    else:
+        print("[SDK] No messages received.")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Launch Socialware Agent (production mode)")
-    parser.add_argument("--role", required=True, help="Role name(s), comma-separated")
+    parser = argparse.ArgumentParser(description="Launch Socialware Agent (SDK mode)")
+    parser.add_argument("--role", required=True, help="Role name")
     parser.add_argument("--adapter", default="claude", help="Platform adapter")
+    parser.add_argument("--prompt", default="You are ready. What can I help with?", help="Initial prompt")
     args = parser.parse_args()
 
-    # Workspace-local: .runtime/ is in parent of src/
+    # Workspace-local
     app_root = Path(__file__).parent.parent
     runtime_dir = app_root / ".runtime"
 
     if not runtime_dir.exists():
-        print(f"Error: .runtime/ not found at {runtime_dir}")
-        print("Run ./agent/deploy.sh first")
+        print(f"Error: .runtime/ not found. Run 'make deploy' first.")
         sys.exit(1)
 
-    roles = args.role.split(",")
+    project_dir = runtime_dir / "agents" / args.role.strip()
+    if not project_dir.exists():
+        print(f"Error: Role '{args.role}' not found at {project_dir}")
+        sys.exit(1)
 
-    for role_name in roles:
-        project_dir = runtime_dir / "agents" / role_name.strip()
-        if not project_dir.exists():
-            print(f"Error: Role '{role_name}' not found at {project_dir}")
-            sys.exit(1)
+    adapter = load_adapter(args.adapter, project_dir)
 
-        print(f"Launching {role_name} via {args.adapter} SDK...")
-        adapter = load_adapter(args.adapter, project_dir)
-        adapter.launch_sdk()
+    # Read workspace root
+    ws_file = project_dir / ".workspace_root"
+    workspace_root = Path(ws_file.read_text().strip()) if ws_file.exists() else app_root
+
+    asyncio.run(run_sdk(adapter, args.prompt, workspace_root, args.role, args.adapter))
 
 
 if __name__ == "__main__":

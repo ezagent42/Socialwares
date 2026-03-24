@@ -22,63 +22,69 @@ class TestDiagnose:
         """Diagnose runs even with no data — reports no issues."""
         data_dir = tmp_path / "data"
         data_dir.mkdir()
-        constraints = tmp_path / "commitment.yaml"
-        constraints.write_text("transition_constraints: {}\naction_constraints: {}\n")
+        commitment = tmp_path / "commitment.yaml"
+        commitment.write_text("commitments: {}\n")
 
         result = subprocess.run(
             [sys.executable, str(DIAGNOSE_SCRIPT),
              "--data-dir", str(data_dir),
-             "--constraints", str(constraints)],
+             "--commitment", str(commitment)],
             capture_output=True, text=True,
         )
         assert result.returncode == 0
         assert "DIAGNOSTIC REPORT" in result.stdout
 
-    def test_detects_conversation_errors(self, tmp_path):
-        """Diagnose detects errors in conversation logs."""
+    def test_runs_with_prompt_data(self, tmp_path):
+        """Diagnose reads hook prompt logs."""
         data_dir = tmp_path / "data"
-        conv_dir = data_dir / "conversations"
-        conv_dir.mkdir(parents=True)
-        constraints = tmp_path / "commitment.yaml"
-        constraints.write_text("transition_constraints: {}\naction_constraints: {}\n")
+        prompts_dir = data_dir / "prompts"
+        prompts_dir.mkdir(parents=True)
+        commitment = tmp_path / "commitment.yaml"
+        commitment.write_text("commitments: {}\n")
 
-        # Write sample conversation with errors
         entries = [
-            json.dumps({"tool": "create_task", "role": "default", "success": True}),
-            json.dumps({"tool": "create_task", "role": "default", "success": False, "error": "500 Internal Error"}),
-            json.dumps({"tool": "check_health", "role": "default", "success": True}),
+            json.dumps({"type": "user_prompt", "role": "default", "content": "check health", "timestamp": "2026-03-24T10:00:00Z"}),
+            json.dumps({"type": "tool_call", "role": "default", "tool": "Bash", "input": {"command": "curl /health"}, "timestamp": "2026-03-24T10:00:05Z"}),
         ]
-        (conv_dir / "current.jsonl").write_text("\n".join(entries) + "\n")
+        (prompts_dir / "current.jsonl").write_text("\n".join(entries) + "\n")
 
         result = subprocess.run(
             [sys.executable, str(DIAGNOSE_SCRIPT),
              "--data-dir", str(data_dir),
-             "--constraints", str(constraints)],
+             "--commitment", str(commitment)],
             capture_output=True, text=True,
         )
         assert result.returncode == 0
-        assert "Error rate" in result.stdout
-        assert "create_task" in result.stdout
+        assert "Hook log entries: 2" in result.stdout
 
-    def test_detects_violations(self, tmp_path):
-        """Diagnose detects constraint violations."""
+    def test_commitment_fulfillment(self, tmp_path):
+        """Diagnose computes fulfillment rate for commitments."""
         data_dir = tmp_path / "data"
-        viol_dir = data_dir / "violations"
-        viol_dir.mkdir(parents=True)
-        constraints = tmp_path / "commitment.yaml"
-        constraints.write_text("transition_constraints: {}\naction_constraints: {}\n")
+        prompts_dir = data_dir / "prompts"
+        prompts_dir.mkdir(parents=True)
+
+        commitment = tmp_path / "commitment.yaml"
+        commitment.write_text("""
+commitments:
+  C1:
+    from: { role: coder, action: submit_code }
+    to: { role: pm, action: review_code }
+    condition: "within 24h"
+""")
 
         entries = [
-            json.dumps({"constraint": "C1", "description": "review overdue", "resolved": False}),
-            json.dumps({"constraint": "C1", "description": "review overdue", "resolved": True}),
+            json.dumps({"type": "user_prompt", "role": "coder", "content": "submit code for review", "timestamp": "2026-03-24T10:00:00Z"}),
+            json.dumps({"type": "user_prompt", "role": "pm", "content": "review code submission", "timestamp": "2026-03-24T12:00:00Z"}),
         ]
-        (viol_dir / "current.jsonl").write_text("\n".join(entries) + "\n")
+        (prompts_dir / "current.jsonl").write_text("\n".join(entries) + "\n")
 
         result = subprocess.run(
             [sys.executable, str(DIAGNOSE_SCRIPT),
              "--data-dir", str(data_dir),
-             "--constraints", str(constraints)],
+             "--commitment", str(commitment)],
             capture_output=True, text=True,
         )
         assert result.returncode == 0
-        assert "Unresolved: 1" in result.stdout
+        assert "C1" in result.stdout
+        assert "submit_code" in result.stdout
+        assert "review_code" in result.stdout
