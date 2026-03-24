@@ -38,12 +38,12 @@ ls .runtime/agents/
 |---|---|
 | **Action** | Inspect .runtime/ contents inside workspace |
 | **Purpose** | Verify deploy generates correct structure per role |
-| **Verify** | Each role has: .claude/skills/, .claude/hooks/, SOUL.md, constraints.yaml, flow.yaml |
+| **Verify** | Each role has: .claude/skills/, .claude/hooks/, SOUL.md, commitment.yaml, flow.yaml |
 
 ```bash
 # From within workspace:
 ls .runtime/agents/default/
-# Expected: .claude  SOUL.md  constraints.yaml  flow.yaml
+# Expected: .claude  SOUL.md  commitment.yaml  flow.yaml
 
 ls .runtime/agents/default/.claude/skills/
 # Expected: check_health (symlink)
@@ -299,14 +299,14 @@ cd ../../../..
 
 | | |
 |---|---|
-| **Action** | Check constraints.yaml in deployed roles |
+| **Action** | Check commitment.yaml in deployed roles |
 | **Purpose** | Verify deploy copies constraints |
-| **Verify** | constraints.yaml exists in each role's .runtime/ |
+| **Verify** | commitment.yaml exists in each role's .runtime/ |
 
 ```bash
 # From within workspace:
-cat .runtime/agents/default/constraints.yaml
-# Should match agent/commitment/constraints.yaml
+cat .runtime/agents/default/commitment.yaml
+# Should match agent/commitment/commitment.yaml
 ```
 
 ### 4.2 Violations API
@@ -393,7 +393,7 @@ make start ROLE=evolver
 ```bash
 uv run agent/flow/evolve_diagnose/scripts/diagnose.py \
   --data-dir .runtime/data \
-  --constraints agent/commitment/constraints.yaml
+  --constraints agent/commitment/commitment.yaml
 # Expected: DIAGNOSTIC REPORT with "No conversation data yet"
 ```
 
@@ -763,10 +763,10 @@ kill %1
 |---|---|
 | **Action** | Define postcondition constraints |
 | **Purpose** | Test constraint mechanism |
-| **Verify** | constraints.yaml deployed |
+| **Verify** | commitment.yaml deployed |
 
 ```bash
-cat > agent/commitment/constraints.yaml << 'EOF'
+cat > agent/commitment/commitment.yaml << 'EOF'
 transition_constraints: {}
 action_constraints:
   C1:
@@ -782,7 +782,7 @@ action_constraints:
 EOF
 
 make deploy
-cat .runtime/agents/default/constraints.yaml
+cat .runtime/agents/default/commitment.yaml
 # Should match
 ```
 

@@ -63,21 +63,39 @@ App capability boundary via `agent/scope/scope.md`.
 
 ---
 
-## Commitment — What (Constraints)
+## Commitment — What (Evaluation Standards)
 
-Constraints on flow edges defined in `agent/commitment/constraints.yaml`.
+Evaluation standards for flow edges defined in `agent/commitment/commitment.yaml`.
 
-Commitment is a constraint on the edges of the flow graph — it defines what must be true between two role-actions.
+Commitment is an evaluation standard for the edges of the flow graph — it defines what "good" looks like between two role-actions. It is NOT an enforcement mechanism; agents are not forced to comply.
 
 It is NOT:
+- Forced execution rules (the agent is not forced to comply)
 - API testing or eval metrics (that's eval)
 - Skill instructions (that belongs in flow/SKILL.md)
-- Agent behavior rules (that belongs in role .md)
+- Automated enforcement hooks
 
 It IS:
-- A promise from one role to another (or to itself)
-- A condition that must be met between two actions
-- Part of the collaboration contract between agents
+- An evaluation standard (like OKR) for agent collaboration
+- A condition that SHOULD be met between two actions
+- The criteria evolver uses to assess and improve the system
+
+**Important**: Commitment is NOT included in non-evolver roles' SOUL.md. Only the evolver sees commitment standards for evaluation. Other roles operate based on their skills and role definitions.
+
+### Deploy and Hook Tagging
+
+Deploy processes commitment.yaml in three steps:
+1. Copies `commitment.yaml` to each role's `.runtime/agents/{name}/`
+2. Generates `commitment_watch.yaml` per role — lists which actions to tag
+3. `log_action.sh` hook reads `commitment_watch.yaml` and tags matching log entries with commitment IDs
+
+```yaml
+# .runtime/agents/reviewer/commitment_watch.yaml (auto-generated)
+watch:
+  - commitment: C1
+    action: review_code
+    capture: [timestamp, output, duration]
+```
 
 ### Unified Schema
 
@@ -96,8 +114,8 @@ commitments:
 |-------|----------|------|---------|
 | `from` | yes | `{ role, action }` | Edge start: who did what (trigger) |
 | `to` | yes | `{ role, action }` | Edge end: who must do what (responsible party) |
-| `condition` | yes | string | What must be true for this edge (natural language) |
-| `on_violation` | no | `{ role, action }` or null | What happens if condition is not met |
+| `condition` | yes | string | Evaluation standard (natural language) |
+| `on_violation` | no | `{ role, action }` or null | Suggested escalation path |
 
 - `to.role` = the responsible party
 - `from.role` = the triggering party
@@ -106,16 +124,16 @@ commitments:
 ### Condition Examples
 
 ```yaml
-# Time constraint
+# Time standard
 condition: "within 24h"
 
-# Precondition
+# Precondition standard
 condition: "review_code completed with result approved"
 
-# Quality (natural language — agent/evolver interprets)
+# Quality standard (natural language — evolver interprets)
 condition: "customer rates 4+ stars"
 
-# Span constraint (from/to can be non-adjacent)
+# Span standard (from/to can be non-adjacent)
 condition: "within 48h"
 ```
 

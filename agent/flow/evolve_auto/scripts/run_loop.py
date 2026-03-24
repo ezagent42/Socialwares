@@ -68,7 +68,7 @@ def main() -> None:
     eval_cases = Path(args.eval_cases)
     agent_dir = Path(args.agent_dir)
     data_dir = Path(".runtime/data")
-    constraints = agent_dir / "commitment" / "constraints.yaml"
+    constraints = agent_dir / "commitment" / "commitment.yaml"
 
     print(f"Automated Evolution Loop")
     print(f"  Eval cases: {eval_cases}")

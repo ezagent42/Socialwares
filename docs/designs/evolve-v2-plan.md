@@ -6,7 +6,7 @@
 ## Overview
 
 Four interconnected changes:
-1. **Commitment refactor**: eval.yaml → constraints.yaml (bind to flow edges)
+1. **Commitment refactor**: eval.yaml → commitment.yaml (bind to flow edges)
 2. **Runtime data**: conversation logging + violations queue
 3. **Evolver role**: manual skills (diagnose/eval/improve) + auto skill (EvoSkill loop)
 4. **EvoSkill integration**: use EvoSkill library for automated evolution
@@ -29,16 +29,16 @@ Four interconnected changes:
 
 ## Task 1: Commitment refactor
 
-**Goal**: eval.yaml → constraints.yaml, bind constraints to flow edges
+**Goal**: eval.yaml → commitment.yaml, bind constraints to flow edges
 
 **Files:**
-- Rename: `agent/commitment/eval.yaml` → `agent/commitment/constraints.yaml`
+- Rename: `agent/commitment/eval.yaml` → `agent/commitment/commitment.yaml`
 - Rewrite: `agent/commitment/README.md`
-- Update: `agent/deploy.sh` (copy constraints.yaml instead of eval.yaml)
-- Update: `scripts/create-my-socialware.py` (copy constraints.yaml)
+- Update: `agent/deploy.sh` (copy commitment.yaml instead of eval.yaml)
+- Update: `scripts/create-my-socialware.py` (copy commitment.yaml)
 - Update: tests
 
-**constraints.yaml template:**
+**commitment.yaml template:**
 ```yaml
 # Transition constraints — bind to flow.yaml state machine edges
 # When a transition is triggered, these constraints must be satisfied.
@@ -76,7 +76,7 @@ action_constraints:
 4. SessionStart hook reads violations and notifies the responsible role
 5. Example: how to implement a time-based constraint check in src/app.py
 
-**Verify:** deploy.sh copies constraints.yaml to .runtime/agents/{role}/
+**Verify:** deploy.sh copies commitment.yaml to .runtime/agents/{role}/
 
 ---
 
@@ -183,7 +183,7 @@ direct_actions:
 | conversations/*.jsonl | Requests outside scope boundaries | P4 (need wider Scope) |
 | conversations/*.jsonl | Permission denials, role mismatches | P5 (need new Roles) |
 | API call results | 500/404 errors, slow responses | P2 (code bugs) |
-| constraints.yaml | Active constraints summary | Context |
+| commitment.yaml | Active constraints summary | Context |
 
 **Output:** structured diagnostic report (text) that evolver agent reads and interprets.
 
@@ -311,8 +311,8 @@ Evolver:   → deploys
 
 | For task | Test file | What to test |
 |----------|-----------|--------------|
-| Task 1 | update `tests/test_deploy.py` | constraints.yaml copied to .runtime/ |
-| Task 1 | update `tests/test_create_workspace.py` | constraints.yaml in workspace |
+| Task 1 | update `tests/test_deploy.py` | commitment.yaml copied to .runtime/ |
+| Task 1 | update `tests/test_create_workspace.py` | commitment.yaml in workspace |
 | Task 2 | create `tests/test_violations.py` | violation JSONL write/read, hook exists, API endpoints |
 | Task 3 | create `tests/test_logging.py` | hook exists, JSONL format valid |
 | Task 5 | create `tests/test_diagnose.py` | diagnose.py with sample data produces report |

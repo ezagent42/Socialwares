@@ -261,8 +261,8 @@ HOOKEOF2
 SETTINGSEOF
 
     # Copy commitment constraints configuration
-    if [ -f "$AGENT_DIR/commitment/constraints.yaml" ]; then
-        cp "$AGENT_DIR/commitment/constraints.yaml" "$role_runtime/constraints.yaml"
+    if [ -f "$AGENT_DIR/commitment/commitment.yaml" ]; then
+        cp "$AGENT_DIR/commitment/commitment.yaml" "$role_runtime/commitment.yaml"
     fi
 
     # Copy flow.yaml for reference

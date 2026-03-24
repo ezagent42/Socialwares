@@ -34,7 +34,7 @@ socialwares/
 │   ├── scope/
 │   │   └── scope.md              ← App capability boundary
 │   ├── commitment/
-│   │   └── constraints.yaml      ← Unified schema: from/to/condition/on_violation
+│   │   └── commitment.yaml      ← Unified schema: from/to/condition/on_violation
 │   ├── flow/
 │   │   ├── flow.yaml             ← Action registry (roles → actions)
 │   │   ├── check_health/SKILL.md
@@ -73,7 +73,7 @@ Every Socialware App defines Agent behavior through four primitives:
 |-----------|-----------|----------|---------|
 | **Role** (Who) | agent/role/ | {name}.md | Agent identities + permissions |
 | **Scope** (Where) | agent/scope/ | scope.md | App capability boundary + public identity |
-| **Commitment** (What) | agent/commitment/ | constraints.yaml | Constraints on flow edges |
+| **Commitment** (What) | agent/commitment/ | commitment.yaml | Constraints on flow edges |
 | **Flow** (How) | agent/flow/ | flow.yaml + SKILL.md | Actions the agent can execute |
 
 ## Three Built-in Roles

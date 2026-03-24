@@ -6,17 +6,27 @@
 
 ## What Commitment Is
 
-Commitment is a constraint on the edges of the flow graph — it defines what must be true between two role-actions.
+Commitment is an evaluation standard for the edges of the flow graph — it defines what "good" looks like between two role-actions. It is NOT an enforcement mechanism; agents are not forced to comply. Only the evolver sees commitment standards for assessment.
 
 It is NOT:
 - API testing (that's eval)
 - Skill instructions (that belongs in flow/SKILL.md)
 - Agent behavior rules (that belongs in role .md)
+- Forced execution rules or automated enforcement
 
 It IS:
-- A promise from one role to another (or to itself)
-- A condition that must be met between two actions
-- Part of the collaboration contract between agents
+- An evaluation standard (like OKR) for agent collaboration
+- A condition that SHOULD be met between two actions
+- The criteria evolver uses to assess and improve the system
+
+### Key Design Decision: Evaluation, Not Enforcement
+
+Commitment is NOT included in non-evolver roles' SOUL.md. If it were, agents would be "forced" to follow it, making it enforcement rather than evaluation. Instead:
+
+- Only the **evolver** sees commitment.yaml in its context
+- Other roles operate based on their SOUL.md (scope + role) and skills
+- The evolver evaluates whether commitments were met after the fact
+- Low fulfillment drives improvement suggestions, not runtime enforcement
 
 ## Relationship to Four Primitives
 
@@ -26,10 +36,10 @@ If you view the four primitives as a graph:
 Role + Action = nodes
 Flow          = edges (transitions between nodes)
 Scope         = subgraph (boundary of what's inside)
-Commitment    = constraints on edges (what must be true for traversal)
+Commitment    = evaluation standards on edges (what "good" looks like for traversal)
 ```
 
-Commitment constrains things that a single skill can't express — cross-action, cross-role constraints.
+Commitment evaluates things that a single skill can't express — cross-action, cross-role standards.
 
 | Belongs in Skill (node) | Belongs in Commitment (edge) |
 |---|---|
@@ -56,8 +66,8 @@ commitments:
 |-------|----------|------|---------|
 | `from` | yes | `{ role, action }` | Edge start: who did what (trigger) |
 | `to` | yes | `{ role, action }` | Edge end: who must do what (responsible party) |
-| `condition` | yes | string | What must be true for this edge |
-| `on_violation` | no | `{ role, action }` or null | What happens if condition is not met |
+| `condition` | yes | string | Evaluation standard (natural language) |
+| `on_violation` | no | `{ role, action }` or null | Suggested escalation path |
 
 - `to.role` = the responsible party (debtor in T2SO terms)
 - `from.role` = the triggering party
@@ -66,16 +76,16 @@ commitments:
 ### Condition Examples
 
 ```yaml
-# Time constraint
+# Time standard
 condition: "within 24h"
 
-# Precondition
+# Precondition standard
 condition: "review_code completed with result approved"
 
-# Quality (natural language — agent/evolver interprets)
+# Quality standard (natural language — evolver interprets)
 condition: "customer rates 4+ stars"
 
-# Span constraint (from/to can be non-adjacent)
+# Span standard (from/to can be non-adjacent)
 condition: "within 48h"
 ```
 
@@ -111,34 +121,50 @@ Flow and commitment are at different abstraction levels, connected by action nam
 
 ```
 Flow:       state → action → state      (state machine internals)
-Commitment: role+action → role+action    (inter-role promises)
+Commitment: role+action → role+action    (inter-role evaluation standards)
 ```
 
 - Flow defines WHAT transitions exist
-- Commitment defines WHAT CONDITIONS apply to those transitions
+- Commitment defines WHAT STANDARDS apply to those transitions
 - Shared vocabulary: action names
 
 Commitment does not reference flow states. It doesn't need to — it cares about "who did what → who must do what", not "from which state to which state". State machine mechanics are flow's responsibility.
 
-If the same action appears in multiple flow transitions (e.g., review can trigger from "submitted" or "resubmitted"), commitment applies to ALL of them — it constrains the role-action pair, not a specific state transition.
+If the same action appears in multiple flow transitions (e.g., review can trigger from "submitted" or "resubmitted"), commitment applies to ALL of them — it evaluates the role-action pair, not a specific state transition.
 
 ## Lifecycle
 
-### 1. Declaration (developer writes constraints.yaml)
+### 1. Declaration (developer writes commitment.yaml)
 
-Developer defines commitments based on their collaboration requirements.
+Developer defines evaluation standards based on their collaboration requirements.
 
-### 2. Activation (runtime)
+### 2. Deploy (deploy.sh processes commitment.yaml)
 
-When `from.action` occurs (appears in conversation log), the commitment activates.
+Deploy does three things:
+1. Copies `commitment.yaml` to each role's `.runtime/agents/{name}/`
+2. Generates `commitment_watch.yaml` per role — lists which actions this role should tag:
+   ```yaml
+   # .runtime/agents/reviewer/commitment_watch.yaml (auto-generated)
+   watch:
+     - commitment: C1
+       action: review_code
+       capture: [timestamp, output, duration]
+   ```
+3. Does NOT add commitment to non-evolver SOUL.md — only evolver sees commitment
 
-### 3. Verification (runtime or evolver)
+### 3. Data Capture (hooks tag conversation data)
 
-Check if `to.action` happened and whether `condition` was met.
+`log_action.sh` hook reads `commitment_watch.yaml`:
+- For every action the agent performs, log_action.sh records it in conversation logs
+- When the action matches a commitment_watch entry, the hook **tags** the log entry with the commitment ID and captures extra fields (timestamp, output, duration)
+- This tagging is transparent to the agent — it does not know which actions are being watched
 
-### 4. Recording (conversation log)
+### 4. Evolver Evaluates (reads tagged logs + commitment.yaml)
 
-Each commitment instance is fulfilled or broken, recorded in conversation data.
+Evolver reads conversation logs and for each commitment:
+1. Filters log entries tagged with the commitment ID
+2. Checks if `condition` was met (LLM interprets natural language)
+3. Computes fulfillment rate = fulfilled / total
 
 ### 5. Signal (evolver analysis)
 
@@ -163,16 +189,40 @@ For each commitment:
 
 ### Runtime Phase (fulfillment check)
 
-Evolver reads conversation logs and analyzes fulfillment:
+Evolver reads tagged conversation logs and analyzes fulfillment:
 
 ```
 For each commitment:
-  1. Find all from.action events in conversations/
-  2. Find corresponding to.action events
-  3. Check condition (evolver as LLM interprets natural language)
-  4. Calculate fulfillment rate
-  5. Report
+  1. Filter log entries tagged with this commitment ID
+  2. Check condition (evolver as LLM interprets natural language)
+  3. Calculate fulfillment rate
+  4. Report
 ```
+
+## commitment_watch.yaml — Hook Tagging Mechanism
+
+Deploy generates a `commitment_watch.yaml` per role that tells hooks which actions to tag:
+
+```yaml
+# Auto-generated by deploy.sh from commitment.yaml
+# Role: reviewer
+watch:
+  - commitment: C1
+    action: review_code
+    capture: [timestamp, output, duration]
+  - commitment: C3
+    action: close_task
+    capture: [timestamp]
+```
+
+When `log_action.sh` runs after an action:
+1. Reads the role's `commitment_watch.yaml`
+2. If the current action matches a watch entry, adds to the log:
+   - `commitment_id`: e.g., "C1"
+   - `captured_data`: the fields listed in `capture`
+3. If no match, logs normally without commitment tags
+
+This mechanism keeps commitment invisible to the agent while providing structured data for the evolver.
 
 ## Improvement Cycle
 
@@ -188,7 +238,7 @@ After checking, evolver maps results to four-primitive improvements:
 
 Cycle:
 ```
-Run app → collect conversation data → evolver analyzes
+Run app → collect conversation data (tagged by hooks) → evolver analyzes
 → fulfillment rates per commitment
 → map low rates to specific primitives
 → developer modifies agent/ files
@@ -218,4 +268,4 @@ Our schema maps to T2SO's Commitment definition:
 | deadline (Timestamp) | `condition` (e.g., "within 24h") |
 | outcome (Verifiable) | `condition` (natural language, evolver verifies) |
 
-Fulfillment rate $c_{ij}(t)$ = fulfilled / total per commitment, computed by evolver from conversation logs.
+Fulfillment rate $c_{ij}(t)$ = fulfilled / total per commitment, computed by evolver from tagged conversation logs.

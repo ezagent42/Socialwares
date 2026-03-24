@@ -9,7 +9,7 @@ Coverage:
 - per-role agents/ directory creation
 - SOUL.md correctly merged (scope + role)
 - flow/ skills are copies (not symlinks) of source directories
-- commitment/constraints.yaml correctly copied
+- commitment/commitment.yaml correctly copied
 - Multiple deploy idempotency
 """
 from __future__ import annotations
@@ -215,29 +215,29 @@ class TestFlowSkills:
 
 
 class TestCommitment:
-    """Test commitment/constraints.yaml copy."""
+    """Test commitment/commitment.yaml copy."""
 
     def test_eval_yaml_copied_to_each_role(self, deployed, workspace):
-        src = workspace / "agent" / "commitment" / "constraints.yaml"
+        src = workspace / "agent" / "commitment" / "commitment.yaml"
         if not src.exists():
-            pytest.skip("No constraints.yaml in agent/commitment/")
+            pytest.skip("No commitment.yaml in agent/commitment/")
 
         for role_dir in (deployed / "agents").iterdir():
             if not role_dir.is_dir():
                 continue
-            dest = role_dir / "constraints.yaml"
+            dest = role_dir / "commitment.yaml"
             assert dest.exists()
 
     def test_eval_yaml_content_matches(self, deployed, workspace):
-        src = workspace / "agent" / "commitment" / "constraints.yaml"
+        src = workspace / "agent" / "commitment" / "commitment.yaml"
         if not src.exists():
-            pytest.skip("No constraints.yaml")
+            pytest.skip("No commitment.yaml")
 
         src_content = src.read_text()
         for role_dir in (deployed / "agents").iterdir():
             if not role_dir.is_dir():
                 continue
-            dest_content = (role_dir / "constraints.yaml").read_text()
+            dest_content = (role_dir / "commitment.yaml").read_text()
             assert dest_content == src_content
 
 
@@ -311,14 +311,14 @@ class TestHooksGenerated:
             assert os.access(str(hook), os.X_OK), f"check_violations.sh not executable for {role_dir.name}"
 
     def test_constraints_yaml_copied(self, deployed, workspace):
-        src = workspace / "agent" / "commitment" / "constraints.yaml"
+        src = workspace / "agent" / "commitment" / "commitment.yaml"
         if not src.exists():
-            pytest.skip("No constraints.yaml")
+            pytest.skip("No commitment.yaml")
         for role_dir in (deployed / "agents").iterdir():
             if not role_dir.is_dir():
                 continue
-            dest = role_dir / "constraints.yaml"
-            assert dest.exists(), f"Missing constraints.yaml for {role_dir.name}"
+            dest = role_dir / "commitment.yaml"
+            assert dest.exists(), f"Missing commitment.yaml for {role_dir.name}"
 
     def test_settings_local_json_exists(self, deployed, workspace):
         """settings.local.json must exist to register hooks with Claude Code."""

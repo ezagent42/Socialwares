@@ -14,7 +14,7 @@ All documentation rewritten to match current codebase state.
 
 | File | Key Changes |
 |------|-------------|
-| 001-architecture-and-concepts.md | Directory structure shows flat roles, scope.md, constraints.yaml, Makefile.template. Added Makefile split (root vs workspace). Commitment unified schema. |
+| 001-architecture-and-concepts.md | Directory structure shows flat roles, scope.md, commitment.yaml, Makefile.template. Added Makefile split (root vs workspace). Commitment unified schema. |
 | 002-quickstart.md | All commands use `make`. No quick-try from root. FAQ accurate. |
 | 003-four-primitives.md | Role: flat .md files. Scope: scope.md. Commitment: completely replaced with unified from/to/condition/on_violation schema. Flow: skills are copies not symlinks. |
 | 004-commitment-and-evolve.md | Removed all API middleware/cron content. Commitment = agent-readable spec with unified schema. Two-phase checking. Fulfillment rate. Four-primitive improvement mapping. |
@@ -23,7 +23,7 @@ All documentation rewritten to match current codebase state.
 ### README.md (rewritten)
 
 - Quick Start: `make create` → `cd workspace` → `make start`
-- Directory structure: flat roles, scope.md, constraints.yaml, Makefile
+- Directory structure: flat roles, scope.md, commitment.yaml, Makefile
 - Commitment: unified schema (from/to/condition/on_violation)
 - Deploy output: skills are copies, .workspace_root, settings.local.json
 - Evolver: fulfillment rate based

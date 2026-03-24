@@ -7,7 +7,7 @@ Scans multiple data sources to find improvement opportunities:
 - Constraints: active constraint summary
 
 Usage:
-    uv run diagnose.py --data-dir .runtime/data --constraints agent/commitment/constraints.yaml
+    uv run diagnose.py --data-dir .runtime/data --constraints agent/commitment/commitment.yaml
 """
 from __future__ import annotations
 
@@ -173,7 +173,7 @@ def generate_report(conversations: dict, violations: dict, constraints: dict) ->
 def main() -> None:
     parser = argparse.ArgumentParser(description="Diagnose Socialware App issues")
     parser.add_argument("--data-dir", default=".runtime/data", help="Runtime data directory")
-    parser.add_argument("--constraints", default="agent/commitment/constraints.yaml", help="Constraints file")
+    parser.add_argument("--constraints", default="agent/commitment/commitment.yaml", help="Constraints file")
     args = parser.parse_args()
 
     data_dir = Path(args.data_dir)

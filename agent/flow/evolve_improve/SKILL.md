@@ -26,14 +26,14 @@ Only modify files inside the workspace — NEVER modify template files at the re
    |---------|-----------|--------|
    | Missing capability | Flow | Create new skill in agent/flow/ |
    | High error rate on a skill | Flow | Edit the SKILL.md |
-   | Constraint violations | Commitment | Adjust constraints.yaml |
+   | Constraint violations | Commitment | Adjust commitment.yaml |
    | Out-of-scope requests | Scope | Expand scope/scope.md |
    | Permission issues | Role | Add/adjust role/ |
    | Overall poor performance | Scope | Improve scope/scope.md reasoning |
 
 4. Propose specific changes to the developer
 5. On approval, make the changes:
-   - Edit the relevant files (scope.md, role/*.md, SKILL.md, flow.yaml, constraints.yaml)
+   - Edit the relevant files (scope.md, role/*.md, SKILL.md, flow.yaml, commitment.yaml)
    - Run `./agent/deploy.sh` to recompile
    - Optionally re-run `evolve_eval` to measure improvement
 

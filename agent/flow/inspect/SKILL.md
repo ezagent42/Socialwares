@@ -21,7 +21,7 @@ workspace/                            ← all dev happens here (cd into workspac
 ├── agent/                            ← Four primitives + toolchain
 │   ├── role/                         ← Who: {name}.md files
 │   ├── scope/                        ← Where: scope.md
-│   ├── commitment/                   ← What: constraints.yaml
+│   ├── commitment/                   ← What: commitment.yaml
 │   ├── flow/                         ← How: flow.yaml + {action}/SKILL.md
 │   ├── deploy.sh                     ← Compile → .runtime/
 │   ├── start.sh                      ← Launch agent
@@ -40,7 +40,7 @@ workspace/                            ← all dev happens here (cd into workspac
 |-----------|-----------|----------|---------|
 | **Role** | agent/role/ | {name}.md | Agent identity + permissions |
 | **Scope** | agent/scope/ | scope.md | App capability boundary |
-| **Commitment** | agent/commitment/ | constraints.yaml | Constraints on flow edges |
+| **Commitment** | agent/commitment/ | commitment.yaml | Constraints on flow edges |
 | **Flow** | agent/flow/ | flow.yaml + SKILL.md | Actions + how to execute |
 
 ## Development Workflow

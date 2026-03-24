@@ -22,7 +22,7 @@ class TestDiagnose:
         """Diagnose runs even with no data — reports no issues."""
         data_dir = tmp_path / "data"
         data_dir.mkdir()
-        constraints = tmp_path / "constraints.yaml"
+        constraints = tmp_path / "commitment.yaml"
         constraints.write_text("transition_constraints: {}\naction_constraints: {}\n")
 
         result = subprocess.run(
@@ -39,7 +39,7 @@ class TestDiagnose:
         data_dir = tmp_path / "data"
         conv_dir = data_dir / "conversations"
         conv_dir.mkdir(parents=True)
-        constraints = tmp_path / "constraints.yaml"
+        constraints = tmp_path / "commitment.yaml"
         constraints.write_text("transition_constraints: {}\naction_constraints: {}\n")
 
         # Write sample conversation with errors
@@ -65,7 +65,7 @@ class TestDiagnose:
         data_dir = tmp_path / "data"
         viol_dir = data_dir / "violations"
         viol_dir.mkdir(parents=True)
-        constraints = tmp_path / "constraints.yaml"
+        constraints = tmp_path / "commitment.yaml"
         constraints.write_text("transition_constraints: {}\naction_constraints: {}\n")
 
         entries = [

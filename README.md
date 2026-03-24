@@ -51,7 +51,7 @@ socialwares/
 │   ├── scope/                    ← Where: App capability boundary
 │   │   └── scope.md
 │   ├── commitment/               ← What: Constraints on flow edges
-│   │   └── constraints.yaml      ← Unified schema: from/to/condition/on_violation
+│   │   └── commitment.yaml      ← Unified schema: from/to/condition/on_violation
 │   ├── flow/                     ← How: Skills + action registry
 │   │   ├── flow.yaml             ← Action registry (roles → actions)
 │   │   ├── check_health/         ← default + dev + evolver
@@ -122,7 +122,7 @@ App capability boundary via `scope/scope.md`.
 Commitment constrains the edges of the flow graph — what must be true between two role-actions. Uses a unified schema:
 
 ```yaml
-# agent/commitment/constraints.yaml
+# agent/commitment/commitment.yaml
 commitments:
   C1:
     from: { role: coder, action: submit_code }
@@ -171,7 +171,7 @@ What it generates per role:
 - `.claude/settings.local.json` — registers hooks
 - `SOUL.md` — merged scope/scope.md + role/{name}.md
 - `.workspace_root` — marker pointing to workspace root
-- `constraints.yaml` — copied from commitment/
+- `commitment.yaml` — copied from commitment/
 - `flow.yaml` — copied for reference
 
 ```
@@ -188,14 +188,14 @@ What it generates per role:
     │   ├── .claude/settings.local.json
     │   ├── .workspace_root
     │   ├── SOUL.md
-    │   └── constraints.yaml
+    │   └── commitment.yaml
     └── evolver/                ← evolver role's $PROJECT_DIR
         ├── .claude/skills/     ← diagnose + eval + improve + auto + inspect + check_health
         ├── .claude/hooks/
         ├── .claude/settings.local.json
         ├── .workspace_root
         ├── SOUL.md
-        └── constraints.yaml
+        └── commitment.yaml
 ```
 
 ### start.sh

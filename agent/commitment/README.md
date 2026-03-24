@@ -1,32 +1,33 @@
 # Commitment — What
 
-Defines constraints on flow edges. Commitment is an agent-readable specification that constrains the edges of the flow graph — what must be true between two role-actions.
+Defines evaluation standards for flow edges. Commitment is an agent-readable specification that defines what "good" looks like between two role-actions — an evaluation standard, not an enforcement mechanism.
 
 ## Core Concept
 
 Commitment is NOT:
-- API testing or eval metrics (that's eval)
-- Skill execution instructions (that belongs in flow/SKILL.md)
-- Agent behavior rules (that belongs in role .md)
+- Forced execution rules (the agent is not forced to comply)
+- API testing (that's eval)
+- Skill instructions (that belongs in flow/SKILL.md)
 - Automated enforcement hooks
 
 Commitment IS:
-- A promise from one role to another (or to itself)
-- A condition that must be met between two actions
-- Part of the collaboration contract between agents
-- An agent-readable spec — the agent reads it and follows it
+- An evaluation standard (like OKR) for agent collaboration
+- A condition that SHOULD be met between two actions
+- The criteria evolver uses to assess and improve the system
 
-### Example
+### How It Works
 
-| Belongs in Skill (node) | Belongs in Commitment (edge) |
-|---|---|
-| Output format requirements | Time limit between two actions |
-| How to execute an action | Precondition for next action |
-| What fields to include | Ordering between roles |
+```
+commitment.yaml → defines standards
+log_action.sh   → captures data (tagged with commitment IDs)
+evolver         → compares data vs standards → fulfillment rate → improvement suggestions
+```
+
+The agent is NOT given commitment in its SOUL.md (that would make it enforcement). Only the evolver sees commitment standards for evaluation.
 
 ## Files
 
-- `constraints.yaml` — constraint definitions using the unified schema
+- `commitment.yaml` — evaluation standards using the unified schema
 
 ## Unified Schema
 
@@ -47,45 +48,28 @@ commitments:
 |-------|----------|------|---------|
 | `from` | yes | `{ role, action }` | Edge start: who did what (trigger) |
 | `to` | yes | `{ role, action }` | Edge end: who must do what (responsible party) |
-| `condition` | yes | string | What must be true for this edge (natural language) |
-| `on_violation` | no | `{ role, action }` or null | What happens if condition is not met |
-
-- `to.role` = the responsible party
-- `from.role` = the triggering party
-- `on_violation.role` = the escalation party
-
-### Condition Examples
-
-```yaml
-# Time constraint
-condition: "within 24h"
-
-# Precondition
-condition: "review_code completed with result approved"
-
-# Span constraint (from/to can be non-adjacent)
-condition: "within 48h"
-```
+| `condition` | yes | string | Evaluation standard (natural language) |
+| `on_violation` | no | `{ role, action }` or null | Suggested escalation path |
 
 ### Full Examples
 
 ```yaml
 commitments:
-  # Deadline: submit → review within 24h
+  # Deadline standard
   C1:
     from: { role: coder, action: submit_code }
     to:   { role: pm, action: review_code }
     condition: "within 24h"
     on_violation: { role: tech_lead, action: escalate }
 
-  # Precondition: can't merge without approved review
+  # Precondition standard
   C2:
     from: { role: coder, action: submit_code }
     to:   { role: coder, action: merge_code }
     condition: "review_code completed with result approved"
     on_violation: null
 
-  # Span: task must close within 48h of creation
+  # Span standard
   C3:
     from: { role: pm, action: create_task }
     to:   { role: pm, action: close_task }
@@ -95,25 +79,34 @@ commitments:
 
 ## Lifecycle
 
-1. **Declaration** — developer writes constraints.yaml
-2. **Deploy** — deploy.sh copies constraints.yaml to each role's `.runtime/agents/{name}/`
-3. **Agent reads** — agent starts with constraints.yaml in its working directory; it knows what commitments exist and is expected to follow them
-4. **Agent follows** — during operation, the agent respects commitments (e.g., completes review within 24h) because it has read the spec
-5. **Evolver checks** — evolver reads conversation logs, checks if each commitment's condition was actually met, computes fulfillment rate
-
-There is NO automatic enforcement hook. The agent follows commitments because it reads the spec (like an employee following a handbook). The evolver verifies compliance afterwards (like a manager reviewing performance).
+1. **Declaration** — developer writes commitment.yaml
+2. **Deploy** — deploy.sh:
+   - Copies commitment.yaml to each role's .runtime/
+   - Generates `commitment_watch.yaml` per role (lists which actions to tag)
+   - Hooks use commitment_watch.yaml to tag relevant conversation log entries
+3. **Data capture** — log_action.sh hook captures conversation data; for actions listed in commitment_watch.yaml, adds commitment tags and extra fields (output, duration)
+4. **Evolver evaluates** — evolver reads tagged conversation logs + commitment.yaml → checks if conditions were met → computes fulfillment rate
+5. **Improvement** — low fulfillment → evolver suggests changes to four primitives
 
 ## deploy.sh Processing
 
-`constraints.yaml` is copied to each role's `.runtime/agents/{name}/constraints.yaml`.
+1. Copies `commitment.yaml` to each role's `.runtime/agents/{name}/`
+2. Generates `commitment_watch.yaml` per role — lists actions this role should tag:
+   ```yaml
+   # .runtime/agents/reviewer/commitment_watch.yaml (auto-generated)
+   watch:
+     - commitment: C1
+       action: review_code
+       capture: [timestamp, output, duration]
+   ```
+3. `log_action.sh` hook reads `commitment_watch.yaml` — when it sees a matching action, tags the log entry with commitment ID and captures extra data
 
 ## Evolver Verification
 
-The evolver reads conversation logs (`.runtime/data/conversations/*.jsonl`) and for each commitment:
-1. Finds `from.action` events (trigger)
-2. Finds corresponding `to.action` events (fulfillment)
-3. Checks if `condition` was met (LLM interprets natural language)
-4. Computes fulfillment rate = fulfilled / total
-5. Low fulfillment → suggests improvements to four primitives
+Evolver reads conversation logs and for each commitment:
+1. Filters log entries tagged with the commitment ID
+2. Checks if `condition` was met (LLM interprets natural language)
+3. Computes fulfillment rate = fulfilled / total
+4. Low fulfillment → suggests improvements to four primitives
 
 See [docs/discuss/commitment.md](../../docs/discuss/commitment.md) for full design discussion.

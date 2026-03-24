@@ -29,7 +29,7 @@ cd "$WORKSPACE_ROOT"
 ```bash
 uv run agent/flow/evolve_diagnose/scripts/diagnose.py \
   --data-dir .runtime/data \
-  --constraints agent/commitment/constraints.yaml
+  --constraints agent/commitment/commitment.yaml
 ```
 
 ## Data Sources Analyzed
