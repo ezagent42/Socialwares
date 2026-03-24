@@ -182,7 +182,7 @@ agent/flow/
 
 ### deploy.sh Processing
 
-Reads flow.yaml → **copies** (not symlinks) only the actions allowed for each role into `.runtime/agents/{name}/.claude/skills/`. This prevents accidental template modification.
+Reads flow.yaml → **symlinks** only the actions allowed for each role into `.runtime/agents/{name}/.claude/skills/`. Symlinks within workspace mean changes to `agent/flow/` are instantly visible. Template→workspace isolation is handled by `create-my-socialware` (copy).
 
 ### Role-Based Skill Allocation
 

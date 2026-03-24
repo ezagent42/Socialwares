@@ -165,7 +165,7 @@ Run from within a workspace. Not available at repo root.
 Compiles `agent/` four primitives into `.runtime/`. Idempotent — detects added/removed roles and skills.
 
 What it generates per role:
-- `.claude/skills/` — copies of allowed flow/ actions (per flow.yaml)
+- `.claude/skills/` — symlinks to allowed flow/ actions (per flow.yaml)
 - `.claude/hooks/log_action.sh` — PostToolUse hook for conversation logging
 - `.claude/hooks/check_violations.sh` — SessionStart hook for violation notifications
 - `.claude/settings.local.json` — registers hooks

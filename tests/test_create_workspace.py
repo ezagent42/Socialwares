@@ -82,11 +82,11 @@ class TestCreateWorkspace:
             pyproject = (workspace_dir / "pyproject.toml").read_text()
             assert app in pyproject
 
-            # Check skills are copies not symlinks in deployed workspace
+            # Check skills are symlinks within workspace (agent/flow/ → .runtime/.claude/skills/)
             default_skills = workspace_dir / ".runtime" / "agents" / "default" / ".claude" / "skills"
             if default_skills.exists():
                 for skill in default_skills.iterdir():
-                    assert not skill.is_symlink(), f"Skill {skill} should be copied, not symlinked"
+                    assert skill.is_symlink(), f"Skill {skill} should be a symlink within workspace"
 
         finally:
             room_dir = REPO_ROOT / ".socialware" / "workspace" / room

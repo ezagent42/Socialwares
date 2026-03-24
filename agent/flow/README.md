@@ -54,7 +54,7 @@ direct_actions:
 
 ## Role-Based Skill Allocation
 
-`deploy.sh` reads `flow.yaml` and **copies** (not symlinks) only the actions allowed for each role into `.runtime/agents/{name}/.claude/skills/`. Copying prevents accidental modification of the template source.
+`deploy.sh` reads `flow.yaml` and **symlinks** only the actions allowed for each role into `.runtime/agents/{name}/.claude/skills/`. Symlinks within the workspace mean changes to `agent/flow/` are instantly visible without re-deploy. Template→workspace isolation is handled by `create-my-socialware` (which copies).
 
 - `default` role → gets `check_health` skill only
 - `dev` role → gets `check_health` + `setup_claude` + `inspect` skills
@@ -77,4 +77,5 @@ Followed by Markdown: trigger conditions, execution steps, API calls.
 - Permissions are checked by the App API
 - flow.yaml is the single source of truth for "what actions exist and who can use them"
 - SKILL.md is "how to execute the action"
-- Skills are **copies** in `.runtime/`, not symlinks — safe to modify template without affecting deployed agents
+- Skills are **symlinks** in `.runtime/` pointing to `agent/flow/` — changes are instantly visible
+- Template→workspace isolation is handled by `create-my-socialware` (copy), not by deploy

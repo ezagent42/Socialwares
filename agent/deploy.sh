@@ -142,8 +142,14 @@ for role_file in "$AGENT_DIR"/role/*.md; do
 
         link="$role_runtime/.claude/skills/$skill_name"
 
-        # Copy skill directory (not symlink — prevents accidental template modification)
-        cp -r "$skill_dir" "$link"
+        # Symlink within workspace (agent/flow/ → .runtime/.claude/skills/)
+        # Changes to agent/flow/ are instantly visible without re-deploy.
+        # Note: template→workspace copy is done by create-my-socialware (isolation).
+        [ -L "$link" ] && rm "$link"
+        [ -d "$link" ] && rm -rf "$link"
+        link_dir=$(dirname "$link")
+        target=$(python3 -c "import os.path; print(os.path.relpath('$skill_dir', '$link_dir'))")
+        ln -s "$target" "$link"
         skill_count=$((skill_count + 1))
     done
 

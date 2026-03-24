@@ -135,45 +135,34 @@ class TestSoulMerge:
 
 
 # ---------------------------------------------------------------------------
-# Flow skills (copies, not symlinks)
+# Flow skills (symlinks within workspace)
 # ---------------------------------------------------------------------------
 
 
 class TestFlowSkills:
-    """Test flow/ skills are proper copies."""
+    """Test flow/ skills are symlinks to agent/flow/ within workspace."""
 
-    def test_skills_are_directories(self, deployed):
+    def test_skills_are_symlinks(self, deployed):
         for role_dir in (deployed / "agents").iterdir():
             if not role_dir.is_dir():
                 continue
             skills_dir = role_dir / ".claude" / "skills"
             for skill in skills_dir.iterdir():
-                assert skill.is_dir(), f"{skill} should be a directory"
-                assert not skill.is_symlink(), f"{skill} should not be a symlink"
+                assert skill.is_symlink(), f"{skill} should be a symlink"
 
-    def test_skills_content_matches_agent_flow(self, deployed, workspace):
-        """Copied skill content should match agent/flow/ source directories."""
+    def test_skills_resolve_to_agent_flow(self, deployed, workspace):
+        """Symlinks should resolve to agent/flow/ directories."""
         for role_dir in (deployed / "agents").iterdir():
             if not role_dir.is_dir():
                 continue
             skills_dir = role_dir / ".claude" / "skills"
-            for skill_dir in skills_dir.iterdir():
-                if not skill_dir.is_dir():
+            for skill_link in skills_dir.iterdir():
+                if not skill_link.is_symlink():
                     continue
-                expected_source = workspace / "agent" / "flow" / skill_dir.name
-                assert expected_source.is_dir(), (
-                    f"Source flow dir missing for {skill_dir.name}"
+                expected_source = workspace / "agent" / "flow" / skill_link.name
+                assert skill_link.resolve() == expected_source.resolve(), (
+                    f"Symlink {skill_link} does not resolve to {expected_source}"
                 )
-                # Verify files in the copy match the source
-                for src_file in expected_source.iterdir():
-                    if src_file.is_file():
-                        dest_file = skill_dir / src_file.name
-                        assert dest_file.exists(), (
-                            f"Missing {src_file.name} in copied skill {skill_dir.name}"
-                        )
-                        assert dest_file.read_text() == src_file.read_text(), (
-                            f"Content mismatch for {src_file.name} in {skill_dir.name}"
-                        )
 
     def test_skills_subset_of_flow_dirs(self, deployed, workspace):
         """Each role's skills should be a subset of agent/flow/ directories.
@@ -343,13 +332,13 @@ class TestHooksGenerated:
             root_path = marker.read_text().strip()
             assert str(workspace) == root_path
 
-    def test_skills_are_copies_not_symlinks(self, deployed):
-        """Skills should be copies, not symlinks (prevents template modification)."""
+    def test_skills_are_symlinks_not_copies(self, deployed):
+        """Skills in .runtime/ should be symlinks to agent/flow/ (within workspace)."""
         for role_dir in (deployed / "agents").iterdir():
             if not role_dir.is_dir():
                 continue
             skills_dir = role_dir / ".claude" / "skills"
             for skill in skills_dir.iterdir():
-                assert not skill.is_symlink(), (
-                    f"{skill} should be a copy, not a symlink"
+                assert skill.is_symlink(), (
+                    f"{skill} should be a symlink, not a copy"
                 )
