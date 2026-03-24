@@ -478,62 +478,88 @@ make test
 
 ## 10. Full App Development Scenario — Todo App
 
-Build a complete Todo app from scratch, testing every feature along the way.
+Build a complete Todo app from scratch, testing every feature.
 
 ### 10.1 Create the workspace
 
 | | |
 |---|---|
 | **Action** | Create a Todo app workspace |
-| **Purpose** | Start from template, get a self-contained workspace |
-| **Verify** | Workspace created, auto-deployed, all files present |
+| **Purpose** | Verify create copies template + auto-deploys |
+| **Verify** | Workspace has all files, .runtime/ deployed, Makefile works |
 
 ```bash
+# From repo root:
 make create ROOM=demo APP=todo DESC="Simple todo list"
 cd .socialware/workspace/demo/todo
 
-ls agent/role/        # default.md  dev.md  evolver.md  README.md
-ls agent/scope/       # scope.md  README.md
-ls .runtime/agents/   # default  dev  evolver
-cat agent/scope/scope.md  # Should contain "todo"
+ls agent/role/         # default.md  dev.md  evolver.md  README.md
+ls .runtime/agents/    # default  dev  evolver
+cat .workspace_root 2>/dev/null || cat .runtime/agents/default/.workspace_root
+# Should show workspace root path
+ls Makefile            # exists
 ```
 
-### 10.2 Define scope
+### 10.2 Verify deploy output
 
 | | |
 |---|---|
-| **Action** | Edit scope.md for the Todo app |
-| **Purpose** | Define what the app can do |
-| **Verify** | scope.md has Todo-specific content |
+| **Action** | Check .runtime/ structure |
+| **Purpose** | Skills are copies (not symlinks), hooks registered, workspace root marker |
+| **Verify** | All checks pass |
 
 ```bash
-cat > agent/scope/scope.md << 'EOF'
-# Todo App
+# Skills are copies, not symlinks
+ls -la .runtime/agents/default/.claude/skills/check_health
+# Should NOT show -> (symlink arrow)
 
-Simple todo list manager.
+# Hooks registered in settings.local.json
+cat .runtime/agents/default/.claude/settings.local.json | python3 -m json.tool
+# Should show PostToolUse + SessionStart hooks
 
-## Capabilities
-
-- Health check (/health)
-- Create todo items
-- List todo items
-- Mark todos as done
-
-## Boundaries
-
-- No user authentication (single user)
-- No persistence across restarts (in-memory)
-- No priority/tags (keep it simple)
-EOF
+# Workspace root marker
+cat .runtime/agents/default/.workspace_root
+# Should show full path to workspace
 ```
 
-### 10.3 Add backend API
+### 10.3 Test hooks work
 
 | | |
 |---|---|
-| **Action** | Add todo CRUD endpoints to src/app.py |
+| **Action** | Run hook scripts manually with test data |
+| **Purpose** | Verify hooks actually execute and produce output |
+| **Verify** | conversation log written, violations detected |
+
+```bash
+# Test conversation logging hook
+mkdir -p .runtime/data/conversations
+echo '{"tool_name":"Bash","tool_input":{"command":"test"}}' | \
+  bash .runtime/agents/default/.claude/hooks/log_action.sh
+cat .runtime/data/conversations/current.jsonl
+# Should have a JSONL entry with timestamp + tool name
+
+# Test violations hook with no violations
+bash .runtime/agents/default/.claude/hooks/check_violations.sh
+# Should output JSON with "No pending violations"
+
+# Test violations hook with a violation
+mkdir -p .runtime/data/violations
+echo '{"id":"v-001","constraint":"C1","description":"test","trigger_role":"default","resolved":false}' \
+  > .runtime/data/violations/current.jsonl
+bash .runtime/agents/default/.claude/hooks/check_violations.sh
+# Should report "1 unresolved violation(s): C1: test"
+
+# Clean up test data
+rm -f .runtime/data/violations/current.jsonl .runtime/data/conversations/current.jsonl
+```
+
+### 10.4 Add backend API
+
+| | |
+|---|---|
+| **Action** | Write Todo CRUD endpoints in src/app.py |
 | **Purpose** | Build the Biz layer |
-| **Verify** | API endpoints work |
+| **Verify** | API endpoints work via curl |
 
 ```bash
 cat > src/app.py << 'PYEOF'
@@ -549,7 +575,6 @@ app = FastAPI(title="Todo App", version="0.1.0")
 
 _todos: dict[str, dict] = {}
 _counter = 0
-
 VIOLATIONS_DIR = Path(".runtime/data/violations")
 
 @app.get("/health")
@@ -561,12 +586,7 @@ async def create_todo(data: dict[str, Any]):
     global _counter
     _counter += 1
     todo_id = f"todo-{_counter:03d}"
-    todo = {
-        "id": todo_id,
-        "title": data.get("title", "Untitled"),
-        "done": False,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
+    todo = {"id": todo_id, "title": data.get("title", "Untitled"), "done": False, "created_at": datetime.now(timezone.utc).isoformat()}
     _todos[todo_id] = todo
     return todo
 
@@ -599,44 +619,29 @@ async def list_violations():
                     violations.append(v)
     return violations
 PYEOF
-```
 
-Test the API:
-
-```bash
+# Test
 uv run uvicorn src.app:app --port 8001 &
 sleep 2
-
-# Health
-curl -s http://localhost:8001/health
-# Expected: {"status":"ok"}
-
-# Create
+curl -s http://localhost:8001/health                    # {"status":"ok"}
 curl -s -X POST http://localhost:8001/todos -H "Content-Type: application/json" -d '{"title":"Buy milk"}'
-# Expected: {"id":"todo-001","title":"Buy milk","done":false,...}
-
-# List
-curl -s http://localhost:8001/todos
-# Expected: [{"id":"todo-001",...}]
-
-# Mark done
+curl -s http://localhost:8001/todos                     # [{"id":"todo-001",...}]
 curl -s -X POST http://localhost:8001/todos/todo-001/done
-# Expected: {"id":"todo-001","done":true,...}
-
 kill %1
 ```
 
-### 10.4 Add flow skills (P2: Refine Flow)
+### 10.5 Add flow skills
 
 | | |
 |---|---|
-| **Action** | Create CRUD skills and register in flow.yaml |
-| **Purpose** | Agent can now manage todos |
-| **Verify** | Skills deployed, agent can use them |
+| **Action** | Create CRUD skills + register in flow.yaml |
+| **Purpose** | Agent can manage todos |
+| **Verify** | Skills deployed, filtered by role |
 
 ```bash
-# Create todo skill
-mkdir -p agent/flow/create_todo
+# Create skills (create_todo, list_todos, mark_done)
+mkdir -p agent/flow/create_todo agent/flow/list_todos agent/flow/mark_done
+
 cat > agent/flow/create_todo/SKILL.md << 'EOF'
 ---
 name: create_todo
@@ -644,19 +649,11 @@ description: "Create a new todo item"
 ---
 # Create Todo
 ## Trigger
-User says "add todo", "new task", "create todo" etc.
+User says "add todo", "new task" etc.
 ## Flow
-1. Extract title from user input
-2. POST /todos with title
-3. Return created todo
-## API
-```bash
-curl -X POST http://localhost:8001/todos -H "Content-Type: application/json" -d '{"title":"..."}'
-```
+1. Extract title → POST /todos → return result
 EOF
 
-# List todos skill
-mkdir -p agent/flow/list_todos
 cat > agent/flow/list_todos/SKILL.md << 'EOF'
 ---
 name: list_todos
@@ -664,18 +661,11 @@ description: "List all todo items"
 ---
 # List Todos
 ## Trigger
-User says "list todos", "show tasks", "what needs doing" etc.
+User says "list todos", "show tasks" etc.
 ## Flow
-1. GET /todos
-2. Format and display results
-## API
-```bash
-curl http://localhost:8001/todos
-```
+1. GET /todos → format and display
 EOF
 
-# Mark done skill
-mkdir -p agent/flow/mark_done
 cat > agent/flow/mark_done/SKILL.md << 'EOF'
 ---
 name: mark_done
@@ -683,102 +673,87 @@ description: "Mark a todo as done"
 ---
 # Mark Done
 ## Trigger
-User says "done", "complete", "finish todo-xxx" etc.
+User says "done", "complete todo-xxx" etc.
 ## Flow
-1. Get todo ID from user
-2. POST /todos/{id}/done
-3. Confirm completion
-## API
-```bash
-curl -X POST http://localhost:8001/todos/todo-001/done
-```
+1. Get ID → POST /todos/{id}/done → confirm
 EOF
 
-# Register in flow.yaml — replace the entire file
+# Update flow.yaml
 cat > agent/flow/flow.yaml << 'EOF'
 flows: {}
-
 direct_actions:
-  - { action: check_health,  role: [default, dev, evolver], description: "Check app health" }
-  - { action: setup_claude,  role: [dev], description: "Configure Claude Code" }
-  - { action: inspect,       role: [dev, evolver], description: "Show project structure" }
-  - { action: create_todo,   role: [default], description: "Create a todo item" }
-  - { action: list_todos,    role: [default], description: "List todo items" }
-  - { action: mark_done,     role: [default], description: "Mark todo as done" }
-  - { action: evolve_diagnose, role: [evolver], description: "Diagnose issues" }
-  - { action: evolve_eval,     role: [evolver], description: "Run eval cases" }
-  - { action: evolve_improve,  role: [evolver], description: "Apply improvements" }
-  - { action: evolve_auto,     role: [evolver], description: "Automated evolution" }
+  - { action: check_health,     role: [default, dev, evolver], description: "Check app health" }
+  - { action: setup_claude,     role: [dev], description: "Configure Claude Code" }
+  - { action: inspect,          role: [dev, evolver], description: "Show project structure" }
+  - { action: create_todo,      role: [default], description: "Create a todo item" }
+  - { action: list_todos,       role: [default], description: "List todo items" }
+  - { action: mark_done,        role: [default], description: "Mark todo as done" }
+  - { action: evolve_diagnose,  role: [evolver], description: "Diagnose issues" }
+  - { action: evolve_eval,      role: [evolver], description: "Run eval cases" }
+  - { action: evolve_improve,   role: [evolver], description: "Apply improvements" }
+  - { action: evolve_auto,      role: [evolver], description: "Automated evolution" }
 EOF
 
-# Deploy
-./agent/deploy.sh
-
-# Verify
+# Deploy and verify
+make deploy
 ls .runtime/agents/default/.claude/skills/
 # Expected: check_health  create_todo  list_todos  mark_done
 ```
 
-### 10.5 Test agent with skills
+### 10.6 Write eval cases (API + conversation level)
 
 | | |
 |---|---|
-| **Action** | Start agent and use todo skills |
-| **Purpose** | Verify agent can manage todos via skills |
-| **Verify** | Agent creates, lists, and completes todos |
-
-```bash
-uv run uvicorn src.app:app --port 8001 &
-sleep 2
-
-./agent/start.sh --role default
-# In Claude Code:
-#   "add a todo: buy groceries"   → should call POST /todos
-#   "list todos"                  → should call GET /todos
-#   "mark todo-001 as done"      → should call POST /todos/todo-001/done
-#   Exit: Ctrl+C
-
-kill %1
-```
-
-### 10.6 Add eval cases (P3: Refine Commitment)
-
-| | |
-|---|---|
-| **Action** | Write eval cases for the Todo app |
-| **Purpose** | Establish "correct answer set" |
-| **Verify** | Eval passes against running app |
+| **Action** | Write eval_cases.yaml with API checks + conversation checks |
+| **Purpose** | Define "correct behavior" for the app |
+| **Verify** | API checks pass, conversation checks listed |
 
 ```bash
 cat > agent/flow/evolve_eval/eval_cases.yaml << 'EOF'
-cases:
-  - description: "Health check returns ok"
+api_checks:
+  - description: "Health check"
     method: GET
     endpoint: /health
     expected_status: 200
     expected_body: '{"status":"ok"}'
-
-  - description: "Create todo returns 200"
+  - description: "Create todo"
     method: POST
     endpoint: /todos
-    body: '{"title":"test item"}'
+    body: '{"title":"eval test"}'
     expected_status: 200
-
-  - description: "List todos returns array"
+  - description: "List todos"
     method: GET
     endpoint: /todos
     expected_status: 200
+  - description: "Non-existent todo 404"
+    method: GET
+    endpoint: /todos/todo-000
+    expected_status: 404
+
+conversation_checks:
+  - input: "add a todo: buy milk"
+    expected_skill: create_todo
+    description: "Agent creates todo via skill"
+  - input: "list my todos"
+    expected_skill: list_todos
+    description: "Agent lists todos via skill"
+  - input: "check health"
+    expected_skill: check_health
+    description: "Agent checks health"
 EOF
 
 # Run eval
 uv run uvicorn src.app:app --port 8001 &
 sleep 2
 
-uv run agent/flow/evolve_eval/scripts/run_eval.py \
-  --cases agent/flow/evolve_eval/eval_cases.yaml \
+WORKSPACE_ROOT=$(pwd)
+cd .runtime/agents/evolver
+uv run python "$WORKSPACE_ROOT/agent/flow/evolve_eval/scripts/run_eval.py" \
+  --cases "$WORKSPACE_ROOT/agent/flow/evolve_eval/eval_cases.yaml" \
   --base-url http://localhost:8001
-# Expected: Score: 3/3 (100%)
-
+# Expected: API Score: 4/4 (100%)
+#           Conversation checks (3 defined): listed for interactive testing
+cd "$WORKSPACE_ROOT"
 kill %1
 ```
 
@@ -786,183 +761,141 @@ kill %1
 
 | | |
 |---|---|
-| **Action** | Define a postcondition constraint |
-| **Purpose** | Test constraints work with the app |
-| **Verify** | constraints.yaml deployed correctly |
+| **Action** | Define postcondition constraints |
+| **Purpose** | Test constraint mechanism |
+| **Verify** | constraints.yaml deployed |
 
 ```bash
 cat > agent/commitment/constraints.yaml << 'EOF'
 transition_constraints: {}
-
 action_constraints:
   C1:
     description: "Health check returns ok"
     on: { action: check_health }
     type: postcondition
     expected: '{"status":"ok"}'
-
   C2:
-    description: "Create todo returns valid JSON"
+    description: "Create todo returns 200"
     on: { action: create_todo }
     type: postcondition
     expected_status: 200
 EOF
 
-./agent/deploy.sh
+make deploy
 cat .runtime/agents/default/constraints.yaml
-# Should match what we wrote
+# Should match
 ```
 
-### 10.8 Run evolver diagnose
+### 10.8 Test evolver — diagnose
 
 | | |
 |---|---|
-| **Action** | Run diagnose against the Todo app |
-| **Purpose** | Verify evolver can analyze the app |
-| **Verify** | Report shows constraints and no issues |
+| **Action** | Start evolver, run diagnose |
+| **Purpose** | Verify evolver can analyze runtime data |
+| **Verify** | Diagnostic report generated |
 
 ```bash
-uv run agent/flow/evolve_diagnose/scripts/diagnose.py \
-  --data-dir .runtime/data \
-  --constraints agent/commitment/constraints.yaml
-# Expected: DIAGNOSTIC REPORT
-#   Active Constraints: 2 (action constraints)
-#   No conversation data (haven't used the app yet)
-```
-
-### 10.9 Add a reviewer role (P5: Expand Role)
-
-| | |
-|---|---|
-| **Action** | Add a reviewer role with limited skills |
-| **Purpose** | Test multi-role setup |
-| **Verify** | Reviewer gets only list_todos, not create_todo |
-
-```bash
-cat > agent/role/reviewer.md << 'EOF'
-# Reviewer Agent
-
-Reviews todo items.
-
-## Identity
-
-- Role: reviewer
-- Permissions: read-only access
-
-## Responsibilities
-
-1. List and review todo items
-EOF
-
-# Update flow.yaml — add reviewer to list_todos only
-# Edit the list_todos line:
-sed -i 's/action: list_todos,    role: \[default\]/action: list_todos,    role: [default, reviewer]/' agent/flow/flow.yaml
-
-./agent/deploy.sh
-
-ls .runtime/agents/reviewer/.claude/skills/
-# Expected: check_health  list_todos  (NOT create_todo, mark_done)
-```
-
-### 10.10 Multi-role startup
-
-| | |
-|---|---|
-| **Action** | Start default + reviewer in tmux |
-| **Purpose** | Verify multi-role works |
-| **Verify** | Two tmux panes, different skills |
-
-```bash
-./agent/start.sh --role default,reviewer
-# Expected: tmux session with 2 panes
-# Pane 1 (default): has create_todo, list_todos, mark_done
-# Pane 2 (reviewer): has only list_todos, check_health
-# Exit: Ctrl+b then d (detach), then tmux kill-session
-```
-
-### 10.11 Test evolve_improve (manual mode)
-
-| | |
-|---|---|
-| **Action** | Start evolver, do a full diagnose → improve cycle |
-| **Purpose** | Verify conversational improvement workflow |
-| **Verify** | Evolver reads diagnostic data, proposes changes, applies them |
-
-```bash
-./agent/start.sh --role evolver
+make start ROLE=evolver
 # In Claude Code:
 #   "diagnose"
-#   → Evolver runs diagnose.py → shows report
-#   → "No conversation data yet" (normal for new app)
-#
-#   "evaluate"
-#   → Evolver runs run_eval.py → "Score: 3/3 (100%)"
-#
-#   "The check_health skill description is too brief. Improve it."
-#   → Evolver should:
-#     1. Read agent/flow/check_health/SKILL.md
-#     2. Propose an improvement
-#     3. Ask for approval
-#     4. On "yes" → edit the file → run deploy.sh
-#
-#   "evaluate" again
-#   → Should still be 3/3 (improvement didn't break anything)
-#
+#   → Agent reads .workspace_root, cd to workspace root
+#   → Runs diagnose.py
+#   → Reports: constraints, conversations, violations
 #   Exit: Ctrl+C
-
-# Verify the file was actually changed:
-cat agent/flow/check_health/SKILL.md
-# Should show the improvement evolver made
-git diff agent/flow/check_health/SKILL.md
-# Should show the diff
-git checkout agent/flow/check_health/SKILL.md  # restore original
 ```
 
-### 10.12 Test evolve_auto (automated loop)
+### 10.9 Test evolver — evaluate
 
 | | |
 |---|---|
-| **Action** | Run the automated evolution loop |
-| **Purpose** | Verify EvoSkill-based auto-optimization works |
-| **Verify** | Loop runs, reports score, creates backup |
+| **Action** | Start evolver, run evaluate (backend must be running) |
+| **Purpose** | Verify eval runs both API and conversation checks |
+| **Verify** | API score + conversation check listing |
 
 ```bash
 uv run uvicorn src.app:app --port 8001 &
 sleep 2
-
-# Run auto loop directly (outside of agent, to verify script)
-uv run agent/flow/evolve_auto/scripts/run_loop.py \
-  --eval-cases agent/flow/evolve_eval/eval_cases.yaml \
-  --base-url http://localhost:8001 \
-  --iterations 2
-# Expected:
-#   Initial score: 100% (all cases pass)
-#   No failures — nothing to improve
-#   (This is correct — app already passes all eval cases)
-
+make start ROLE=evolver
+# In Claude Code:
+#   "evaluate"
+#   → Runs run_eval.py
+#   → Reports API score (4/4) + conversation checks (3 listed)
+#   Exit: Ctrl+C
 kill %1
-
-# Also test via evolver conversation:
-./agent/start.sh --role evolver
-# "auto-optimize, run 2 iterations"
-# → Evolver should run the loop script and report results
-# Exit: Ctrl+C
 ```
 
-### 10.13 Use evolver to inspect the app
+### 10.10 Test evolver — improve
 
 | | |
 |---|---|
-| **Action** | Start evolver, use inspect skill |
-| **Purpose** | Verify evolver can navigate the project |
-| **Verify** | Inspect shows correct structure including new todo skills |
+| **Action** | Ask evolver to improve a skill |
+| **Purpose** | Verify evolver modifies workspace (not template) |
+| **Verify** | Only workspace files changed, deploy runs |
 
 ```bash
-./agent/start.sh --role evolver
+make start ROLE=evolver
 # In Claude Code:
-#   "inspect" → should show project structure with create_todo, list_todos, mark_done skills
-#   "evaluate" → should run eval cases (need backend running)
+#   "improve the list_todos skill — add empty list handling"
+#   → Evolver reads diagnose + eval data
+#   → Proposes edit to agent/flow/list_todos/SKILL.md
+#   → Applies change (IN WORKSPACE ONLY)
+#   → Runs deploy
+#   Verify: "show me what changed" → should only show workspace paths
 #   Exit: Ctrl+C
+
+# Verify template NOT modified:
+cd ../../../..    # back to repo root
+git diff agent/flow/list_todos/SKILL.md
+# Should show NO changes (template untouched)
+cd .socialware/workspace/demo/todo
+```
+
+### 10.11 Test evolver — auto-optimize
+
+| | |
+|---|---|
+| **Action** | Ask evolver to auto-optimize |
+| **Purpose** | Verify automated loop runs |
+| **Verify** | Eval cases expanded, skills improved, score reported |
+
+```bash
+uv run uvicorn src.app:app --port 8001 &
+sleep 2
+make start ROLE=evolver
+# In Claude Code:
+#   "auto-optimize, run 3 iterations"
+#   → Evolver finds workspace root via .workspace_root
+#   → Runs eval → expands cases → improves skills → re-evals
+#   → Reports: initial score → final score, what changed
+#   Exit: Ctrl+C
+kill %1
+```
+
+### 10.12 Add reviewer role (P5)
+
+| | |
+|---|---|
+| **Action** | Add reviewer role with limited skills |
+| **Purpose** | Test multi-role filtering |
+| **Verify** | Reviewer gets only list_todos |
+
+```bash
+cat > agent/role/reviewer.md << 'EOF'
+# Reviewer Agent
+Reviews todo items.
+## Identity
+- Role: reviewer
+- Permissions: read-only
+## Responsibilities
+1. List and review todo items
+EOF
+
+# Add reviewer to list_todos in flow.yaml
+sed -i 's/action: list_todos,      role: \[default\]/action: list_todos,      role: [default, reviewer]/' agent/flow/flow.yaml
+
+make deploy
+ls .runtime/agents/reviewer/.claude/skills/
+# Expected: check_health  list_todos  (NOT create_todo, mark_done)
 ```
 
 ---

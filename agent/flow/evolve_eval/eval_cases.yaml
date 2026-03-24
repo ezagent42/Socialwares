@@ -1,28 +1,36 @@
-# Eval cases — correct answer set for measuring agent/app performance.
-# Grows with your app through progressive phases.
+# Eval cases — standard conversation behaviors for this app.
+# Each case defines: what the user says, what the agent should do, how to verify.
 #
-# Each case makes an HTTP request to the running app and checks the response.
+# Two types of eval:
+#   api_check: direct HTTP call to verify endpoint works
+#   conversation: what action should the agent take for a given input
 
-cases:
-  # P1: basic health
+# API-level checks (baseline — does the backend work?)
+api_checks:
   - description: "Health check returns ok"
     method: GET
     endpoint: /health
     expected_status: 200
     expected_body: '{"status":"ok"}'
 
-  # P2: add task CRUD cases as you build them
-  # - description: "Create task returns 200"
-  #   method: POST
-  #   endpoint: /tasks
-  #   body: '{"title": "test"}'
-  #   headers: {"X-Identity": "admin"}
-  #   expected_status: 200
+# Conversation-level checks (does the agent behave correctly?)
+# These define standard input → expected behavior mappings.
+# The evolver uses these to evaluate and improve agent skills.
+conversation_checks:
+  - input: "check health"
+    expected_skill: check_health
+    description: "Agent should use check_health skill"
 
-  # P5: add role-based cases
-  # - description: "Reviewer cannot create task"
-  #   method: POST
-  #   endpoint: /tasks
-  #   headers: {"X-Identity": "reviewer"}
-  #   body: '{"title": "test"}'
-  #   expected_status: 403
+  # Add more as your app grows:
+  # - input: "add a todo: buy milk"
+  #   expected_skill: create_todo
+  #   expected_api_call: "POST /todos"
+  #   expected_result_contains: "buy milk"
+  #
+  # - input: "list my todos"
+  #   expected_skill: list_todos
+  #   expected_api_call: "GET /todos"
+  #
+  # - input: "what can you do?"
+  #   expected_skill: inspect
+  #   description: "Agent should show project structure"

@@ -20,11 +20,22 @@ from urllib.request import Request, urlopen
 import yaml
 
 
-def load_cases(path: Path) -> list[dict]:
-    """Load eval cases from YAML file."""
+def load_cases(path: Path) -> tuple[list[dict], list[dict]]:
+    """Load eval cases from YAML file.
+
+    Returns (api_checks, conversation_checks).
+    """
     with open(path) as f:
         data = yaml.safe_load(f) or {}
-    return data.get("cases", [])
+
+    api_checks = data.get("api_checks", [])
+    conversation_checks = data.get("conversation_checks", [])
+
+    # Backward compatible: old format with just "cases"
+    if "cases" in data and not api_checks:
+        api_checks = data["cases"]
+
+    return api_checks, conversation_checks
 
 
 def run_case(case: dict, base_url: str) -> dict:
@@ -97,36 +108,53 @@ def main() -> None:
     parser.add_argument("--base-url", default="http://localhost:8001", help="App base URL")
     args = parser.parse_args()
 
-    cases = load_cases(Path(args.cases))
-    if not cases:
+    api_checks, conversation_checks = load_cases(Path(args.cases))
+
+    if not api_checks and not conversation_checks:
         print("No eval cases found.")
         sys.exit(0)
 
-    print(f"Running {len(cases)} eval cases against {args.base_url}")
-    print()
-
+    # Run API checks
     results = []
-    for case in cases:
-        result = run_case(case, args.base_url)
-        results.append(result)
-        status = "PASS" if result["passed"] else "FAIL"
-        print(f"  [{status}] {result['description']}")
-        if not result["passed"]:
-            for key in ["status_mismatch", "body_mismatch", "error"]:
-                if key in result:
-                    print(f"         {result[key]}")
+    api_score = 0
+    if api_checks:
+        print(f"Running {len(api_checks)} API checks against {args.base_url}")
+        print()
+        for case in api_checks:
+            result = run_case(case, args.base_url)
+            results.append(result)
+            status = "PASS" if result["passed"] else "FAIL"
+            print(f"  [{status}] {result['description']}")
+            if not result["passed"]:
+                for key in ["status_mismatch", "body_mismatch", "error"]:
+                    if key in result:
+                        print(f"         {result[key]}")
 
+        passed = sum(1 for r in results if r["passed"])
+        total = len(results)
+        api_score = passed / total if total > 0 else 0
+        print(f"\nAPI Score: {passed}/{total} ({api_score:.0%})")
+
+    # Report conversation checks (require agent runtime)
+    if conversation_checks:
+        print(f"\nConversation checks ({len(conversation_checks)} defined):")
+        for cc in conversation_checks:
+            print(f"  [ ] {cc.get('input', '?')} → expects: {cc.get('expected_skill', '?')}")
+        print("  (Run these interactively with evolver role)")
+
+    # Save results for evolver to read
     passed = sum(1 for r in results if r["passed"])
     total = len(results)
     score = passed / total if total > 0 else 0
-
-    print()
-    print(f"Score: {passed}/{total} ({score:.0%})")
-
-    # Save results for evolver to read
     results_file = Path(args.cases).parent / "last_eval_results.json"
     with open(results_file, "w") as f:
-        json.dump({"score": score, "passed": passed, "total": total, "results": results}, f, indent=2)
+        json.dump({
+            "score": score,
+            "passed": passed,
+            "total": total,
+            "results": results,
+            "conversation_checks_count": len(conversation_checks),
+        }, f, indent=2)
     print(f"Results saved to {results_file}")
 
 
