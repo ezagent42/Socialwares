@@ -1,0 +1,41 @@
+# Constraints — bind to flow edges (state machine transitions or direct actions)
+#
+# Transition constraints: enforce rules on state machine edges
+# Action constraints: postconditions on direct actions
+#
+# Violations are written to .runtime/data/violations/ by the app backend.
+# SessionStart hook notifies the responsible role on login.
+#
+# App developer responsibilities:
+# 1. Record timestamps on state transitions (your DB/data layer)
+# 2. Implement detection (API middleware, background task, or cron)
+# 3. Write violations to .runtime/data/violations/current.jsonl
+
+# Transition constraints — bind to flow.yaml state machine edges
+transition_constraints: {}
+  # Example:
+  # C1:
+  #   description: "Review within 72h"
+  #   on: { flow: F1, from: submitted, action: review }
+  #   type: time
+  #   deadline: 72h
+  #   on_violation:
+  #     trigger_action: force_resolve
+  #     trigger_role: admin
+  #
+  # C2:
+  #   description: "Review must include justification"
+  #   on: { flow: F1, from: under_review, action: approve }
+  #   type: quality
+  #   postcondition: "response must contain 'reason' field"
+  #   on_violation:
+  #     trigger_action: reject
+  #     reason: "insufficient justification"
+
+# Action constraints — postconditions on direct actions
+action_constraints:
+  C1:
+    description: "Health check returns ok"
+    on: { action: check_health }
+    type: postcondition
+    expected: '{"status": "ok"}'

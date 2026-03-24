@@ -14,14 +14,7 @@ Commitment IS:
 - A condition that must be met between two actions
 - Part of the collaboration contract between agents
 
-### Graph Model
-
-```
-Role + Action = nodes
-Flow          = edges (transitions between nodes)
-Scope         = subgraph (boundary of what's inside)
-Commitment    = constraints on edges (what must be true for traversal)
-```
+### Example
 
 | Belongs in Skill (node) | Belongs in Commitment (edge) |
 |---|---|
@@ -100,53 +93,6 @@ commitments:
     condition: "within 48h"
     on_violation: { role: pm, action: auto_close }
 ```
-
-## Relationship to Flow
-
-Flow and commitment are at different abstraction levels, connected by action names:
-
-```
-Flow:       state → action → state      (state machine internals)
-Commitment: role+action → role+action    (inter-role promises)
-```
-
-- Flow defines WHAT transitions exist
-- Commitment defines WHAT CONDITIONS apply to those transitions
-- Shared vocabulary: action names
-
-Commitment does not reference flow states. It constrains the role-action pair, not a specific state transition. If the same action appears in multiple flow transitions, the commitment applies to ALL of them.
-
-## Two-Phase Checking
-
-### Development Phase (structure check)
-
-Evolver checks consistency between commitment and other primitives:
-
-```
-For each commitment:
-  - from.role exists in agent/role/?
-  - from.action exists in flow.yaml?
-  - to.role exists in agent/role/?
-  - to.action exists in flow.yaml?
-  - on_violation.role exists in agent/role/?
-  - on_violation.action exists in flow.yaml?
-  - gap found → report to developer
-```
-
-### Runtime Phase (fulfillment check)
-
-Evolver reads conversation logs and analyzes fulfillment:
-
-```
-For each commitment:
-  1. Find all from.action events in conversations/
-  2. Find corresponding to.action events
-  3. Check condition (evolver as LLM interprets natural language)
-  4. Calculate fulfillment rate
-  5. Report
-```
-
-Fulfillment rate = fulfilled / total per commitment.
 
 ## Lifecycle
 

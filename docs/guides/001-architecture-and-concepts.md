@@ -110,12 +110,12 @@ Each workspace is a self-contained copy of the template. Deploy and start only h
     └── pyproject.toml         ← independent dependencies
 ```
 
-- **Room** = organizational group (team, project)
-- **Workspace** = one app instance within a room
-- Each workspace has its own `Makefile` (copied from `agent/Makefile.template` during `make create`)
-- Each workspace has its own dependencies (pyproject.toml)
-- `.runtime/` is gitignored — only exists inside workspaces, never at repo root
-- Root Makefile only provides `make create` and `make test`
+- **Room** = organizational group (team, project) — just a directory for grouping
+- **App** = self-contained development unit (`{room}/{app}/`) — has its own Makefile, pyproject.toml, agent/, src/, .runtime/
+- Each app has its own `Makefile` (copied from `agent/Makefile.template` during `make create`)
+- Each app has its own dependencies (`pyproject.toml` + `.venv/`)
+- `.runtime/` is gitignored — only exists inside apps, never at repo root
+- Root Makefile only provides `make create` and `make test` (template-level tests for contributors)
 
 ## Makefile Split
 
@@ -124,18 +124,3 @@ Each workspace is a self-contained copy of the template. Deploy and start only h
 | Root Makefile | `socialwares/Makefile` | `make create`, `make test` |
 | Workspace Makefile | `.socialware/workspace/{room}/{app}/Makefile` | `make deploy`, `make start`, `make test`, `make clean` |
 | Makefile.template | `agent/Makefile.template` | Source copied to workspace during `make create` |
-
-## Commitment: Unified Schema
-
-Commitment constrains the edges of the flow graph — what must be true between two role-actions. Every commitment uses the same four fields:
-
-```yaml
-commitments:
-  C1:
-    from: { role: coder, action: submit_code }
-    to:   { role: pm, action: review_code }
-    condition: "within 24h"
-    on_violation: { role: tech_lead, action: escalate }
-```
-
-See [docs/discuss/commitment.md](../discuss/commitment.md) for full design discussion.

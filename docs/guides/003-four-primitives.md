@@ -79,21 +79,6 @@ It IS:
 - A condition that must be met between two actions
 - Part of the collaboration contract between agents
 
-### Graph Model
-
-```
-Role + Action = nodes
-Flow          = edges (transitions between nodes)
-Scope         = subgraph (boundary of what's inside)
-Commitment    = constraints on edges (what must be true for traversal)
-```
-
-| Belongs in Skill (node) | Belongs in Commitment (edge) |
-|---|---|
-| Output format requirements | Time limit between two actions |
-| How to execute an action | Precondition for next action |
-| What fields to include | Ordering between roles |
-
 ### Unified Schema
 
 Every commitment has the same four fields:
@@ -133,51 +118,6 @@ condition: "customer rates 4+ stars"
 # Span constraint (from/to can be non-adjacent)
 condition: "within 48h"
 ```
-
-### Full Examples
-
-```yaml
-commitments:
-  # Deadline: submit → review within 24h
-  C1:
-    from: { role: coder, action: submit_code }
-    to:   { role: pm, action: review_code }
-    condition: "within 24h"
-    on_violation: { role: tech_lead, action: escalate }
-
-  # Precondition: can't merge without approved review
-  C2:
-    from: { role: coder, action: submit_code }
-    to:   { role: coder, action: merge_code }
-    condition: "review_code completed with result approved"
-    on_violation: null
-
-  # Span: task must close within 48h of creation
-  C3:
-    from: { role: pm, action: create_task }
-    to:   { role: pm, action: close_task }
-    condition: "within 48h"
-    on_violation: { role: pm, action: auto_close }
-```
-
-### Relationship to Flow
-
-Flow and commitment are at different abstraction levels, connected by action names:
-
-```
-Flow:       state → action → state      (state machine internals)
-Commitment: role+action → role+action    (inter-role promises)
-```
-
-- Flow defines WHAT transitions exist
-- Commitment defines WHAT CONDITIONS apply to those transitions
-- Shared vocabulary: action names
-
-Commitment does not reference flow states. It constrains the role-action pair, not a specific state transition. If the same action appears in multiple flow transitions, the commitment applies to ALL of them.
-
-See [docs/discuss/commitment.md](../discuss/commitment.md) for full design discussion.
-
----
 
 ## Flow — How
 

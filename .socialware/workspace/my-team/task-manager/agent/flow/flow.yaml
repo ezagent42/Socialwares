@@ -1,0 +1,38 @@
+# Flow definitions — action registry and state machines.
+#
+# Each named flow (F1, F2, ...) defines a state machine.
+# Direct actions have no state machine — they execute immediately.
+#
+# Structure follows SwSim §2 Flows pattern:
+#   flows:     named state machines with transitions
+#   direct_actions:  actions without state machine
+
+flows: {}
+  # Example (uncomment and customize for your app):
+  #
+  # F1:
+  #   name: task_lifecycle
+  #   description: "Task from creation to closure"
+  #   states: [draft, submitted, under_review, approved, rejected, closed]
+  #   transitions:
+  #     - { from: _none_,        action: create_task, to: draft,        role: [admin, submitter] }
+  #     - { from: draft,         action: submit,      to: submitted,    role: [submitter] }
+  #     - { from: submitted,     action: review,      to: under_review, role: [reviewer] }
+  #     - { from: under_review,  action: approve,     to: approved,     role: [reviewer] }
+  #     - { from: under_review,  action: reject,      to: rejected,     role: [reviewer] }
+  #     - { from: approved,      action: close,       to: closed,       role: [admin] }
+
+direct_actions:
+  - action: check_health
+    role: [default, dev, evolver]
+    description: "Check app health status"
+
+  - action: setup_claude
+    role: [dev]
+    description: "Configure Claude Code environment (agent-setup plugin, settings, hooks)"
+
+  - { action: evolve_diagnose, role: [evolver], description: "Diagnose issues from runtime data" }
+  - { action: evolve_eval,     role: [evolver], description: "Run eval cases and report score" }
+  - { action: evolve_improve,  role: [evolver], description: "Propose and apply four-primitive changes" }
+  - { action: evolve_auto,     role: [evolver], description: "Run automated evolution loop (EvoSkill)" }
+  - { action: inspect, role: [dev, evolver], description: "Show project structure and dev workflow" }

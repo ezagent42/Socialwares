@@ -12,7 +12,7 @@ Create and run a Socialware App in 5 minutes.
 ```bash
 git clone https://github.com/ezagent42/Socialwares.git
 cd Socialwares
-uv sync
+uv sync    # install template dependencies (for make create)
 ```
 
 ## Step 2: Create Your App
@@ -25,10 +25,11 @@ This copies the template (including a workspace `Makefile` from `agent/Makefile.
 
 ## Step 3: Enter Your Workspace
 
-All development — deploy, start, edit — happens inside the workspace:
+All development — deploy, start, edit — happens inside the workspace. Each app has its own dependencies:
 
 ```bash
 cd .socialware/workspace/my-team/task-manager
+uv sync    # install app dependencies (independent from template root)
 ```
 
 ## Step 4: Start the Agent
@@ -88,8 +89,16 @@ make start ROLE=dev
 uv run uvicorn src.app:app --port 8001
 ```
 
-## Step 10: Run Template Tests
+## Step 10: Add Tests
 
+```bash
+# From within your workspace — add your own tests:
+mkdir -p tests
+# Write tests for your app
+make test
+```
+
+To run the template's built-in tests (for template contributors):
 ```bash
 # From repo root:
 make test
@@ -113,4 +122,4 @@ make deploy
 - SDK mode: adapter's log_conversation() function
 
 ### Q: Where do deploy and start run?
-Always from within a workspace (`cd .socialware/workspace/{room}/{app}`). The repo root Makefile only has `make create` and `make test` — running `make deploy` or `make start` at the root will display an error.
+Always from within an app directory (`cd .socialware/workspace/{room}/{app}`). Each app is self-contained with its own Makefile, pyproject.toml, and .venv. Room is just a grouping folder. The repo root Makefile only has `make create` and `make test` — running `make deploy` or `make start` at the root will display an error.

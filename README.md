@@ -12,7 +12,7 @@ Socialware App scaffolding template — a web application for Agent interaction 
 git clone https://github.com/ezagent42/Socialwares.git
 cd Socialwares
 
-# 2. Install dependencies
+# 2. Install template dependencies
 uv sync
 
 # 3. Create your App
@@ -73,7 +73,7 @@ socialwares/
 ├── scripts/
 │   └── create-my-socialware.py   ← Create new App instance
 ├── claude.sh                     ← Claude Code launcher (agent-setup)
-├── .socialware/workspace/        ← Workspace instances (each has its own Makefile)
+├── .socialware/workspace/        ← App instances (each app has own Makefile + pyproject.toml)
 ├── tests/
 ├── docs/
 │   ├── discuss/commitment.md     ← Commitment design discussion
@@ -82,7 +82,7 @@ socialwares/
 └── pyproject.toml
 ```
 
-Each workspace has its own `Makefile` (copied from `agent/Makefile.template` during `make create`):
+Each app has its own `Makefile`, `pyproject.toml`, and `.venv/` (copied from template during `make create`). Room is just a grouping folder:
 
 ```
 .socialware/workspace/{room}/{app}/
@@ -293,11 +293,12 @@ See [docs/designs/progressive-dev-guide-example.md](docs/designs/progressive-dev
 ## Development
 
 ```bash
-uv sync
-make test        # run template tests
+uv sync                            # install template dependencies
+make test                          # run template tests (for contributors)
 make create ROOM=dev APP=sandbox DESC="Development sandbox"
 cd .socialware/workspace/dev/sandbox
-make start       # auto-deploys, then starts
+uv sync                            # install app dependencies
+make start                         # auto-deploys, then starts
 ```
 
 ## License
