@@ -238,7 +238,7 @@ Written by UserPromptSubmit hook (log_prompt.sh) and PreToolUse hook (log_tool.s
 
 ### Violation Queue (`.runtime/data/violations/*.jsonl`)
 
-Written by app backend when constraints are violated:
+Written by evolver's `diagnose.py` when it finds commitment violations during conversation analysis:
 
 ```json
 {"id": "v-001", "constraint": "C1", "description": "review overdue 24h", "detected_at": "2026-03-20T10:00:00Z", "resolved": false}

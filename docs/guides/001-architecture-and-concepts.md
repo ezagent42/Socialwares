@@ -13,8 +13,8 @@ A web application for Agent interaction visualization. Users see a normal UI + C
 User → Login → Session (role assigned)
   → Chat message → Backend receives
   → Backend spawns agent with user's role
-  → Agent processes → calls API → state transitions
-  → API checks constraints → response back to chat
+  → Agent processes → calls API → state transitions → response back to chat
+  → Hooks record prompts + tool calls → evolver's diagnose.py analyzes later
 ```
 
 ## Directory Structure

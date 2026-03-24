@@ -186,7 +186,7 @@ Reads flow.yaml → **symlinks** only the actions allowed for each role into `.r
 
 ### Role-Based Skill Allocation
 
-`deploy.sh` reads `flow.yaml` and only copies actions allowed for each role:
+`deploy.sh` reads `flow.yaml` and only symlinks the actions allowed for each role:
 
 - `default` role → gets `check_health` skill only
 - `dev` role → gets `check_health` + `setup_claude` + `inspect` skills

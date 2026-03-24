@@ -3,13 +3,12 @@
 # Transition constraints: enforce rules on state machine edges
 # Action constraints: postconditions on direct actions
 #
-# Violations are written to .runtime/data/violations/ by the app backend.
-# UserPromptSubmit (log_prompt.sh) + PreToolUse (log_tool.sh) hooks capture data for analysis.
+# Violations are written to .runtime/data/violations/ by evolver's diagnose.py.
+# UserPromptSubmit (log_prompt.sh) + PreToolUse (log_tool.sh) hooks capture
+# prompts and tool calls for analysis — they do NOT check violations.
 #
-# App developer responsibilities:
-# 1. Record timestamps on state transitions (your DB/data layer)
-# 2. Implement detection (API middleware, background task, or cron)
-# 3. Write violations to .runtime/data/violations/current.jsonl
+# Flow: hooks record data → diagnose.py analyzes → writes violations
+# The violations API (GET /violations) reads these files.
 
 # Transition constraints — bind to flow.yaml state machine edges
 transition_constraints: {}

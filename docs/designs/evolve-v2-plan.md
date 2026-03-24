@@ -1,5 +1,13 @@
 # Evolve V2 Implementation Plan
 
+> **Note (superseded):** This is a historical design plan. Some decisions here were revised in V3:
+> - Violations are written by evolver's `diagnose.py` (not by "app backend")
+> - `check_violations.sh` SessionStart hook was removed
+> - `conversations/` directory was renamed to `prompts/`
+> - Hooks record prompts + tool calls; they do NOT check violations
+>
+> See `docs/designs/evolve-v3-plan.md` and `docs/logs/0324-evolve-v3-phase1.md` for current state.
+
 > Branch: feat/evolve-v2
 > Prerequisite: main branch up to date
 

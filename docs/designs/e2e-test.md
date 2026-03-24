@@ -1,6 +1,6 @@
-# End-to-End Test Plan
+# End-to-End Test Plan — Task Review App
 
-Manual test plan covering every feature. Run from a clean state.
+A developer builds a Task Review App from scratch, testing every Socialwares feature along the way.
 
 ## Prerequisites
 
@@ -12,62 +12,70 @@ uv sync
 
 ---
 
-## 1. Template Deploy via Workspace
+## Phase 1: Template & Workspace
 
-Deploy and start only happen inside workspaces — never at the repo root. `.runtime/` never exists at repo root.
-
-### 1.1 Create a workspace and verify deploy
+### 1.1 Root Makefile guards
 
 | | |
 |---|---|
-| **Action** | `make create` then verify .runtime/ inside workspace |
-| **Purpose** | Verify create copies template, deploys into workspace |
-| **Verify** | Workspace has `.runtime/agents/default/`, `dev/`, `evolver/` |
+| **Action** | Run `make deploy` and `./agent/deploy.sh` at repo root |
+| **Purpose** | Verify deploy/start are blocked at template root |
+| **Expected** | Error message: "deploy.sh should not run at the template root" |
 
 ```bash
-make create ROOM=test APP=template-check DESC="Template verification"
-cd .socialware/workspace/test/template-check
-
-ls .runtime/agents/
-# Expected: default  dev  evolver
+make deploy      # Error: workspace command
+./agent/deploy.sh   # Error: should not run at template root
 ```
 
-### 1.2 Check .runtime/ structure (inside workspace)
+### 1.2 Create workspace
 
 | | |
 |---|---|
-| **Action** | Inspect .runtime/ contents inside workspace |
-| **Purpose** | Verify deploy generates correct structure per role |
-| **Verify** | Each role has: .claude/skills/, .claude/hooks/, SOUL.md, commitment.yaml, flow.yaml |
+| **Action** | `make create ROOM=demo APP=task-review DESC="Task review workflow"` |
+| **Purpose** | Create self-contained app workspace |
+| **Expected** | Directory at .socialware/workspace/demo/task-review/ with agent/, src/, Makefile, pyproject.toml |
 
 ```bash
-# From within workspace:
-ls .runtime/agents/default/
-# Expected: .claude  SOUL.md  commitment.yaml  flow.yaml
+make create ROOM=demo APP=task-review DESC="Task review workflow"
+cd .socialware/workspace/demo/task-review
+uv sync
 
-ls .runtime/agents/default/.claude/skills/
-# Expected: check_health (symlink)
-# NOT: setup_claude, evolve_* (those are for dev/evolver only)
+ls             # agent  app  Makefile  pyproject.toml  src  .runtime
+ls agent/role/ # default.md  dev.md  evolver.md  README.md
+cat agent/scope/scope.md    # Contains "task-review"
+cat Makefile | head -2       # "Socialware App — Workspace Makefile"
+```
 
-ls .runtime/agents/evolver/.claude/skills/
-# Expected: check_health, evolve_auto, evolve_diagnose, evolve_eval, evolve_improve, inspect
+### 1.3 Verify initial deploy
 
+| | |
+|---|---|
+| **Action** | Check .runtime/ created by make create |
+| **Purpose** | Verify auto-deploy on create |
+| **Expected** | .runtime/agents/ with 3 roles, skills symlinked, hooks generated |
+
+```bash
+ls .runtime/agents/          # default  dev  evolver
+
+# Skills are symlinks within workspace
+ls -la .runtime/agents/default/.claude/skills/check_health
+# Should show -> (symlink arrow pointing to agent/flow/check_health)
+
+# Workspace root marker
+cat .runtime/agents/default/.workspace_root
+# Should show full path to workspace
+
+# Hooks generated (claude adapter default)
 ls .runtime/agents/default/.claude/hooks/
 # Expected: log_prompt.sh  log_tool.sh
-```
 
-### 1.3 Check SOUL.md merge
+# Hooks registered
+cat .runtime/agents/default/.claude/settings.local.json | python3 -m json.tool
+# Should show UserPromptSubmit + PreToolUse (NOT PostToolUse or SessionStart)
 
-| | |
-|---|---|
-| **Action** | Read merged SOUL.md |
-| **Purpose** | Verify scope.md + role.md merged correctly |
-| **Verify** | Contains content from both scope/scope.md and role/default.md |
-
-```bash
-# From within workspace:
-cat .runtime/agents/default/SOUL.md
-# Should contain scope content ("Socialware App") AND role content ("Default Agent")
+# Prompt file for claude
+cat .runtime/agents/default/SOUL.md | head -5
+# Should contain merged scope + role content
 ```
 
 ### 1.4 Skill filtering by role
@@ -75,494 +83,71 @@ cat .runtime/agents/default/SOUL.md
 | | |
 |---|---|
 | **Action** | Compare skills across roles |
-| **Purpose** | Verify flow.yaml role filtering works |
-| **Verify** | default has fewer skills than evolver |
+| **Purpose** | Verify flow.yaml role filtering |
+| **Expected** | default=1, dev=3, evolver=7 |
 
 ```bash
-# From within workspace:
-ls .runtime/agents/default/.claude/skills/ | wc -l   # Expected: 1 (check_health)
-ls .runtime/agents/dev/.claude/skills/ | wc -l        # Expected: 3 (check_health, setup_claude, inspect)
-ls .runtime/agents/evolver/.claude/skills/ | wc -l     # Expected: 6 (check_health, inspect, evolve_diagnose/eval/improve/auto)
+ls .runtime/agents/default/.claude/skills/ | wc -l    # 1 (check_health)
+ls .runtime/agents/dev/.claude/skills/ | wc -l         # 3 (check_health, setup_claude, inspect)
+ls .runtime/agents/evolver/.claude/skills/ | wc -l      # 7 (check_health, inspect, evolve_check, evolve_diagnose, evolve_eval, evolve_improve, evolve_auto)
 ```
 
-### 1.5 Make start (from workspace)
+### 1.5 Make idempotency
 
 | | |
 |---|---|
-| **Action** | `make start` from within workspace |
-| **Purpose** | Verify agent launches in default role |
-| **Verify** | Claude Code TUI opens, SOUL.md loaded, skills available |
+| **Action** | Run `make deploy` twice |
+| **Purpose** | Verify Make timestamp-based idempotency |
+| **Expected** | Both show "Nothing to be done" (create already deployed) |
 
 ```bash
-# From within workspace:
-make start
-# In Claude Code:
-#   - Type "/" → should see "check_health" in skill list
-#   - Say "check health" → should attempt to call GET /health
-#   - Exit: Ctrl+C
+make deploy    # Nothing to be done
+make deploy    # Nothing to be done
 ```
 
-### 1.6 Make idempotency
+### 1.6 Make change detection
 
 | | |
 |---|---|
-| **Action** | Run `make deploy` twice from within workspace |
-| **Purpose** | Verify Make skips rebuild when nothing changed |
-| **Verify** | Both runs say "nothing to be done" (create already deployed) |
-
-```bash
-# From within workspace (create already deployed, so both show up-to-date):
-make deploy    # "Nothing to be done for 'deploy'." (create already deployed)
-make deploy    # same result
-```
-
-### 1.7 Make change detection
-
-| | |
-|---|---|
-| **Action** | Edit a file, run `make deploy` from within workspace |
+| **Action** | Edit a file, run `make deploy` |
 | **Purpose** | Verify Make detects source changes |
-| **Verify** | Redeploys after edit |
+| **Expected** | Redeploys after edit |
 
 ```bash
-# From within workspace:
-echo "# test" >> agent/scope/scope.md
-make deploy    # should rebuild (runs deploy.sh)
-# Restore: remove the line we added
-sed -i '$ d' agent/scope/scope.md
+echo "# test change" >> agent/scope/scope.md
+make deploy    # Should rebuild
+sed -i '$ d' agent/scope/scope.md   # Restore
+```
+
+### 1.7 Duplicate workspace fails
+
+| | |
+|---|---|
+| **Action** | Run create with same room/app |
+| **Purpose** | Verify won't overwrite |
+| **Expected** | Error message |
+
+```bash
+cd ../../../..   # back to repo root
+make create ROOM=demo APP=task-review DESC="duplicate"   # Should fail
+cd .socialware/workspace/demo/task-review
 ```
 
 ---
 
-## 2. Create Workspace
+## Phase 2: Build the App
 
-### 2.1 Create workspace
-
-| | |
-|---|---|
-| **Action** | `make create ROOM=test APP=hello DESC="Test App"` |
-| **Purpose** | Verify workspace creation with room/app structure |
-| **Verify** | Directory created, files copied, SOUL files customized, auto-deployed |
-
-```bash
-make create ROOM=test APP=hello DESC="Test App"
-
-# Check structure
-ls .socialware/workspace/test/hello/
-# Expected: agent  app  pyproject.toml  src  .runtime
-
-# Check customization
-cat .socialware/workspace/test/hello/agent/scope/scope.md
-# Should contain "hello" and "Test App"
-
-cat .socialware/workspace/test/hello/agent/role/default.md
-# Should contain "hello"
-
-# Check auto-deploy
-ls .socialware/workspace/test/hello/.runtime/agents/
-# Expected: default  dev  evolver
-```
-
-### 2.2 Duplicate workspace fails
+### 2.1 Add backend API
 
 | | |
 |---|---|
-| **Action** | Run create again with same room/app |
-| **Purpose** | Verify won't overwrite existing workspace |
-| **Verify** | Exits with error |
-
-```bash
-make create ROOM=test APP=hello DESC="Test"
-# Expected: error message, non-zero exit code
-```
-
-### 2.3 Workspace self-contained
-
-| | |
-|---|---|
-| **Action** | Deploy and start from within workspace |
-| **Purpose** | Verify workspace works independently from repo root |
-| **Verify** | deploy.sh and start.sh work using workspace's local agent/ |
-
-```bash
-cd .socialware/workspace/test/hello
-./agent/deploy.sh        # should work (reads local agent/)
-./agent/start.sh --role default
-# Claude Code opens, check_health skill available
-# Exit: Ctrl+C
-cd ../../../..            # back to repo root
-```
-
-### 2.4 Independent pyproject.toml
-
-| | |
-|---|---|
-| **Action** | Check workspace has its own pyproject.toml |
-| **Purpose** | Verify dependency independence |
-| **Verify** | pyproject.toml exists with app name |
-
-```bash
-cat .socialware/workspace/test/hello/pyproject.toml
-# Should contain: name = "hello"
-```
-
----
-
-## 3. Four Primitives
-
-### 3.1 Add a new skill
-
-| | |
-|---|---|
-| **Action** | Create a new flow action in workspace |
-| **Purpose** | Verify custom skills work |
-| **Verify** | New skill appears in deployed .runtime/ |
-
-```bash
-cd .socialware/workspace/test/hello
-
-mkdir -p agent/flow/greet
-cat > agent/flow/greet/SKILL.md << 'EOF'
----
-name: greet
-description: "Say hello"
----
-# Greet
-## Trigger
-User says "hello" or "greet"
-## Flow
-Respond with a greeting.
-EOF
-
-# Register in flow.yaml
-echo '  - { action: greet, role: [default], description: "Say hello" }' >> agent/flow/flow.yaml
-
-./agent/deploy.sh
-ls .runtime/agents/default/.claude/skills/
-# Expected: check_health  greet
-
-cd ../../../..
-```
-
-### 3.2 Add a new role
-
-| | |
-|---|---|
-| **Action** | Create a new role in workspace |
-| **Purpose** | Verify new roles are deployed |
-| **Verify** | New role directory in .runtime/agents/ |
-
-```bash
-cd .socialware/workspace/test/hello
-
-cat > agent/role/admin.md << 'EOF'
-# Admin Agent
-Admin role.
-## Identity
-- Role: admin
-- Permissions: all
-## Responsibilities
-1. Manage the app
-EOF
-
-./agent/deploy.sh
-ls .runtime/agents/
-# Expected: admin  default  dev  evolver
-
-cd ../../../..
-```
-
-### 3.3 Remove a role
-
-| | |
-|---|---|
-| **Action** | Delete a role file, redeploy |
-| **Purpose** | Verify deploy cleans up removed roles |
-| **Verify** | Removed role's .runtime/ directory is gone |
-
-```bash
-cd .socialware/workspace/test/hello
-
-rm agent/role/admin.md
-./agent/deploy.sh
-ls .runtime/agents/
-# Expected: default  dev  evolver  (no admin)
-
-cd ../../../..
-```
-
----
-
-## 4. Constraints + Violations
-
-### 4.1 Constraints copied to .runtime/
-
-| | |
-|---|---|
-| **Action** | Check commitment.yaml in deployed roles |
-| **Purpose** | Verify deploy copies constraints |
-| **Verify** | commitment.yaml exists in each role's .runtime/ |
-
-```bash
-# From within workspace:
-cat .runtime/agents/default/commitment.yaml
-# Should match agent/commitment/commitment.yaml
-```
-
-### 4.2 Violations API
-
-| | |
-|---|---|
-| **Action** | Start backend, call violations endpoints |
-| **Purpose** | Verify violations API works |
-| **Verify** | GET /violations returns list, POST resolve works |
-
-```bash
-uv run uvicorn src.app:app --port 8001 &
-sleep 2
-
-curl http://localhost:8001/violations
-# Expected: []
-
-curl http://localhost:8001/health
-# Expected: {"status":"ok"}
-
-kill %1
-```
-
-### 4.3 Logging hooks
-
-| | |
-|---|---|
-| **Action** | Check hooks exist and are executable |
-| **Purpose** | Verify deploy generates logging hooks |
-| **Verify** | log_prompt.sh and log_tool.sh are executable |
-
-```bash
-# From within workspace:
-ls -la .runtime/agents/default/.claude/hooks/log_prompt.sh
-# Expected: -rwxr-xr-x
-ls -la .runtime/agents/default/.claude/hooks/log_tool.sh
-# Expected: -rwxr-xr-x
-```
-
----
-
-## 5. Prompt & Tool Logging
-
-### 5.1 Logging hooks exist
-
-| | |
-|---|---|
-| **Action** | Check log_prompt.sh and log_tool.sh hooks |
-| **Purpose** | Verify deploy generates logging hooks |
-| **Verify** | log_prompt.sh and log_tool.sh are executable |
-
-```bash
-# From within workspace:
-ls -la .runtime/agents/default/.claude/hooks/log_prompt.sh
-# Expected: -rwxr-xr-x
-ls -la .runtime/agents/default/.claude/hooks/log_tool.sh
-# Expected: -rwxr-xr-x
-```
-
----
-
-## 6. Evolver
-
-### 6.1 Start evolver
-
-| | |
-|---|---|
-| **Action** | `make start ROLE=evolver` from within workspace |
-| **Purpose** | Verify evolver role launches with correct skills |
-| **Verify** | Claude Code opens, evolve skills available |
-
-```bash
-# From within workspace:
-make start ROLE=evolver
-# In Claude Code:
-#   Type "/" → should see: evolve_diagnose, evolve_eval, evolve_improve, evolve_auto, inspect
-#   Exit: Ctrl+C
-```
-
-### 6.2 Run diagnose
-
-| | |
-|---|---|
-| **Action** | Run diagnose.py directly |
-| **Purpose** | Verify diagnose works with no data |
-| **Verify** | Produces report without errors |
-
-```bash
-uv run agent/flow/evolve_diagnose/scripts/diagnose.py \
-  --data-dir .runtime/data \
-  --commitment agent/commitment/commitment.yaml
-# Expected: DIAGNOSTIC REPORT with "No conversation data yet"
-```
-
-### 6.3 Run eval
-
-| | |
-|---|---|
-| **Action** | Run eval against live app |
-| **Purpose** | Verify eval cases work |
-| **Verify** | Reports score |
-
-```bash
-uv run uvicorn src.app:app --port 8001 &
-sleep 2
-
-uv run agent/flow/evolve_eval/scripts/run_eval.py \
-  --cases agent/flow/evolve_eval/eval_cases.yaml \
-  --base-url http://localhost:8001
-# Expected: [PASS] Health check returns ok
-#           Score: 1/1 (100%)
-
-kill %1
-```
-
----
-
-## 7. Dev Role
-
-### 7.1 Start dev
-
-| | |
-|---|---|
-| **Action** | `./agent/start.sh --role dev` |
-| **Purpose** | Verify dev role has correct skills |
-| **Verify** | Claude Code opens with setup_claude + inspect skills |
-
-```bash
-./agent/start.sh --role dev
-# In Claude Code:
-#   Type "/" → should see: check_health, setup_claude, inspect
-#   Say "inspect" → should show project structure
-#   Exit: Ctrl+C
-```
-
----
-
-## 8. Platform Adapters
-
-### 8.1 Adapter exists
-
-| | |
-|---|---|
-| **Action** | Check adapter files |
-| **Purpose** | Verify all 3 adapters are present |
-| **Verify** | shell.sh executable for each |
-
-```bash
-ls -la agent/adapters/claude/shell.sh   # executable
-ls -la agent/adapters/codex/shell.sh    # executable
-ls -la agent/adapters/kimicode/shell.sh # executable
-```
-
----
-
-## 9. Automated Tests
-
-### 9.1 Run pytest
-
-| | |
-|---|---|
-| **Action** | `make test` (from repo root) |
-| **Purpose** | Verify all automated tests pass |
-| **Verify** | 36 tests pass |
-
-```bash
-# From repo root:
-make test
-# Expected: 36 passed
-```
-
----
-
-## 10. Full App Development Scenario — Todo App
-
-Build a complete Todo app from scratch, testing every feature.
-
-### 10.1 Create the workspace
-
-| | |
-|---|---|
-| **Action** | Create a Todo app workspace |
-| **Purpose** | Verify create copies template + auto-deploys |
-| **Verify** | Workspace has all files, .runtime/ deployed, Makefile works |
-
-```bash
-# From repo root:
-make create ROOM=demo APP=todo DESC="Simple todo list"
-cd .socialware/workspace/demo/todo
-
-ls agent/role/         # default.md  dev.md  evolver.md  README.md
-ls .runtime/agents/    # default  dev  evolver
-cat .workspace_root 2>/dev/null || cat .runtime/agents/default/.workspace_root
-# Should show workspace root path
-ls Makefile            # exists
-```
-
-### 10.2 Verify deploy output
-
-| | |
-|---|---|
-| **Action** | Check .runtime/ structure |
-| **Purpose** | Skills are copies (not symlinks), hooks registered, workspace root marker |
-| **Verify** | All checks pass |
-
-```bash
-# Skills are copies, not symlinks
-ls -la .runtime/agents/default/.claude/skills/check_health
-# Should NOT show -> (symlink arrow)
-
-# Hooks registered in settings.local.json
-cat .runtime/agents/default/.claude/settings.local.json | python3 -m json.tool
-# Should show PostToolUse + SessionStart hooks
-
-# Workspace root marker
-cat .runtime/agents/default/.workspace_root
-# Should show full path to workspace
-```
-
-### 10.3 Test hooks work
-
-| | |
-|---|---|
-| **Action** | Run hook scripts manually with test data |
-| **Purpose** | Verify hooks actually execute and produce output |
-| **Verify** | prompt and tool logs written |
-
-```bash
-# Test prompt logging hook (UserPromptSubmit)
-mkdir -p .runtime/data/prompts
-echo '{"prompt":"hello"}' | \
-  bash .runtime/agents/default/.claude/hooks/log_prompt.sh
-cat .runtime/data/prompts/current.jsonl
-# Should have a JSONL entry with timestamp + prompt
-
-# Test tool logging hook (PreToolUse)
-echo '{"tool_name":"Bash","tool_input":{"command":"test"}}' | \
-  bash .runtime/agents/default/.claude/hooks/log_tool.sh
-cat .runtime/data/prompts/current.jsonl
-# Should have a JSONL entry with timestamp + tool name
-
-# Clean up test data
-rm -f .runtime/data/prompts/current.jsonl
-```
-
-### 10.4 Add backend API
-
-| | |
-|---|---|
-| **Action** | Write Todo CRUD endpoints in src/app.py |
+| **Action** | Write task review endpoints in src/app.py |
 | **Purpose** | Build the Biz layer |
-| **Verify** | API endpoints work via curl |
+| **Expected** | CRUD endpoints work |
 
 ```bash
 cat > src/app.py << 'PYEOF'
-"""Todo App backend."""
+"""Task Review App backend."""
 from __future__ import annotations
 import json
 from datetime import datetime, timezone
@@ -570,9 +155,9 @@ from pathlib import Path
 from typing import Any
 from fastapi import FastAPI, HTTPException
 
-app = FastAPI(title="Todo App", version="0.1.0")
+app = FastAPI(title="Task Review App", version="0.1.0")
 
-_todos: dict[str, dict] = {}
+_tasks: dict[str, dict] = {}
 _counter = 0
 VIOLATIONS_DIR = Path(".runtime/data/violations")
 
@@ -580,31 +165,46 @@ VIOLATIONS_DIR = Path(".runtime/data/violations")
 async def health():
     return {"status": "ok"}
 
-@app.post("/todos")
-async def create_todo(data: dict[str, Any]):
+@app.post("/tasks")
+async def create_task(data: dict[str, Any]):
     global _counter
     _counter += 1
-    todo_id = f"todo-{_counter:03d}"
-    todo = {"id": todo_id, "title": data.get("title", "Untitled"), "done": False, "created_at": datetime.now(timezone.utc).isoformat()}
-    _todos[todo_id] = todo
-    return todo
+    task_id = f"task-{_counter:03d}"
+    task = {
+        "id": task_id,
+        "title": data.get("title", "Untitled"),
+        "status": "draft",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _tasks[task_id] = task
+    return task
 
-@app.get("/todos")
-async def list_todos():
-    return list(_todos.values())
+@app.post("/tasks/{task_id}/submit")
+async def submit_task(task_id: str):
+    if task_id not in _tasks:
+        raise HTTPException(404)
+    _tasks[task_id]["status"] = "submitted"
+    _tasks[task_id]["submitted_at"] = datetime.now(timezone.utc).isoformat()
+    return _tasks[task_id]
 
-@app.get("/todos/{todo_id}")
-async def get_todo(todo_id: str):
-    if todo_id not in _todos:
-        raise HTTPException(404, f"Todo {todo_id} not found")
-    return _todos[todo_id]
+@app.post("/tasks/{task_id}/review")
+async def review_task(task_id: str, data: dict[str, Any]):
+    if task_id not in _tasks:
+        raise HTTPException(404)
+    _tasks[task_id]["status"] = data.get("decision", "reviewed")
+    _tasks[task_id]["review_comment"] = data.get("comment", "")
+    _tasks[task_id]["reviewed_at"] = datetime.now(timezone.utc).isoformat()
+    return _tasks[task_id]
 
-@app.post("/todos/{todo_id}/done")
-async def mark_done(todo_id: str):
-    if todo_id not in _todos:
-        raise HTTPException(404, f"Todo {todo_id} not found")
-    _todos[todo_id]["done"] = True
-    return _todos[todo_id]
+@app.get("/tasks")
+async def list_tasks():
+    return list(_tasks.values())
+
+@app.get("/tasks/{task_id}")
+async def get_task(task_id: str):
+    if task_id not in _tasks:
+        raise HTTPException(404)
+    return _tasks[task_id]
 
 @app.get("/violations")
 async def list_violations():
@@ -617,64 +217,102 @@ async def list_violations():
                 if not v.get("resolved", False):
                     violations.append(v)
     return violations
+
+@app.post("/violations/{violation_id}/resolve")
+async def resolve_violation(violation_id: str):
+    VIOLATIONS_DIR.mkdir(parents=True, exist_ok=True)
+    for f in VIOLATIONS_DIR.glob("*.jsonl"):
+        lines = f.read_text().splitlines()
+        updated = []
+        found = False
+        for line in lines:
+            if line.strip():
+                v = json.loads(line)
+                if v.get("id") == violation_id:
+                    v["resolved"] = True
+                    v["resolved_at"] = datetime.now(timezone.utc).isoformat()
+                    found = True
+                updated.append(json.dumps(v, ensure_ascii=False))
+        if found:
+            f.write_text("\n".join(updated) + "\n")
+            return {"status": "resolved", "id": violation_id}
+    raise HTTPException(404, f"Violation {violation_id} not found")
 PYEOF
 
 # Test
 uv run uvicorn src.app:app --port 8001 &
 sleep 2
-curl -s http://localhost:8001/health                    # {"status":"ok"}
-curl -s -X POST http://localhost:8001/todos -H "Content-Type: application/json" -d '{"title":"Buy milk"}'
-curl -s http://localhost:8001/todos                     # [{"id":"todo-001",...}]
-curl -s -X POST http://localhost:8001/todos/todo-001/done
+curl -s http://localhost:8001/health
+# {"status":"ok"}
+curl -s -X POST http://localhost:8001/tasks -H "Content-Type: application/json" -d '{"title":"Fix bug #42"}'
+# {"id":"task-001","title":"Fix bug #42","status":"draft",...}
+curl -s -X POST http://localhost:8001/tasks/task-001/submit
+# {"id":"task-001","status":"submitted",...}
+curl -s -X POST http://localhost:8001/tasks/task-001/review -H "Content-Type: application/json" -d '{"decision":"approved","comment":"LGTM"}'
+# {"id":"task-001","status":"approved","review_comment":"LGTM",...}
 kill %1
 ```
 
-### 10.5 Add flow skills
+### 2.2 Add flow skills
 
 | | |
 |---|---|
-| **Action** | Create CRUD skills + register in flow.yaml |
-| **Purpose** | Agent can manage todos |
-| **Verify** | Skills deployed, filtered by role |
+| **Action** | Create skills for task workflow |
+| **Purpose** | Agent can manage tasks |
+| **Expected** | Skills deployed for correct roles |
 
 ```bash
-# Create skills (create_todo, list_todos, mark_done)
-mkdir -p agent/flow/create_todo agent/flow/list_todos agent/flow/mark_done
+# Create skills
+for skill in create_task submit_task review_task list_tasks; do
+    mkdir -p agent/flow/$skill
+done
 
-cat > agent/flow/create_todo/SKILL.md << 'EOF'
+cat > agent/flow/create_task/SKILL.md << 'EOF'
 ---
-name: create_todo
-description: "Create a new todo item"
+name: create_task
+description: "Create a new task"
 ---
-# Create Todo
+# Create Task
 ## Trigger
-User says "add todo", "new task" etc.
+User says "create task", "new task" etc.
 ## Flow
-1. Extract title → POST /todos → return result
+1. Extract title -> POST /tasks -> return result
 EOF
 
-cat > agent/flow/list_todos/SKILL.md << 'EOF'
+cat > agent/flow/submit_task/SKILL.md << 'EOF'
 ---
-name: list_todos
-description: "List all todo items"
+name: submit_task
+description: "Submit a task for review"
 ---
-# List Todos
+# Submit Task
 ## Trigger
-User says "list todos", "show tasks" etc.
+User says "submit task-xxx" etc.
 ## Flow
-1. GET /todos → format and display
+1. Get ID -> POST /tasks/{id}/submit -> confirm
 EOF
 
-cat > agent/flow/mark_done/SKILL.md << 'EOF'
+cat > agent/flow/review_task/SKILL.md << 'EOF'
 ---
-name: mark_done
-description: "Mark a todo as done"
+name: review_task
+description: "Review a submitted task"
 ---
-# Mark Done
+# Review Task
 ## Trigger
-User says "done", "complete todo-xxx" etc.
+User says "review task-xxx", "approve", "reject" etc.
 ## Flow
-1. Get ID → POST /todos/{id}/done → confirm
+1. Get ID + decision -> POST /tasks/{id}/review -> confirm
+EOF
+
+cat > agent/flow/list_tasks/SKILL.md << 'EOF'
+---
+name: list_tasks
+description: "List all tasks"
+---
+# List Tasks
+## Trigger
+User says "list tasks", "show tasks" etc.
+## Flow
+1. GET /tasks -> format and display
 EOF
 
 # Update flow.yaml
@@ -684,28 +322,184 @@ direct_actions:
   - { action: check_health,     role: [default, dev, evolver], description: "Check app health" }
   - { action: setup_claude,     role: [dev], description: "Configure Claude Code" }
   - { action: inspect,          role: [dev, evolver], description: "Show project structure" }
-  - { action: create_todo,      role: [default], description: "Create a todo item" }
-  - { action: list_todos,       role: [default], description: "List todo items" }
-  - { action: mark_done,        role: [default], description: "Mark todo as done" }
-  - { action: evolve_diagnose,  role: [evolver], description: "Diagnose issues" }
+  - { action: create_task,      role: [default], description: "Create a new task" }
+  - { action: submit_task,      role: [default], description: "Submit task for review" }
+  - { action: review_task,      role: [reviewer], description: "Review a submitted task" }
+  - { action: list_tasks,       role: [default, reviewer], description: "List all tasks" }
+  - { action: evolve_check,     role: [evolver], description: "Check structural consistency" }
+  - { action: evolve_diagnose,  role: [evolver], description: "Diagnose from runtime data" }
   - { action: evolve_eval,      role: [evolver], description: "Run eval cases" }
   - { action: evolve_improve,   role: [evolver], description: "Apply improvements" }
-  - { action: evolve_auto,      role: [evolver], description: "Automated evolution" }
+  - { action: evolve_auto,      role: [evolver], description: "Automated conversation testing" }
 EOF
 
-# Deploy and verify
 make deploy
+
+# Verify
 ls .runtime/agents/default/.claude/skills/
-# Expected: check_health  create_todo  list_todos  mark_done
+# Expected: check_health  create_task  list_tasks  submit_task
 ```
 
-### 10.6 Write eval cases (API + conversation level)
+### 2.3 Add reviewer role
+
+| | |
+|---|---|
+| **Action** | Create reviewer role |
+| **Purpose** | Multi-role collaboration |
+| **Expected** | Reviewer gets only review_task + list_tasks + check_health |
+
+```bash
+cat > agent/role/reviewer.md << 'EOF'
+# Reviewer Agent
+
+Reviews submitted tasks.
+
+## Identity
+
+- Role: reviewer
+- Permissions: review and list tasks
+
+## Responsibilities
+
+1. Review submitted tasks (approve/reject with comment)
+2. List tasks to see what needs review
+EOF
+
+make deploy
+
+ls .runtime/agents/reviewer/.claude/skills/
+# Expected: check_health  list_tasks  review_task
+# NOT: create_task, submit_task
+```
+
+### 2.4 Deploy cleans removed roles
+
+| | |
+|---|---|
+| **Action** | Delete a role file and redeploy |
+| **Purpose** | Verify deploy removes stale roles from .runtime/ |
+| **Expected** | Deleted role's .runtime/agents/ directory disappears |
+
+```bash
+cp agent/role/reviewer.md agent/role/reviewer.md.bak
+rm agent/role/reviewer.md
+make deploy
+ls .runtime/agents/
+# Expected: default  dev  evolver  (no reviewer)
+
+# Restore for later phases
+mv agent/role/reviewer.md.bak agent/role/reviewer.md
+make deploy
+ls .runtime/agents/
+# Expected: default  dev  evolver  reviewer
+```
+
+### 2.5 TUI mode — start agent
+
+| | |
+|---|---|
+| **Action** | Start default role in TUI |
+| **Purpose** | Verify agent launches with correct skills |
+| **Expected** | Claude Code opens, SOUL.md loaded, skills available |
+
+```bash
+make start
+# In Claude Code:
+#   "/" -> should see: check_health, create_task, submit_task, list_tasks
+#   "create a task: fix login bug"
+#   "list tasks"
+#   Exit: Ctrl+C
+```
+
+### 2.6 Test hooks capture data
+
+| | |
+|---|---|
+| **Action** | Check if hooks captured prompts during TUI session |
+| **Purpose** | Verify UserPromptSubmit + PreToolUse hooks work |
+| **Expected** | .runtime/data/prompts/current.jsonl has entries |
+
+```bash
+cat .runtime/data/prompts/current.jsonl
+# Should have entries like:
+# {"type":"user_prompt","content":"create a task: fix login bug",...}
+# {"type":"tool_call","tool":"Bash","input":{...},...}
+```
+
+### 2.7 Test hooks manually
+
+| | |
+|---|---|
+| **Action** | Run hook scripts with test data to verify execution |
+| **Purpose** | Verify hooks actually execute, are executable, and produce JSONL output |
+| **Expected** | JSONL entries written to .runtime/data/prompts/current.jsonl |
+
+```bash
+# Check hooks are executable
+ls -la .runtime/agents/default/.claude/hooks/log_prompt.sh
+# Expected: -rwxr-xr-x
+ls -la .runtime/agents/default/.claude/hooks/log_tool.sh
+# Expected: -rwxr-xr-x
+
+# Test prompt logging hook (UserPromptSubmit)
+mkdir -p .runtime/data/prompts
+echo '{"prompt":"hello"}' | \
+  bash .runtime/agents/default/.claude/hooks/log_prompt.sh
+cat .runtime/data/prompts/current.jsonl
+# Should have a JSONL entry with timestamp + type "user_prompt"
+
+# Test tool logging hook (PreToolUse)
+echo '{"tool_name":"Bash","tool_input":{"command":"test"}}' | \
+  bash .runtime/agents/default/.claude/hooks/log_tool.sh
+cat .runtime/data/prompts/current.jsonl
+# Should have a JSONL entry with timestamp + type "tool_call"
+
+# Clean up test data
+rm -f .runtime/data/prompts/current.jsonl
+```
+
+---
+
+## Phase 3: Commitment — Evaluation Standards
+
+### 3.1 Define commitment
+
+| | |
+|---|---|
+| **Action** | Write commitment.yaml with evaluation standards |
+| **Purpose** | Define what "good" looks like for the task review workflow |
+| **Expected** | commitment.yaml deployed to all roles |
+
+```bash
+cat > agent/commitment/commitment.yaml << 'EOF'
+commitments:
+  C1:
+    from: { role: default, action: submit_task }
+    to: { role: reviewer, action: review_task }
+    condition: "review should happen within 24h of submission"
+    on_violation: null
+
+  C2:
+    from: { role: default, action: create_task }
+    to: { role: default, action: submit_task }
+    condition: "task should be submitted within 48h of creation"
+    on_violation: null
+EOF
+
+make deploy
+cat .runtime/agents/default/commitment.yaml
+# Should match
+cat .runtime/agents/evolver/commitment.yaml
+# Should also match (deployed to all roles)
+```
+
+### 3.2 Write eval cases
 
 | | |
 |---|---|
 | **Action** | Write eval_cases.yaml with API checks + conversation checks |
-| **Purpose** | Define "correct behavior" for the app |
-| **Verify** | API checks pass, conversation checks listed |
+| **Purpose** | Define correct behavior benchmarks for both API and agent |
+| **Expected** | API checks pass, conversation checks listed |
 
 ```bash
 cat > agent/flow/evolve_eval/eval_cases.yaml << 'EOF'
@@ -715,194 +509,571 @@ api_checks:
     endpoint: /health
     expected_status: 200
     expected_body: '{"status":"ok"}'
-  - description: "Create todo"
+  - description: "Create task"
     method: POST
-    endpoint: /todos
+    endpoint: /tasks
     body: '{"title":"eval test"}'
     expected_status: 200
-  - description: "List todos"
+  - description: "List tasks"
     method: GET
-    endpoint: /todos
+    endpoint: /tasks
     expected_status: 200
-  - description: "Non-existent todo 404"
+  - description: "Non-existent task 404"
     method: GET
-    endpoint: /todos/todo-000
+    endpoint: /tasks/task-000
     expected_status: 404
 
 conversation_checks:
-  - input: "add a todo: buy milk"
-    expected_skill: create_todo
-    description: "Agent creates todo via skill"
-  - input: "list my todos"
-    expected_skill: list_todos
-    description: "Agent lists todos via skill"
+  - input: "create a task: write docs"
+    expected_skill: create_task
+    description: "Agent uses create_task skill"
+  - input: "list tasks"
+    expected_skill: list_tasks
+    description: "Agent uses list_tasks skill"
   - input: "check health"
     expected_skill: check_health
-    description: "Agent checks health"
+    description: "Agent uses check_health skill"
 EOF
-
-# Run eval
-uv run uvicorn src.app:app --port 8001 &
-sleep 2
-
-WORKSPACE_ROOT=$(pwd)
-cd .runtime/agents/evolver
-uv run python "$WORKSPACE_ROOT/agent/flow/evolve_eval/scripts/run_eval.py" \
-  --cases "$WORKSPACE_ROOT/agent/flow/evolve_eval/eval_cases.yaml" \
-  --base-url http://localhost:8001
-# Expected: API Score: 4/4 (100%)
-#           Conversation checks (3 defined): listed for interactive testing
-cd "$WORKSPACE_ROOT"
-kill %1
-```
-
-### 10.7 Add constraints
-
-| | |
-|---|---|
-| **Action** | Define postcondition constraints |
-| **Purpose** | Test constraint mechanism |
-| **Verify** | commitment.yaml deployed |
-
-```bash
-cat > agent/commitment/commitment.yaml << 'EOF'
-transition_constraints: {}
-action_constraints:
-  C1:
-    description: "Health check returns ok"
-    on: { action: check_health }
-    type: postcondition
-    expected: '{"status":"ok"}'
-  C2:
-    description: "Create todo returns 200"
-    on: { action: create_todo }
-    type: postcondition
-    expected_status: 200
-EOF
-
-make deploy
-cat .runtime/agents/default/commitment.yaml
-# Should match
-```
-
-### 10.8 Test evolver — diagnose
-
-| | |
-|---|---|
-| **Action** | Start evolver, run diagnose |
-| **Purpose** | Verify evolver can analyze runtime data |
-| **Verify** | Diagnostic report generated |
-
-```bash
-make start ROLE=evolver
-# In Claude Code:
-#   "diagnose"
-#   → Agent reads .workspace_root, cd to workspace root
-#   → Runs diagnose.py
-#   → Reports: constraints, conversations, violations
-#   Exit: Ctrl+C
-```
-
-### 10.9 Test evolver — evaluate
-
-| | |
-|---|---|
-| **Action** | Start evolver, run evaluate (backend must be running) |
-| **Purpose** | Verify eval runs both API and conversation checks |
-| **Verify** | API score + conversation check listing |
-
-```bash
-uv run uvicorn src.app:app --port 8001 &
-sleep 2
-make start ROLE=evolver
-# In Claude Code:
-#   "evaluate"
-#   → Runs run_eval.py
-#   → Reports API score (4/4) + conversation checks (3 listed)
-#   Exit: Ctrl+C
-kill %1
-```
-
-### 10.10 Test evolver — improve
-
-| | |
-|---|---|
-| **Action** | Ask evolver to improve a skill |
-| **Purpose** | Verify evolver modifies workspace (not template) |
-| **Verify** | Only workspace files changed, deploy runs |
-
-```bash
-make start ROLE=evolver
-# In Claude Code:
-#   "improve the list_todos skill — add empty list handling"
-#   → Evolver reads diagnose + eval data
-#   → Proposes edit to agent/flow/list_todos/SKILL.md
-#   → Applies change (IN WORKSPACE ONLY)
-#   → Runs deploy
-#   Verify: "show me what changed" → should only show workspace paths
-#   Exit: Ctrl+C
-
-# Verify template NOT modified:
-cd ../../../..    # back to repo root
-git diff agent/flow/list_todos/SKILL.md
-# Should show NO changes (template untouched)
-cd .socialware/workspace/demo/todo
-```
-
-### 10.11 Test evolver — auto-optimize
-
-| | |
-|---|---|
-| **Action** | Ask evolver to auto-optimize |
-| **Purpose** | Verify automated loop runs |
-| **Verify** | Eval cases expanded, skills improved, score reported |
-
-```bash
-uv run uvicorn src.app:app --port 8001 &
-sleep 2
-make start ROLE=evolver
-# In Claude Code:
-#   "auto-optimize, run 3 iterations"
-#   → Evolver finds workspace root via .workspace_root
-#   → Runs eval → expands cases → improves skills → re-evals
-#   → Reports: initial score → final score, what changed
-#   Exit: Ctrl+C
-kill %1
-```
-
-### 10.12 Add reviewer role (P5)
-
-| | |
-|---|---|
-| **Action** | Add reviewer role with limited skills |
-| **Purpose** | Test multi-role filtering |
-| **Verify** | Reviewer gets only list_todos |
-
-```bash
-cat > agent/role/reviewer.md << 'EOF'
-# Reviewer Agent
-Reviews todo items.
-## Identity
-- Role: reviewer
-- Permissions: read-only
-## Responsibilities
-1. List and review todo items
-EOF
-
-# Add reviewer to list_todos in flow.yaml
-sed -i 's/action: list_todos,      role: \[default\]/action: list_todos,      role: [default, reviewer]/' agent/flow/flow.yaml
-
-make deploy
-ls .runtime/agents/reviewer/.claude/skills/
-# Expected: check_health  list_todos  (NOT create_todo, mark_done)
 ```
 
 ---
 
-## 12. Cleanup
+## Phase 4: Evolver — Verify All Functions
+
+### 4.1 evolve_check — structure consistency
+
+| | |
+|---|---|
+| **Action** | Run check_structure.py |
+| **Purpose** | Verify all four-primitive cross-references are valid |
+| **Expected** | PASS (or specific issues listed) |
 
 ```bash
-cd ../../../..     # back to repo root
+WORKSPACE_ROOT=$(cat .runtime/agents/evolver/.workspace_root)
+cd "$WORKSPACE_ROOT"
+uv run agent/flow/evolve_check/scripts/check_structure.py --agent-dir agent
+# Expected: STRUCTURE CHECK REPORT
+#   Flow Actions -> SKILL.md: All actions have SKILL.md
+#   Commitment References: (checks C1, C2 roles/actions exist)
+#   Scope Capabilities: listed for review
+#   PASS: No structural issues found.
+```
+
+### 4.2 evolve_eval — API testing
+
+| | |
+|---|---|
+| **Action** | Run eval against live app |
+| **Purpose** | Verify API endpoints work, results saved to last_eval_results.json |
+| **Expected** | API Score: 4/4 (100%), conversation checks listed |
+
+```bash
+uv run uvicorn src.app:app --port 8001 &
+sleep 2
+uv run agent/flow/evolve_eval/scripts/run_eval.py \
+  --cases agent/flow/evolve_eval/eval_cases.yaml \
+  --base-url http://localhost:8001
+# Expected:
+#   [PASS] Health check
+#   [PASS] Create task
+#   [PASS] List tasks
+#   [PASS] Non-existent task 404
+#   API Score: 4/4 (100%)
+#   Conversation checks (3 defined): listed
+#   Results saved to agent/flow/evolve_eval/last_eval_results.json
+kill %1
+```
+
+### 4.3 evolve_diagnose — conversation analysis
+
+| | |
+|---|---|
+| **Action** | Run diagnose.py |
+| **Purpose** | Analyze hook data + commitment fulfillment, saves report + cursor |
+| **Expected** | Diagnostic report with commitment status, saved to .runtime/data/ |
+
+```bash
+uv run agent/flow/evolve_diagnose/scripts/diagnose.py \
+  --data-dir .runtime/data \
+  --commitment agent/commitment/commitment.yaml
+# Expected: DIAGNOSTIC REPORT
+#   Data Sources: Hook log entries + SDK sessions
+#   Commitment Fulfillment: C1, C2 status (N/A if no events)
+#   Recommendations: "No conversation data yet" or specific advice
+#   Report saved to .runtime/data/last_diagnosis.txt
+#   Cursor saved to .runtime/data/evolve_state.yaml
+```
+
+### 4.4 evolve_auto — automated conversation testing
+
+| | |
+|---|---|
+| **Action** | Run run_auto.py (requires SDK) |
+| **Purpose** | Automated agent behavior testing via SDK adapter |
+| **Expected** | Conversation score reported (or SDK not installed message) |
+
+```bash
+uv run uvicorn src.app:app --port 8001 &
+sleep 2
+uv run agent/flow/evolve_auto/scripts/run_auto.py \
+  --cases agent/flow/evolve_eval/eval_cases.yaml \
+  --adapter claude \
+  --role default
+# Expected (if claude-code-sdk installed):
+#   [PASS/FAIL] Agent uses create_task skill
+#   [PASS/FAIL] Agent uses list_tasks skill
+#   [PASS/FAIL] Agent uses check_health skill
+#   Conversation Score: x/3
+#   Results saved to .runtime/data/auto_tests/auto_test_*.json
+# Expected (if SDK not installed):
+#   [Claude SDK] claude-code-sdk not installed.
+kill %1
+```
+
+### 4.5 Evolver TUI — interactive improvement
+
+| | |
+|---|---|
+| **Action** | Start evolver role, do full check/diagnose/improve cycle |
+| **Purpose** | Verify evolver can diagnose + improve in conversation |
+| **Expected** | Evolver reads data, proposes changes, applies them |
+
+```bash
+make start ROLE=evolver
+# In Claude Code:
+#   "check structure"     -> runs check_structure.py
+#   "diagnose"            -> runs diagnose.py, shows fulfillment rates
+#   "improve the review_task skill -- add rejection handling"
+#     -> proposes edit -> apply -> deploy
+#
+#   Verify: evolver only modifies workspace files (not template)
+#   Exit: Ctrl+C
+
+# Check template untouched:
+cd ../../../..
+git diff agent/
+# Should show NO changes
+cd .socialware/workspace/demo/task-review
+```
+
+### 4.6 Violations API
+
+| | |
+|---|---|
+| **Action** | Check violations API end-to-end (write, list, resolve) |
+| **Purpose** | Verify evolver-written violations are readable and resolvable via API |
+| **Expected** | API returns violations list, resolve marks them resolved |
+
+```bash
+# Write a test violation (simulating evolver output)
+mkdir -p .runtime/data/violations
+echo '{"id":"v-001","commitment":"C1","description":"review overdue","role":"reviewer","resolved":false}' \
+  > .runtime/data/violations/current.jsonl
+
+uv run uvicorn src.app:app --port 8001 &
+sleep 2
+curl -s http://localhost:8001/violations
+# Expected: [{"id":"v-001","commitment":"C1",...}]
+
+curl -s -X POST http://localhost:8001/violations/v-001/resolve
+# Expected: {"status":"resolved","id":"v-001"}
+
+curl -s http://localhost:8001/violations
+# Expected: [] (resolved)
+kill %1
+
+# Clean up
+rm .runtime/data/violations/current.jsonl
+```
+
+---
+
+## Phase 5: Adapter Awareness
+
+### 5.1 Deploy with codex adapter
+
+| | |
+|---|---|
+| **Action** | Deploy with --adapter codex |
+| **Purpose** | Verify adapter-specific output: .agents/skills (not .claude/), AGENTS.md (not SOUL.md) |
+| **Expected** | Codex structure with .codex/hooks.json + config.toml |
+
+```bash
+make clean
+make deploy ADAPTER=codex
+
+# Check structure
+ls .runtime/agents/default/.agents/skills/    # skills here
+cat .runtime/agents/default/AGENTS.md | head -5  # not SOUL.md
+cat .runtime/agents/default/.codex/hooks.json | python3 -m json.tool
+# Should have UserPromptSubmit + PreToolUse
+cat .runtime/agents/default/.codex/config.toml
+# Should have codex_hooks = true
+
+# Verify NO .claude/ directory
+ls .runtime/agents/default/.claude/ 2>/dev/null
+# Should not exist
+```
+
+### 5.2 Deploy with kimi adapter
+
+| | |
+|---|---|
+| **Action** | Deploy with --adapter kimi |
+| **Purpose** | Verify kimi output: .agents/skills/, AGENTS.md, NO hooks at all |
+| **Expected** | No hooks directory for any adapter |
+
+```bash
+make clean
+make deploy ADAPTER=kimi
+
+ls .runtime/agents/default/.agents/skills/    # skills here
+cat .runtime/agents/default/AGENTS.md | head -5  # not SOUL.md
+ls .runtime/agents/default/.kimi/ 2>/dev/null  # should not exist (no hooks)
+ls .runtime/agents/default/.codex/ 2>/dev/null # should not exist
+ls .runtime/agents/default/.claude/ 2>/dev/null # should not exist
+```
+
+### 5.3 Restore claude adapter
+
+| | |
+|---|---|
+| **Action** | Clean and redeploy with default claude adapter |
+| **Purpose** | Restore to claude for remaining tests |
+| **Expected** | Back to SOUL.md + .claude/ structure |
+
+```bash
+make clean
+make deploy ADAPTER=claude
+
+# Verify restored
+cat .runtime/agents/default/SOUL.md | head -5
+ls .runtime/agents/default/.claude/skills/
+ls .runtime/agents/default/.claude/hooks/
+```
+
+---
+
+## Phase 6: SDK Mode
+
+### 6.1 SDK launch
+
+| | |
+|---|---|
+| **Action** | Run start_agent.py |
+| **Purpose** | Verify SDK mode launches, sends prompt, and saves session |
+| **Expected** | Session JSON saved to .runtime/data/sessions/ |
+
+```bash
+uv run uvicorn src.app:app --port 8001 &
+sleep 2
+uv run src/start_agent.py --role default --adapter claude --prompt "check health"
+# Expected (if claude-code-sdk installed):
+#   [SDK] Sending prompt to default via claude...
+#   Messages printed
+#   Session saved to .runtime/data/sessions/default_session_*.json
+# Expected (if SDK not installed):
+#   [Claude SDK] claude-code-sdk not installed.
+
+ls .runtime/data/sessions/
+# Should have session file (if SDK worked)
+kill %1
+```
+
+### 6.2 SDK via Makefile
+
+| | |
+|---|---|
+| **Action** | Run `make run` which invokes start_agent.py |
+| **Purpose** | Verify Makefile `run` target works (auto-deploys + launches SDK) |
+| **Expected** | Same as 6.1 but through Makefile |
+
+```bash
+uv run uvicorn src.app:app --port 8001 &
+sleep 2
+make run ROLE=default
+# Same behavior as 6.1 (Makefile calls: uv run src/start_agent.py --role default --adapter claude)
+kill %1
+```
+
+---
+
+## Phase 7: Cross-Feature Verification
+
+### 7.1 Multi-role startup
+
+| | |
+|---|---|
+| **Action** | Start multiple roles in tmux |
+| **Purpose** | Verify multi-role works via start.sh comma-separated roles |
+| **Expected** | Two tmux panes with different skills |
+
+```bash
+./agent/start.sh --role default,reviewer
+# Expected: tmux session "socialware-*", 2 panes
+# Pane 1 (default): check_health, create_task, submit_task, list_tasks
+# Pane 2 (reviewer): check_health, review_task, list_tasks
+# Exit: tmux kill-session
+```
+
+### 7.2 Platform adapters exist
+
+| | |
+|---|---|
+| **Action** | Check adapter files: base.py + 3 adapters each with shell.sh + sdk.py |
+| **Purpose** | Verify all adapters present with correct structure |
+| **Expected** | 3 adapters, each with shell.sh + sdk.py, plus base.py |
+
+```bash
+ls agent/adapters/base.py          # BaseAdapter + RoleConfig + save_session
+ls agent/adapters/claude/          # shell.sh  sdk.py
+ls agent/adapters/codex/           # shell.sh  sdk.py
+ls agent/adapters/kimicode/        # shell.sh  sdk.py
+
+# Verify shell scripts are executable
+test -x agent/adapters/claude/shell.sh && echo "claude OK"
+test -x agent/adapters/codex/shell.sh && echo "codex OK"
+test -x agent/adapters/kimicode/shell.sh && echo "kimicode OK"
+```
+
+### 7.3 Dev role — inspect + setup_claude
+
+| | |
+|---|---|
+| **Action** | Start dev role |
+| **Purpose** | Verify dev skills work (inspect shows structure, setup_claude available) |
+| **Expected** | inspect shows four primitives layout, setup_claude skill present |
+
+```bash
+make start ROLE=dev
+# In Claude Code:
+#   "inspect" -> shows project structure (four primitives, dev workflow, key commands)
+#   "/" -> should see: check_health, setup_claude, inspect
+#   Exit: Ctrl+C
+```
+
+### 7.4 SOUL.md merge correctness
+
+| | |
+|---|---|
+| **Action** | Read merged SOUL.md for each role |
+| **Purpose** | Verify scope.md + role.md merged correctly with separator |
+| **Expected** | Each SOUL.md contains scope content + "---" + role content |
+
+```bash
+cat .runtime/agents/default/SOUL.md
+# Should contain scope content ("task-review") at top
+# Then "---" separator
+# Then role content ("Default Agent")
+
+cat .runtime/agents/evolver/SOUL.md
+# Should contain scope content at top
+# Then "---" separator
+# Then evolver role content ("Evolution role")
+```
+
+### 7.5 Flow.yaml deployed to all roles
+
+| | |
+|---|---|
+| **Action** | Check flow.yaml copied to each role's .runtime/ |
+| **Purpose** | Verify deploy copies flow.yaml for reference |
+| **Expected** | Each role has flow.yaml matching agent/flow/flow.yaml |
+
+```bash
+diff agent/flow/flow.yaml .runtime/agents/default/flow.yaml
+# No differences
+diff agent/flow/flow.yaml .runtime/agents/evolver/flow.yaml
+# No differences
+```
+
+### 7.6 Workspace self-contained
+
+| | |
+|---|---|
+| **Action** | Run deploy.sh and start.sh directly from workspace |
+| **Purpose** | Verify workspace works independently from repo root Makefile |
+| **Expected** | Both scripts work using workspace's local agent/ |
+
+```bash
+./agent/deploy.sh        # should work (reads local agent/)
+./agent/start.sh --role default
+# Claude Code opens, skills available
+# Exit: Ctrl+C
+```
+
+### 7.7 start.sh without --role lists available roles
+
+| | |
+|---|---|
+| **Action** | Run start.sh without --role argument |
+| **Purpose** | Verify start.sh shows available roles when no role specified |
+| **Expected** | Lists all deployed roles |
+
+```bash
+./agent/start.sh
+# Expected:
+#   Available roles:
+#     - default
+#     - dev
+#     - evolver
+#     - reviewer
+#   Usage: ./agent/start.sh --role <name>[,name2]
+```
+
+### 7.8 Independent pyproject.toml
+
+| | |
+|---|---|
+| **Action** | Check workspace has its own pyproject.toml with app name |
+| **Purpose** | Verify dependency independence |
+| **Expected** | pyproject.toml exists with name = "task-review" |
+
+```bash
+cat pyproject.toml | grep "name ="
+# Should contain: name = "task-review"
+```
+
+### 7.9 .runtime/data directory structure
+
+| | |
+|---|---|
+| **Action** | Check .runtime/data/ directories created by deploy |
+| **Purpose** | Verify data directories for Files, Sqlite, prompts, sessions exist |
+| **Expected** | All four data directories present |
+
+```bash
+ls .runtime/data/
+# Expected: Files  Sqlite  prompts  sessions
+# (violations created on demand by app or evolver)
+```
+
+### 7.10 Automated tests pass
+
+| | |
+|---|---|
+| **Action** | Run template tests from repo root |
+| **Purpose** | Verify template tests still pass |
+| **Expected** | All tests pass |
+
+```bash
+cd ../../../..    # back to repo root
+make test
+# Expected: all tests passed
+cd .socialware/workspace/demo/task-review
+```
+
+---
+
+## Phase 8: Scope Update
+
+### 8.1 Update scope
+
+| | |
+|---|---|
+| **Action** | Update scope.md to reflect actual capabilities |
+| **Purpose** | Scope should match what the app can do |
+| **Expected** | scope.md has task workflow capabilities, deployed to all roles |
+
+```bash
+cat > agent/scope/scope.md << 'EOF'
+# Task Review App
+
+A task review workflow app.
+
+## Capabilities
+
+- Health check (/health)
+- Create tasks (POST /tasks)
+- Submit tasks for review (POST /tasks/{id}/submit)
+- Review tasks with decision (POST /tasks/{id}/review)
+- List all tasks (GET /tasks)
+- View violations (GET /violations)
+- Resolve violations (POST /violations/{id}/resolve)
+
+## Boundaries
+
+- No authentication (single user)
+- No persistence across restarts (in-memory)
+- No task deletion or editing
+EOF
+
+make deploy
+
+# Verify scope reflected in SOUL.md
+cat .runtime/agents/default/SOUL.md | head -15
+# Should contain "Task Review App" and capabilities list
+```
+
+### 8.2 Verify evolve_check passes after scope update
+
+| | |
+|---|---|
+| **Action** | Re-run check_structure.py with updated scope |
+| **Purpose** | Verify four-primitive consistency after scope + commitment + flow changes |
+| **Expected** | PASS with updated scope capabilities listed |
+
+```bash
+uv run agent/flow/evolve_check/scripts/check_structure.py --agent-dir agent
+# Expected: STRUCTURE CHECK REPORT
+#   Flow Actions -> SKILL.md: All actions have SKILL.md
+#   Commitment References: All commitment references valid
+#   Scope Capabilities:
+#     SCOPE: - Health check (/health)
+#     SCOPE: - Create tasks (POST /tasks)
+#     ...
+#   PASS: No structural issues found.
+```
+
+---
+
+## Phase 9: Make clean and rebuild
+
+### 9.1 Clean removes .runtime/
+
+| | |
+|---|---|
+| **Action** | Run `make clean` |
+| **Purpose** | Verify clean removes entire .runtime/ directory |
+| **Expected** | .runtime/ gone, agent/ untouched |
+
+```bash
+make clean
+ls .runtime/ 2>/dev/null
+# Should not exist
+
+ls agent/role/
+# Still present: default.md  dev.md  evolver.md  reviewer.md
+ls agent/flow/flow.yaml
+# Still present
+```
+
+### 9.2 Full rebuild from clean state
+
+| | |
+|---|---|
+| **Action** | Deploy from scratch after clean |
+| **Purpose** | Verify full rebuild works |
+| **Expected** | All roles, skills, hooks restored |
+
+```bash
+make deploy
+
+ls .runtime/agents/
+# Expected: default  dev  evolver  reviewer
+
+ls .runtime/agents/default/.claude/skills/
+# Expected: check_health  create_task  list_tasks  submit_task
+
+ls .runtime/agents/evolver/.claude/skills/ | wc -l
+# Expected: 7
+```
+
+---
+
+## Cleanup
+
+```bash
+cd ../../../..
 rm -rf .socialware/workspace/demo
-rm -rf .socialware/workspace/test
 ```
