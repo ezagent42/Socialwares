@@ -14,6 +14,17 @@ AGENT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_ROOT="$(cd "$AGENT_DIR/.." && pwd)"
 RUNTIME_DIR="$APP_ROOT/.runtime"
 
+# Guard: prevent start at template root
+if [ -f "$APP_ROOT/scripts/create-my-socialware.py" ] && [ ! -f "$APP_ROOT/Makefile" -o "$(head -1 "$APP_ROOT/Makefile" 2>/dev/null)" = "# Socialwares Template — Root Makefile" ]; then
+    echo "Error: start.sh should not run at the template root."
+    echo ""
+    echo "Create a workspace first:"
+    echo "  make create ROOM=my-team APP=my-app"
+    echo "  cd .socialware/workspace/my-team/my-app"
+    echo "  make start ROLE=default"
+    exit 1
+fi
+
 # Default parameters
 ROLE=""
 ADAPTER="claude"

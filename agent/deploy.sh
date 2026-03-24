@@ -5,7 +5,7 @@
 # Reads agent/ from the SAME directory as this script (workspace-local).
 # Reads flow.yaml to determine which actions each role can access.
 #
-# Usage (from within a workspace or repo root):
+# Usage (from within a workspace only — NOT at template root):
 #   ./agent/deploy.sh
 set -euo pipefail
 
@@ -13,6 +13,17 @@ AGENT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_ROOT="$(cd "$AGENT_DIR/.." && pwd)"
 RUNTIME_DIR="$APP_ROOT/.runtime"
 FLOW_YAML="$AGENT_DIR/flow/flow.yaml"
+
+# Guard: prevent deploy at template root (must be in a workspace)
+if [ -f "$APP_ROOT/scripts/create-my-socialware.py" ] && [ ! -f "$APP_ROOT/Makefile" -o "$(head -1 "$APP_ROOT/Makefile" 2>/dev/null)" = "# Socialwares Template — Root Makefile" ]; then
+    echo "Error: deploy.sh should not run at the template root."
+    echo ""
+    echo "Create a workspace first:"
+    echo "  make create ROOM=my-team APP=my-app"
+    echo "  cd .socialware/workspace/my-team/my-app"
+    echo "  make deploy"
+    exit 1
+fi
 
 echo "Deploying four primitives"
 echo "  Source: $AGENT_DIR"
