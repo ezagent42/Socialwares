@@ -1,84 +1,159 @@
 ---
-name: create_role
-description: "Create a new Agent role with SOUL.md, optional skills, and optional eval commitments"
+name: create_agent
+description: "Create a complete Agent with four primitives (Role, Scope, Flow, Commitment), then auto-online"
 ---
 
-# Create Role
+# Create Agent
 
-Creates a new Agent role by generating a SOUL.md identity file, registering it in flow.yaml, and deploying the configuration.
+Creates a complete AI member in the chat room — a virtual user backed by an agent. Generates all four primitive files, deploys, and auto-onlines the agent.
 
 ## Trigger
 
-User says "create a role", "new agent", "create an agent for ...", "add role", etc.
+User says "create agent", "create an AI assistant", "new agent", "add an agent for ...", etc.
 
 ## Flow
 
-1. Ask for role name (must be lowercase alphanumeric + hyphens, e.g. "task-manager")
-2. Ask for a description of what this agent does
-3. Query existing roles via API to check for conflicts
-4. Create `agent/role/{name}/SOUL.md` with Identity, Responsibilities, Boundaries sections
-5. Update `agent/flow/flow.yaml` to bind actions to the new role
-6. Optionally invoke create_skill flow for each skill the role needs
-7. Optionally add evaluation criteria to `agent/commitment/eval.yaml`
-8. Run `./agent/deploy.sh` to compile changes
-9. Verify the role was created via API
-10. Report: "{name} role created. Start with: `./agent/start.sh --role {name}`"
+Ask four questions sequentially, one per primitive:
 
-## Available APIs
+### Q1 — Role (WHO)
 
-Query existing roles before creating (to avoid conflicts):
+Ask: "What is this agent's name, what model should it use, and what is its identity?"
 
-```bash
-curl http://localhost:8001/roles
-# → {"roles": ["agentforge", "default", ...]}
-```
+Collect:
+- **name** (lowercase alphanumeric + hyphens, e.g. "code-reviewer")
+- **adapter** (claude / codex / kimicode)
+- **model** (e.g. sonnet-4-6, o3, etc.)
+- **description** (what this agent does)
+- **responsibilities** (list of responsibilities)
 
-Get details of a specific role:
+Validate:
+- Name matches `^[a-z0-9-]+$`
+- Name does not conflict with existing roles (query `GET /roles`)
+- Adapter is available (query `GET /adapters`)
 
-```bash
-curl http://localhost:8001/roles/{name}
-# → {"name": "...", "soul": "..."}
-```
+### Q2 — Scope (WHERE)
 
-Check current flow registry to see role bindings:
+Ask: "What files/directories does this agent work in? What are its boundaries?"
 
-```bash
-curl http://localhost:8001/flows/registry
-# → {flows: {...}, direct_actions: [...]}
-```
+Collect:
+- **working directories** (e.g. src/, tests/)
+- **boundaries** (what the agent must NOT do)
 
-Verify creation after deploying:
+Validate:
+- Working directories do not exceed app scope (query `GET /scope`)
 
-```bash
-curl http://localhost:8001/roles
-# Should now include the new role name
-```
+### Q3 — Flow (HOW)
 
-## File Operations
+Ask: "What is this agent's workflow? What does it read, analyze, and modify?"
 
-1. **Create SOUL.md** — Use Write tool to create `agent/role/{name}/SOUL.md`:
+Collect:
+- **workflow steps** (ordered list of actions)
+- **skills needed** (specific capabilities)
+
+For each skill identified, invoke the `create_skill` flow.
+
+### Q4 — Commitment (WHAT)
+
+Ask: "How do we evaluate this agent's work quality? What metrics and thresholds?"
+
+Collect:
+- **commitments** (list of metric + threshold pairs)
+
+### Generate Files
+
+1. Create `agent/role/{name}/SOUL.md`:
 
     ```markdown
     # {Display Name} Agent
 
-    {Description from user}
+    {Description}
 
     ## Identity
-
     - Role: {name}
-    - Permissions: {inferred from description}
+    - Adapter: {adapter}
+    - Model: {model}
 
     ## Responsibilities
-
-    {List of responsibilities based on description}
+    {Responsibilities list}
     ```
 
-2. **Register in flow.yaml** — Use Edit tool to add role bindings in `agent/flow/flow.yaml`
+2. Create `agent/scope/{name}/SOUL.md`:
 
-3. **Deploy** — Use Bash tool to run `./agent/deploy.sh`
+    ```markdown
+    # {name} Scope
+
+    ## Working Directory
+    - {directories}
+
+    ## Boundaries
+    - {boundaries}
+    ```
+
+3. Update `agent/flow/flow.yaml` — register action bindings for the new agent
+
+4. Update `agent/commitment/eval.yaml` — add commitments:
+
+    ```yaml
+    commitments:
+      {name}-{metric}:
+        description: "{description}"
+        metric: {metric_name}
+        threshold: "{threshold}"
+        debtor_role: {name}
+    ```
+
+5. Run `./agent/deploy.sh` via Bash tool
+
+6. Auto-online — call API to create session:
+
+    ```bash
+    curl -X POST http://localhost:8001/session \
+      -H "Content-Type: application/json" \
+      -d '{"role": "{name}", "adapter": "{adapter}"}'
+    ```
+
+7. Report: "{name} agent created and online. Four primitives generated: Role, Scope, Flow, Commitment."
+
+## Available APIs
+
+```bash
+# Check existing roles (avoid name conflict)
+curl http://localhost:8001/roles
+
+# Check available adapters
+curl http://localhost:8001/adapters
+
+# Check app scope (validate agent scope within bounds)
+curl http://localhost:8001/scope
+
+# Check existing flows (avoid skill name conflict)
+curl http://localhost:8001/flows/registry
+
+# Create session (auto-online)
+curl -X POST http://localhost:8001/session \
+  -H "Content-Type: application/json" \
+  -d '{"role": "{name}", "adapter": "{adapter}"}'
+
+# Verify agent is online
+curl http://localhost:8001/session
+```
+
+## File Operations
+
+1. **Create SOUL.md** — Use Write tool: `agent/role/{name}/SOUL.md`
+2. **Create Scope** — Use Write tool: `agent/scope/{name}/SOUL.md`
+3. **Update flow.yaml** — Use Edit tool: `agent/flow/flow.yaml`
+4. **Update eval.yaml** — Use Edit tool: `agent/commitment/eval.yaml`
+5. **Create skills** — Invoke `create_skill` flow for each skill
+6. **Deploy** — Use Bash tool: `./agent/deploy.sh`
+7. **Auto-online** — Use Bash tool: `curl -X POST http://localhost:8001/session ...`
 
 ## Validation
 
-- Role name must match: `^[a-z0-9-]+$`
-- SOUL.md must not be empty
-- Role directory must not already exist (ask user to confirm overwrite if it does)
+- Agent name: `^[a-z0-9-]+$`
+- Agent name must not conflict with existing roles
+- Adapter must be available
+- Agent scope must not exceed app scope
+- All four primitive files must be non-empty
+- flow.yaml must remain valid YAML after editing
+- eval.yaml must remain valid YAML after editing
