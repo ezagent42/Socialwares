@@ -6,9 +6,9 @@
 flows: {}
 
 direct_actions:
-  - action: create_role
+  - action: create_agent
     role: [agentforge]
-    description: "Create a new Agent role with SOUL.md"
+    description: "Create a complete Agent with four primitives, then auto-online"
 
   - action: create_skill
     role: [agentforge]
