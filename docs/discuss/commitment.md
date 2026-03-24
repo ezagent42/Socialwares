@@ -154,8 +154,8 @@ Deploy does three things:
 
 ### 3. Data Capture (hooks tag conversation data)
 
-`log_action.sh` hook reads `commitment_watch.yaml`:
-- For every action the agent performs, log_action.sh records it in conversation logs
+`log_prompt.sh` + `log_tool.sh` hooks read `commitment_watch.yaml`:
+- For every action the agent performs, log_prompt.sh / log_tool.sh record it in .runtime/data/prompts/
 - When the action matches a commitment_watch entry, the hook **tags** the log entry with the commitment ID and captures extra fields (timestamp, output, duration)
 - This tagging is transparent to the agent — it does not know which actions are being watched
 
@@ -215,7 +215,7 @@ watch:
     capture: [timestamp]
 ```
 
-When `log_action.sh` runs after an action:
+When `log_prompt.sh` / `log_tool.sh` hooks run:
 1. Reads the role's `commitment_watch.yaml`
 2. If the current action matches a watch entry, adds to the log:
    - `commitment_id`: e.g., "C1"
@@ -238,7 +238,7 @@ After checking, evolver maps results to four-primitive improvements:
 
 Cycle:
 ```
-Run app → collect conversation data (tagged by hooks) → evolver analyzes
+Run app → collect prompt & tool data (tagged by hooks) → evolver analyzes
 → fulfillment rates per commitment
 → map low rates to specific primitives
 → developer modifies agent/ files

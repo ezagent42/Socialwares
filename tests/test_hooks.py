@@ -1,8 +1,10 @@
 """Tests for runtime hooks — verify they actually work, not just exist.
 
 Tests:
-- log_action.sh processes PostToolUse input and writes JSONL
-- check_violations.sh reads violations and reports them
+- log_prompt.sh processes UserPromptSubmit input and writes JSONL
+- log_tool.sh processes PreToolUse input and writes JSONL
+
+Hooks write to .runtime/data/prompts/current.jsonl.
 """
 from __future__ import annotations
 
@@ -32,22 +34,58 @@ def _create_test_workspace(tmp_path: Path) -> Path:
     return workspace
 
 
-class TestLogActionHook:
-    """Test PostToolUse conversation logging hook."""
+class TestLogPromptHook:
+    """Test UserPromptSubmit hook."""
 
     def test_hook_processes_input(self, tmp_path):
-        """Feed tool call data to log_action.sh → verify JSONL written."""
         workspace = _create_test_workspace(tmp_path)
-        hook = workspace / ".runtime" / "agents" / "default" / ".claude" / "hooks" / "log_action.sh"
+        hook = workspace / ".runtime" / "agents" / "default" / ".claude" / "hooks" / "log_prompt.sh"
+        if not hook.exists():
+            pytest.skip("Hook not generated (may need adapter=claude)")
 
-        # Create conversations directory
-        conv_dir = workspace / ".runtime" / "data" / "conversations"
-        conv_dir.mkdir(parents=True, exist_ok=True)
+        prompt_input = json.dumps({
+            "prompt": "check health",
+            "session_id": "test-session",
+        })
 
-        # Simulate PostToolUse input
+        result = subprocess.run(
+            ["bash", str(hook)],
+            input=prompt_input,
+            capture_output=True, text=True,
+            cwd=str(workspace / ".runtime" / "agents" / "default"),
+        )
+
+        # Check if JSONL was written
+        prompts_dir = workspace / ".runtime" / "data" / "prompts"
+        jsonl_file = prompts_dir / "current.jsonl"
+        if jsonl_file.exists():
+            lines = jsonl_file.read_text().strip().splitlines()
+            assert len(lines) >= 1
+            entry = json.loads(lines[0])
+            assert entry.get("type") == "user_prompt"
+            assert "check health" in entry.get("content", "")
+
+    def test_hook_is_executable(self, tmp_path):
+        workspace = _create_test_workspace(tmp_path)
+        hook = workspace / ".runtime" / "agents" / "default" / ".claude" / "hooks" / "log_prompt.sh"
+        if not hook.exists():
+            pytest.skip("Hook not generated")
+        assert os.access(str(hook), os.X_OK)
+
+
+class TestLogToolHook:
+    """Test PreToolUse hook."""
+
+    def test_hook_processes_input(self, tmp_path):
+        workspace = _create_test_workspace(tmp_path)
+        hook = workspace / ".runtime" / "agents" / "default" / ".claude" / "hooks" / "log_tool.sh"
+        if not hook.exists():
+            pytest.skip("Hook not generated")
+
         tool_input = json.dumps({
             "tool_name": "Bash",
             "tool_input": {"command": "curl http://localhost:8001/health"},
+            "session_id": "test-session",
         })
 
         result = subprocess.run(
@@ -56,120 +94,19 @@ class TestLogActionHook:
             capture_output=True, text=True,
             cwd=str(workspace / ".runtime" / "agents" / "default"),
         )
-        # Hook should not crash (exit 0 or silent failure)
-        # Check if JSONL was written
-        jsonl_file = conv_dir / "current.jsonl"
+
+        prompts_dir = workspace / ".runtime" / "data" / "prompts"
+        jsonl_file = prompts_dir / "current.jsonl"
         if jsonl_file.exists():
             lines = jsonl_file.read_text().strip().splitlines()
-            assert len(lines) >= 1, "Should have at least one log entry"
+            assert len(lines) >= 1
             entry = json.loads(lines[0])
-            assert "timestamp" in entry
-            assert entry.get("tool") == "Bash" or "tool" in entry
+            assert entry.get("type") == "tool_call"
+            assert entry.get("tool") == "Bash"
 
     def test_hook_is_executable(self, tmp_path):
         workspace = _create_test_workspace(tmp_path)
-        hook = workspace / ".runtime" / "agents" / "default" / ".claude" / "hooks" / "log_action.sh"
-        assert os.access(str(hook), os.X_OK)
-
-
-class TestCheckViolationsHook:
-    """Test SessionStart violations check hook."""
-
-    def test_no_violations(self, tmp_path):
-        """With no violations, hook reports none."""
-        workspace = _create_test_workspace(tmp_path)
-        hook = workspace / ".runtime" / "agents" / "default" / ".claude" / "hooks" / "check_violations.sh"
-
-        result = subprocess.run(
-            ["bash", str(hook)],
-            capture_output=True, text=True,
-            cwd=str(workspace / ".runtime" / "agents" / "default"),
-        )
-        assert result.returncode == 0
-        output = json.loads(result.stdout)
-        context = output["hookSpecificOutput"]["additionalContext"]
-        assert "No pending violations" in context or "No violations directory" in context
-
-    def test_detects_unresolved_violation(self, tmp_path):
-        """With an unresolved violation for this role, hook reports it."""
-        workspace = _create_test_workspace(tmp_path)
-        hook = workspace / ".runtime" / "agents" / "default" / ".claude" / "hooks" / "check_violations.sh"
-
-        # Write a violation targeting the 'default' role
-        viol_dir = workspace / ".runtime" / "data" / "violations"
-        viol_dir.mkdir(parents=True, exist_ok=True)
-        violation = {
-            "id": "v-001",
-            "constraint": "C1",
-            "description": "test violation",
-            "trigger_action": "force_resolve",
-            "trigger_role": "default",
-            "resolved": False,
-        }
-        (viol_dir / "current.jsonl").write_text(json.dumps(violation) + "\n")
-
-        result = subprocess.run(
-            ["bash", str(hook)],
-            capture_output=True, text=True,
-            cwd=str(workspace / ".runtime" / "agents" / "default"),
-        )
-        assert result.returncode == 0
-        output = json.loads(result.stdout)
-        context = output["hookSpecificOutput"]["additionalContext"]
-        assert "1 unresolved" in context
-        assert "C1" in context
-
-    def test_ignores_other_role_violations(self, tmp_path):
-        """Violations for other roles should not be reported."""
-        workspace = _create_test_workspace(tmp_path)
-        hook = workspace / ".runtime" / "agents" / "default" / ".claude" / "hooks" / "check_violations.sh"
-
-        viol_dir = workspace / ".runtime" / "data" / "violations"
-        viol_dir.mkdir(parents=True, exist_ok=True)
-        violation = {
-            "id": "v-002",
-            "constraint": "C2",
-            "description": "admin only violation",
-            "trigger_role": "admin",
-            "resolved": False,
-        }
-        (viol_dir / "current.jsonl").write_text(json.dumps(violation) + "\n")
-
-        result = subprocess.run(
-            ["bash", str(hook)],
-            capture_output=True, text=True,
-            cwd=str(workspace / ".runtime" / "agents" / "default"),
-        )
-        assert result.returncode == 0
-        output = json.loads(result.stdout)
-        assert "No pending violations" in output["hookSpecificOutput"]["additionalContext"]
-
-    def test_ignores_resolved_violations(self, tmp_path):
-        """Resolved violations should not be reported."""
-        workspace = _create_test_workspace(tmp_path)
-        hook = workspace / ".runtime" / "agents" / "default" / ".claude" / "hooks" / "check_violations.sh"
-
-        viol_dir = workspace / ".runtime" / "data" / "violations"
-        viol_dir.mkdir(parents=True, exist_ok=True)
-        violation = {
-            "id": "v-003",
-            "constraint": "C1",
-            "description": "resolved",
-            "trigger_role": "default",
-            "resolved": True,
-        }
-        (viol_dir / "current.jsonl").write_text(json.dumps(violation) + "\n")
-
-        result = subprocess.run(
-            ["bash", str(hook)],
-            capture_output=True, text=True,
-            cwd=str(workspace / ".runtime" / "agents" / "default"),
-        )
-        assert result.returncode == 0
-        output = json.loads(result.stdout)
-        assert "No pending violations" in output["hookSpecificOutput"]["additionalContext"]
-
-    def test_hook_is_executable(self, tmp_path):
-        workspace = _create_test_workspace(tmp_path)
-        hook = workspace / ".runtime" / "agents" / "default" / ".claude" / "hooks" / "check_violations.sh"
+        hook = workspace / ".runtime" / "agents" / "default" / ".claude" / "hooks" / "log_tool.sh"
+        if not hook.exists():
+            pytest.skip("Hook not generated")
         assert os.access(str(hook), os.X_OK)

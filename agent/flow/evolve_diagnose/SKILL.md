@@ -36,8 +36,8 @@ uv run agent/flow/evolve_diagnose/scripts/diagnose.py \
 
 | Source | What it finds | Suggests improving |
 |--------|--------------|-------------------|
-| conversations/*.jsonl | Failed actions, "can't do" responses | Flow (add skills) |
+| prompts/*.jsonl | Failed actions, "can't do" responses | Flow (add skills) |
 | violations/*.jsonl | Constraint violations, frequency | Commitment (adjust) |
-| conversations/*.jsonl | Out-of-scope requests | Scope (expand) |
-| conversations/*.jsonl | Permission denials | Role (add/adjust) |
-| API errors in conversations | 500/404 errors | Flow (fix skills) |
+| prompts/*.jsonl | Out-of-scope requests | Scope (expand) |
+| prompts/*.jsonl | Permission denials | Role (add/adjust) |
+| API errors in prompts | 500/404 errors | Flow (fix skills) |

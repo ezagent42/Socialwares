@@ -87,7 +87,7 @@ It IS:
 Deploy processes commitment.yaml in three steps:
 1. Copies `commitment.yaml` to each role's `.runtime/agents/{name}/`
 2. Generates `commitment_watch.yaml` per role — lists which actions to tag
-3. `log_action.sh` hook reads `commitment_watch.yaml` and tags matching log entries with commitment IDs
+3. `log_prompt.sh` + `log_tool.sh` hooks read `commitment_watch.yaml` and tag matching log entries with commitment IDs
 
 ```yaml
 # .runtime/agents/reviewer/commitment_watch.yaml (auto-generated)

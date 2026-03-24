@@ -19,7 +19,7 @@ Commitment IS:
 
 ```
 commitment.yaml → defines standards
-log_action.sh   → captures data (tagged with commitment IDs)
+log_prompt.sh + log_tool.sh → capture data (tagged with commitment IDs)
 evolver         → compares data vs standards → fulfillment rate → improvement suggestions
 ```
 
@@ -83,8 +83,8 @@ commitments:
 2. **Deploy** — deploy.sh:
    - Copies commitment.yaml to each role's .runtime/
    - Generates `commitment_watch.yaml` per role (lists which actions to tag)
-   - Hooks use commitment_watch.yaml to tag relevant conversation log entries
-3. **Data capture** — log_action.sh hook captures conversation data; for actions listed in commitment_watch.yaml, adds commitment tags and extra fields (output, duration)
+   - Hooks use commitment_watch.yaml to tag relevant log entries
+3. **Data capture** — log_prompt.sh + log_tool.sh hooks capture interaction data to .runtime/data/prompts/; for actions listed in commitment_watch.yaml, adds commitment tags and extra fields (output, duration)
 4. **Evolver evaluates** — evolver reads tagged conversation logs + commitment.yaml → checks if conditions were met → computes fulfillment rate
 5. **Improvement** — low fulfillment → evolver suggests changes to four primitives
 
@@ -99,7 +99,7 @@ commitments:
        action: review_code
        capture: [timestamp, output, duration]
    ```
-3. `log_action.sh` hook reads `commitment_watch.yaml` — when it sees a matching action, tags the log entry with commitment ID and captures extra data
+3. `log_prompt.sh` + `log_tool.sh` hooks read `commitment_watch.yaml` — when a matching action is seen, the log entry is tagged with commitment ID and extra data is captured
 
 ## Evolver Verification
 

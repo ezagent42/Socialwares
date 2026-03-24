@@ -118,7 +118,7 @@ make deploy
 ```
 
 ### Q: How does conversation logging work?
-- Shell mode: PostToolUse hook auto-captures to .runtime/data/conversations/
+- Shell mode: UserPromptSubmit hook (log_prompt.sh) + PreToolUse hook (log_tool.sh) auto-capture to .runtime/data/prompts/
 - SDK mode: adapter's log_conversation() function
 
 ### Q: Where do deploy and start run?

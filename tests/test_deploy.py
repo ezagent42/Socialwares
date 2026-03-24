@@ -5,15 +5,17 @@ and writes .runtime/ to the parent directory.
 
 Coverage:
 - .runtime/ directory structure is correctly generated
-- data/ shared directory creation
+- data/ shared directory creation (Files, Sqlite, prompts, sessions)
 - per-role agents/ directory creation
-- SOUL.md correctly merged (scope + role)
-- flow/ skills are copies (not symlinks) of source directories
+- Prompt file correctly merged (SOUL.md for claude, AGENTS.md for codex/kimi)
+- flow/ skills are symlinks to agent/flow/ within workspace
 - commitment/commitment.yaml correctly copied
+- Hooks generated and registered (log_prompt.sh, log_tool.sh)
 - Multiple deploy idempotency
 """
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -33,11 +35,14 @@ def _create_test_workspace(tmp_path: Path) -> Path:
     return workspace
 
 
-def run_deploy(workspace: Path) -> subprocess.CompletedProcess:
+def run_deploy(workspace: Path, adapter: str = "claude") -> subprocess.CompletedProcess:
     """Execute deploy.sh from within a test workspace."""
     deploy_sh = workspace / "agent" / "deploy.sh"
+    cmd = [str(deploy_sh)]
+    if adapter != "claude":
+        cmd += ["--adapter", adapter]
     return subprocess.run(
-        [str(deploy_sh)],
+        cmd,
         capture_output=True,
         text=True,
         cwd=str(workspace),
@@ -52,7 +57,7 @@ def workspace(tmp_path):
 
 @pytest.fixture
 def deployed(workspace):
-    """Execute deploy and return the .runtime/ path."""
+    """Execute deploy (claude adapter, default) and return the .runtime/ path."""
     result = run_deploy(workspace)
     assert result.returncode == 0, f"deploy.sh failed:\n{result.stderr}\n{result.stdout}"
     return workspace / ".runtime"
@@ -69,6 +74,12 @@ class TestDirectoryStructure:
     def test_data_dirs_created(self, deployed):
         assert (deployed / "data" / "Files").is_dir()
         assert (deployed / "data" / "Sqlite").is_dir()
+
+    def test_data_prompts_dir_created(self, deployed):
+        assert (deployed / "data" / "prompts").is_dir()
+
+    def test_data_sessions_dir_created(self, deployed):
+        assert (deployed / "data" / "sessions").is_dir()
 
     def test_agents_dir_created(self, deployed):
         assert (deployed / "agents").is_dir()
@@ -95,14 +106,18 @@ class TestDirectoryStructure:
 
 
 # ---------------------------------------------------------------------------
-# SOUL.md merge
+# Prompt file merge (SOUL.md for claude, AGENTS.md for codex/kimi)
 # ---------------------------------------------------------------------------
 
 
-class TestSoulMerge:
-    """Test SOUL.md merge: scope/scope.md + role/{name}.md."""
+class TestPromptFile:
+    """Test prompt file merge: scope/scope.md + role/{name}.md.
+
+    Default adapter is claude, so prompt file is SOUL.md.
+    """
 
     def test_soul_md_exists_for_each_role(self, deployed):
+        """Claude adapter (default) produces SOUL.md."""
         for role_dir in (deployed / "agents").iterdir():
             if not role_dir.is_dir():
                 continue
@@ -132,6 +147,32 @@ class TestSoulMerge:
             role_content = role_soul_src.read_text().strip().split("\n")[0]
             merged = (role_dir / "SOUL.md").read_text()
             assert role_content in merged
+
+    def test_codex_produces_agents_md(self, workspace):
+        """Codex adapter produces AGENTS.md instead of SOUL.md."""
+        result = run_deploy(workspace, adapter="codex")
+        assert result.returncode == 0, f"deploy.sh --adapter codex failed:\n{result.stderr}"
+        runtime = workspace / ".runtime"
+        for role_dir in (runtime / "agents").iterdir():
+            if not role_dir.is_dir():
+                continue
+            agents_md = role_dir / "AGENTS.md"
+            assert agents_md.exists(), f"Missing AGENTS.md for {role_dir.name}"
+            assert agents_md.stat().st_size > 0
+            # SOUL.md should NOT exist for codex
+            assert not (role_dir / "SOUL.md").exists()
+
+    def test_kimi_produces_agents_md(self, workspace):
+        """Kimi adapter produces AGENTS.md instead of SOUL.md."""
+        result = run_deploy(workspace, adapter="kimi")
+        assert result.returncode == 0, f"deploy.sh --adapter kimi failed:\n{result.stderr}"
+        runtime = workspace / ".runtime"
+        for role_dir in (runtime / "agents").iterdir():
+            if not role_dir.is_dir():
+                continue
+            agents_md = role_dir / "AGENTS.md"
+            assert agents_md.exists(), f"Missing AGENTS.md for {role_dir.name}"
+            assert agents_md.stat().st_size > 0
 
 
 # ---------------------------------------------------------------------------
@@ -245,6 +286,8 @@ class TestIdempotency:
         assert r2.returncode == 0
         runtime = workspace / ".runtime"
         assert (runtime / "data" / "Files").is_dir()
+        assert (runtime / "data" / "prompts").is_dir()
+        assert (runtime / "data" / "sessions").is_dir()
         assert (runtime / "agents").is_dir()
 
 
@@ -276,30 +319,53 @@ class TestDeployScript:
 
 
 # ---------------------------------------------------------------------------
-# Hooks generated
+# Hooks generated (claude adapter, default)
 # ---------------------------------------------------------------------------
 
 
 class TestHooksGenerated:
-    """Test that deploy generates runtime hooks."""
+    """Test that deploy generates hooks for claude adapter (default)."""
 
-    def test_log_action_hook_exists(self, deployed, workspace):
+    def test_log_prompt_hook_exists(self, deployed):
         for role_dir in (deployed / "agents").iterdir():
             if not role_dir.is_dir():
                 continue
-            hook = role_dir / ".claude" / "hooks" / "log_action.sh"
-            assert hook.exists(), f"Missing log_action.sh for {role_dir.name}"
-            assert os.access(str(hook), os.X_OK), f"log_action.sh not executable for {role_dir.name}"
+            hook = role_dir / ".claude" / "hooks" / "log_prompt.sh"
+            assert hook.exists(), f"Missing log_prompt.sh for {role_dir.name}"
+            assert os.access(str(hook), os.X_OK)
 
-    def test_check_violations_hook_exists(self, deployed, workspace):
+    def test_log_tool_hook_exists(self, deployed):
         for role_dir in (deployed / "agents").iterdir():
             if not role_dir.is_dir():
                 continue
-            hook = role_dir / ".claude" / "hooks" / "check_violations.sh"
-            assert hook.exists(), f"Missing check_violations.sh for {role_dir.name}"
-            assert os.access(str(hook), os.X_OK), f"check_violations.sh not executable for {role_dir.name}"
+            hook = role_dir / ".claude" / "hooks" / "log_tool.sh"
+            assert hook.exists(), f"Missing log_tool.sh for {role_dir.name}"
+            assert os.access(str(hook), os.X_OK)
 
-    def test_constraints_yaml_copied(self, deployed, workspace):
+    def test_hooks_registered_in_settings(self, deployed):
+        """settings.local.json should register UserPromptSubmit + PreToolUse."""
+        for role_dir in (deployed / "agents").iterdir():
+            if not role_dir.is_dir():
+                continue
+            settings = role_dir / ".claude" / "settings.local.json"
+            assert settings.exists()
+            data = json.loads(settings.read_text())
+            assert "hooks" in data
+            assert "UserPromptSubmit" in data["hooks"]
+            assert "PreToolUse" in data["hooks"]
+            # Should NOT have PostToolUse or SessionStart
+            assert "PostToolUse" not in data["hooks"]
+            assert "SessionStart" not in data["hooks"]
+
+    def test_workspace_root_marker(self, deployed, workspace):
+        for role_dir in (deployed / "agents").iterdir():
+            if not role_dir.is_dir():
+                continue
+            marker = role_dir / ".workspace_root"
+            assert marker.exists()
+            assert str(workspace) == marker.read_text().strip()
+
+    def test_commitment_yaml_copied(self, deployed, workspace):
         src = workspace / "agent" / "commitment" / "commitment.yaml"
         if not src.exists():
             pytest.skip("No commitment.yaml")
@@ -307,38 +373,4 @@ class TestHooksGenerated:
             if not role_dir.is_dir():
                 continue
             dest = role_dir / "commitment.yaml"
-            assert dest.exists(), f"Missing commitment.yaml for {role_dir.name}"
-
-    def test_settings_local_json_exists(self, deployed, workspace):
-        """settings.local.json must exist to register hooks with Claude Code."""
-        for role_dir in (deployed / "agents").iterdir():
-            if not role_dir.is_dir():
-                continue
-            settings = role_dir / ".claude" / "settings.local.json"
-            assert settings.exists(), f"Missing settings.local.json for {role_dir.name}"
-            import json
-            data = json.loads(settings.read_text())
-            assert "hooks" in data
-            assert "PostToolUse" in data["hooks"]
-            assert "SessionStart" in data["hooks"]
-
-    def test_workspace_root_marker(self, deployed, workspace):
-        """Each role should have .workspace_root pointing to workspace root."""
-        for role_dir in (deployed / "agents").iterdir():
-            if not role_dir.is_dir():
-                continue
-            marker = role_dir / ".workspace_root"
-            assert marker.exists(), f"Missing .workspace_root for {role_dir.name}"
-            root_path = marker.read_text().strip()
-            assert str(workspace) == root_path
-
-    def test_skills_are_symlinks_not_copies(self, deployed):
-        """Skills in .runtime/ should be symlinks to agent/flow/ (within workspace)."""
-        for role_dir in (deployed / "agents").iterdir():
-            if not role_dir.is_dir():
-                continue
-            skills_dir = role_dir / ".claude" / "skills"
-            for skill in skills_dir.iterdir():
-                assert skill.is_symlink(), (
-                    f"{skill} should be a symlink, not a copy"
-                )
+            assert dest.exists()

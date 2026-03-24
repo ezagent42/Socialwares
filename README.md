@@ -162,14 +162,13 @@ Each action has a `SKILL.md` (+ optional `scripts/`). `deploy.sh` reads `flow.ya
 
 Run from within a workspace. Not available at repo root.
 
-Compiles `agent/` four primitives into `.runtime/`. Idempotent — detects added/removed roles and skills.
+Compiles `agent/` four primitives into `.runtime/`. Idempotent — detects added/removed roles and skills. Takes `--adapter` parameter (claude/codex/kimi) to generate platform-specific config.
 
 What it generates per role:
-- `.claude/skills/` — symlinks to allowed flow/ actions (per flow.yaml)
-- `.claude/hooks/log_action.sh` — PostToolUse hook for conversation logging
-- `.claude/hooks/check_violations.sh` — SessionStart hook for violation notifications
-- `.claude/settings.local.json` — registers hooks
-- `SOUL.md` — merged scope/scope.md + role/{name}.md
+- Skills dir — symlinks to allowed flow/ actions (per flow.yaml): `.claude/skills/` (claude) or `.agents/skills/` (codex/kimi)
+- Hooks dir — `log_prompt.sh` (UserPromptSubmit) + `log_tool.sh` (PreToolUse): `.claude/hooks/` (claude) or `.codex/hooks/` (codex) or none (kimi)
+- Hook registration — `settings.local.json` (claude) or `.codex/hooks.json` (codex) or none (kimi)
+- Prompt file — merged scope/scope.md + role/{name}.md: `SOUL.md` (claude) or `AGENTS.md` (codex/kimi)
 - `.workspace_root` — marker pointing to workspace root
 - `commitment.yaml` — copied from commitment/
 - `flow.yaml` — copied for reference
@@ -179,22 +178,23 @@ What it generates per role:
 ├── data/
 │   ├── Files/                  ← App runtime files
 │   ├── Sqlite/                 ← App database
-│   ├── conversations/          ← Agent interaction logs (JSONL)
+│   ├── prompts/                ← Agent interaction logs (JSONL)
+│   ├── sessions/               ← Session metadata
 │   └── violations/             ← Constraint violation queue (JSONL)
 └── agents/
     ├── default/                ← default role's $PROJECT_DIR
-    │   ├── .claude/skills/     ← check_health (per flow.yaml)
-    │   ├── .claude/hooks/      ← log_action.sh + check_violations.sh
-    │   ├── .claude/settings.local.json
+    │   ├── .claude/skills/     ← check_health (per flow.yaml) [or .agents/skills/ for codex/kimi]
+    │   ├── .claude/hooks/      ← log_prompt.sh + log_tool.sh [or .codex/hooks/ for codex, none for kimi]
+    │   ├── .claude/settings.local.json  [or .codex/hooks.json for codex]
     │   ├── .workspace_root
-    │   ├── SOUL.md
+    │   ├── SOUL.md             ← [or AGENTS.md for codex/kimi]
     │   └── commitment.yaml
     └── evolver/                ← evolver role's $PROJECT_DIR
         ├── .claude/skills/     ← diagnose + eval + improve + auto + inspect + check_health
-        ├── .claude/hooks/
+        ├── .claude/hooks/      ← log_prompt.sh + log_tool.sh
         ├── .claude/settings.local.json
         ├── .workspace_root
-        ├── SOUL.md
+        ├── SOUL.md             ← [or AGENTS.md for codex/kimi]
         └── commitment.yaml
 ```
 
@@ -228,12 +228,12 @@ First-time Claude Code environment setup. See [docs/guides/005-claude-setup.md](
 
 Agent interactions and constraint violations are logged to `.runtime/data/`:
 
-### Conversation Logs (`.runtime/data/conversations/*.jsonl`)
+### Prompt & Tool Logs (`.runtime/data/prompts/*.jsonl`)
 
-Written by PostToolUse hook (shell mode) or adapter (SDK mode):
+Written by UserPromptSubmit hook (log_prompt.sh) and PreToolUse hook (log_tool.sh) in shell mode, or adapter in SDK mode:
 
 ```json
-{"timestamp": "2026-03-20T10:00:00Z", "role": "default", "type": "tool_call", "tool": "create_task", "input": {"title": "GPS"}, "success": true}
+{"timestamp": "2026-03-20T10:00:00Z", "role": "default", "type": "tool_call", "tool": "create_task", "input": {"title": "GPS"}, "session_id": "..."}
 ```
 
 ### Violation Queue (`.runtime/data/violations/*.jsonl`)

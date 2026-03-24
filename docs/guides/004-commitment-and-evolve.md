@@ -19,7 +19,7 @@ Commitment is NOT included in non-evolver roles' SOUL.md. Only the evolver sees 
 
 ```
 commitment.yaml → defines standards
-log_action.sh   → captures data (tagged with commitment IDs)
+log_prompt.sh + log_tool.sh → capture data (tagged with commitment IDs)
 evolver         → compares data vs standards → fulfillment rate → improvement suggestions
 ```
 
@@ -83,7 +83,7 @@ watch:
     capture: [timestamp, output, duration]
 ```
 
-When `log_action.sh` runs after an action:
+When `log_prompt.sh` / `log_tool.sh` hooks run:
 1. Reads the role's `commitment_watch.yaml`
 2. If the current action matches a watch entry, tags the log with commitment ID and captures extra fields
 3. If no match, logs normally without commitment tags
@@ -125,7 +125,7 @@ Fulfillment rate = fulfilled / total per commitment. This is the primary signal 
 
 1. **Declaration** — developer writes commitment.yaml
 2. **Deploy** — deploy.sh copies commitment.yaml, generates commitment_watch.yaml per role
-3. **Data capture** — log_action.sh hook tags relevant actions with commitment IDs
+3. **Data capture** — log_prompt.sh + log_tool.sh hooks tag relevant actions with commitment IDs (to .runtime/data/prompts/)
 4. **Evolver evaluates** — reads tagged logs + commitment.yaml, checks conditions, computes fulfillment rate
 5. **Improvement** — low fulfillment → evolver suggests changes to four primitives
 
@@ -189,7 +189,7 @@ Evolver: → evaluate → diagnose → propose → apply → re-evaluate
 
 | Source | Location | What evolver looks for |
 |--------|----------|----------------------|
-| Conversation logs | .runtime/data/conversations/*.jsonl | Tagged actions, failed actions, missing capabilities |
+| Prompt & tool logs | .runtime/data/prompts/*.jsonl | Tagged actions, failed actions, missing capabilities |
 | Commitment watch | .runtime/agents/{name}/commitment_watch.yaml | Which actions are tagged for evaluation |
 | Eval cases | agent/flow/evolve_eval/eval_cases.yaml | Performance score trends |
 | Commitment standards | agent/commitment/commitment.yaml | Evaluation standards summary |

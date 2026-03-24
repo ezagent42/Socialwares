@@ -4,7 +4,7 @@
 # Action constraints: postconditions on direct actions
 #
 # Violations are written to .runtime/data/violations/ by the app backend.
-# SessionStart hook notifies the responsible role on login.
+# UserPromptSubmit (log_prompt.sh) + PreToolUse (log_tool.sh) hooks capture data for analysis.
 #
 # App developer responsibilities:
 # 1. Record timestamps on state transitions (your DB/data layer)

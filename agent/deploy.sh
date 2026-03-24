@@ -1,12 +1,8 @@
 #!/usr/bin/env bash
 # deploy.sh — Compile four primitives -> .runtime/
+# Adapter-aware: generates platform-specific config (skills dir, hooks, prompt file)
 #
-# Idempotent: safe to run multiple times. Detects added/removed roles and skills.
-# Reads agent/ from the SAME directory as this script (workspace-local).
-# Reads flow.yaml to determine which actions each role can access.
-#
-# Usage (from within a workspace only — NOT at template root):
-#   ./agent/deploy.sh
+# Usage: ./agent/deploy.sh [--adapter claude|codex|kimi]
 set -euo pipefail
 
 AGENT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -14,7 +10,18 @@ APP_ROOT="$(cd "$AGENT_DIR/.." && pwd)"
 RUNTIME_DIR="$APP_ROOT/.runtime"
 FLOW_YAML="$AGENT_DIR/flow/flow.yaml"
 
-# Guard: prevent deploy at template root (must be in a workspace)
+# Default adapter
+ADAPTER="claude"
+
+# Parse args
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --adapter) ADAPTER="$2"; shift 2 ;;
+        *) echo "Unknown option: $1"; exit 1 ;;
+    esac
+done
+
+# Root guard (prevent running at template root)
 if [ -f "$APP_ROOT/scripts/create-my-socialware.py" ] && [ ! -f "$APP_ROOT/Makefile" -o "$(head -1 "$APP_ROOT/Makefile" 2>/dev/null)" = "# Socialwares Template — Root Makefile" ]; then
     echo "Error: deploy.sh should not run at the template root."
     echo ""
@@ -25,7 +32,30 @@ if [ -f "$APP_ROOT/scripts/create-my-socialware.py" ] && [ ! -f "$APP_ROOT/Makef
     exit 1
 fi
 
-echo "Deploying four primitives"
+# Adapter-specific settings
+case "$ADAPTER" in
+    claude)
+        SKILLS_SUBDIR=".claude/skills"
+        HOOKS_DIR=".claude/hooks"
+        PROMPT_FILE="SOUL.md"
+        ;;
+    codex)
+        SKILLS_SUBDIR=".agents/skills"
+        HOOKS_DIR=".codex/hooks"
+        PROMPT_FILE="AGENTS.md"
+        ;;
+    kimi|kimicode)
+        SKILLS_SUBDIR=".agents/skills"
+        HOOKS_DIR=""  # no hooks
+        PROMPT_FILE="AGENTS.md"
+        ;;
+    *)
+        echo "Unknown adapter: $ADAPTER (supported: claude, codex, kimi)"
+        exit 1
+        ;;
+esac
+
+echo "Deploying four primitives (adapter: $ADAPTER)"
 echo "  Source: $AGENT_DIR"
 echo "  Target: $RUNTIME_DIR"
 echo ""
@@ -33,8 +63,10 @@ echo ""
 # 1. Create .runtime/ directory structure
 mkdir -p "$RUNTIME_DIR/data/Files"
 mkdir -p "$RUNTIME_DIR/data/Sqlite"
+mkdir -p "$RUNTIME_DIR/data/prompts"
+mkdir -p "$RUNTIME_DIR/data/sessions"
 
-# 2. Clean up removed roles — delete .runtime/agents/{role}/ if agent/role/{role}.md no longer exists
+# 2. Clean removed roles
 if [ -d "$RUNTIME_DIR/agents" ]; then
     for old_role_dir in "$RUNTIME_DIR"/agents/*/; do
         [ -d "$old_role_dir" ] || continue
@@ -46,91 +78,58 @@ if [ -d "$RUNTIME_DIR/agents" ]; then
     done
 fi
 
-# 3. Parse flow.yaml to build role→actions mapping
-get_actions_for_role() {
-    local role_name="$1"
-    if [ ! -f "$FLOW_YAML" ]; then
-        # No flow.yaml — all actions for all roles
-        for d in "$AGENT_DIR"/flow/*/; do
-            [ -d "$d" ] && basename "$d"
-        done
-        return
-    fi
-
-    python3 - "$FLOW_YAML" "$role_name" << 'PYEOF'
-import sys
-try:
-    import yaml
-except ImportError:
-    # pyyaml not installed — fallback to all actions
-    import os
-    flow_dir = os.path.dirname(sys.argv[1])
-    for d in os.listdir(flow_dir):
-        if os.path.isdir(os.path.join(flow_dir, d)):
-            print(d)
-    sys.exit(0)
-
-flow_yaml = sys.argv[1]
-role_name = sys.argv[2]
-
-with open(flow_yaml) as f:
+# 3. Parse flow.yaml for role-action mapping (if pyyaml available)
+ROLE_ACTIONS=""
+if python3 -c "import yaml" 2>/dev/null; then
+    ROLE_ACTIONS=$(python3 -c "
+import yaml, json
+with open('$FLOW_YAML') as f:
     data = yaml.safe_load(f) or {}
+result = {}
+for action in data.get('direct_actions', []):
+    for role in action.get('role', []):
+        result.setdefault(role, []).append(action['action'])
+for flow_name, flow in (data.get('flows') or {}).items():
+    if isinstance(flow, dict):
+        for t in flow.get('transitions', []):
+            for role in t.get('role', []):
+                result.setdefault(role, []).append(t['action'])
+print(json.dumps(result))
+" 2>/dev/null) || ROLE_ACTIONS=""
+fi
 
-actions = set()
-
-for flow_id, flow_def in (data.get("flows") or {}).items():
-    if not isinstance(flow_def, dict):
-        continue
-    for t in flow_def.get("transitions", []):
-        roles = t.get("role", [])
-        if isinstance(roles, str):
-            roles = [roles]
-        if "any" in roles or role_name in roles:
-            actions.add(t["action"])
-
-for da in data.get("direct_actions", []):
-    roles = da.get("role", [])
-    if isinstance(roles, str):
-        roles = [roles]
-    if "any" in roles or role_name in roles:
-        actions.add(da["action"])
-
-for a in sorted(actions):
-    print(a)
-PYEOF
-}
-
-# 4. Generate an isolated PROJECT_DIR for each role
+# 4. Deploy each role
 for role_file in "$AGENT_DIR"/role/*.md; do
     [ -f "$role_file" ] || continue
     role_name=$(basename "$role_file" .md)
     [ "$role_name" = "README" ] && continue
     role_runtime="$RUNTIME_DIR/agents/$role_name"
 
-    echo "  Role: $role_name"
+    mkdir -p "$role_runtime/$SKILLS_SUBDIR"
 
-    mkdir -p "$role_runtime/.claude/skills"
-    mkdir -p "$role_runtime/.claude/hooks"
-
-    # Write workspace root marker (so agent can find workspace root from .runtime/)
+    # Write workspace root marker
     echo "$APP_ROOT" > "$role_runtime/.workspace_root"
 
-    # Merge SOUL.md: scope/scope.md + role/{name}.md
+    # Merge scope + role → prompt file
     {
-        cat "$AGENT_DIR/scope/scope.md" 2>/dev/null || true
+        cat "$AGENT_DIR/scope/scope.md"
         echo ""
         echo "---"
         echo ""
-        cat "$role_file" 2>/dev/null || true
-    } > "$role_runtime/SOUL.md"
+        cat "$role_file"
+    } > "$role_runtime/$PROMPT_FILE"
 
-    # Get allowed actions for this role
-    allowed_actions=$(get_actions_for_role "$role_name")
+    # Symlink skills (filtered by flow.yaml)
+    allowed_actions=""
+    if [ -n "$ROLE_ACTIONS" ]; then
+        allowed_actions=$(echo "$ROLE_ACTIONS" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+for a in data.get('$role_name', []):
+    print(a)
+" 2>/dev/null) || allowed_actions=""
+    fi
 
-    # Clear old skills (clean slate for idempotent rebuild)
-    rm -rf "$role_runtime/.claude/skills/"*
-
-    # Symlink allowed skills from flow/ (relative paths for portability)
     skill_count=0
     for skill_dir in "$AGENT_DIR"/flow/*/; do
         [ -d "$skill_dir" ] || continue
@@ -140,11 +139,8 @@ for role_file in "$AGENT_DIR"/role/*.md; do
             echo "$allowed_actions" | grep -qx "$skill_name" || continue
         fi
 
-        link="$role_runtime/.claude/skills/$skill_name"
+        link="$role_runtime/$SKILLS_SUBDIR/$skill_name"
 
-        # Symlink within workspace (agent/flow/ → .runtime/.claude/skills/)
-        # Changes to agent/flow/ are instantly visible without re-deploy.
-        # Note: template→workspace copy is done by create-my-socialware (isolation).
         [ -L "$link" ] && rm "$link"
         [ -d "$link" ] && rm -rf "$link"
         link_dir=$(dirname "$link")
@@ -153,111 +149,114 @@ for role_file in "$AGENT_DIR"/role/*.md; do
         skill_count=$((skill_count + 1))
     done
 
-    # Generate PostToolUse conversation logging hook
-    cat > "$role_runtime/.claude/hooks/log_action.sh" << 'HOOKEOF'
+    # Copy commitment + flow for reference
+    if [ -f "$AGENT_DIR/commitment/commitment.yaml" ]; then
+        cp "$AGENT_DIR/commitment/commitment.yaml" "$role_runtime/commitment.yaml"
+    fi
+    cp "$FLOW_YAML" "$role_runtime/flow.yaml"
+
+    # Generate hooks (platform-specific)
+    if [ -n "$HOOKS_DIR" ]; then
+        mkdir -p "$role_runtime/$HOOKS_DIR"
+
+        # Hook script: log_prompt.sh (UserPromptSubmit)
+        cat > "$role_runtime/$HOOKS_DIR/log_prompt.sh" << 'HOOKEOF'
 #!/usr/bin/env bash
-# PostToolUse hook — log tool calls to .runtime/data/conversations/
+# UserPromptSubmit hook — record user input for commitment analysis
 set -euo pipefail
 INPUT=$(cat)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-# Navigate from .claude/hooks/ up to .runtime/
-RUNTIME_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-DATA_DIR="$(cd "$RUNTIME_DIR/../.." && pwd)/data/conversations"
+
+# Find prompts directory
+if [ -f "$(cd "$SCRIPT_DIR" && pwd)/../../.workspace_root" ]; then
+    WORKSPACE_ROOT=$(cat "$(cd "$SCRIPT_DIR" && pwd)/../../.workspace_root")
+else
+    # Fallback: navigate from hook location
+    WORKSPACE_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+fi
+DATA_DIR="$WORKSPACE_ROOT/.runtime/data/prompts"
 mkdir -p "$DATA_DIR"
 
-TIMESTAMP=$(python3 -c "from datetime import datetime, timezone; print(datetime.now(timezone.utc).isoformat())")
-TOOL_NAME=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tool_name','unknown'))" 2>/dev/null || echo "unknown")
-
 python3 -c "
-import json, sys
+import json, sys, os
+from datetime import datetime, timezone
 data = json.loads(sys.stdin.read())
+role = os.path.basename(os.path.dirname(os.path.dirname('$SCRIPT_DIR')))
 entry = {
-    'timestamp': '$TIMESTAMP',
-    'role': '$(basename \"$RUNTIME_DIR\")',
-    'type': 'tool_call',
-    'tool': data.get('tool_name', 'unknown'),
-    'input': data.get('tool_input', {}),
+    'timestamp': datetime.now(timezone.utc).isoformat(),
+    'type': 'user_prompt',
+    'role': role,
+    'content': data.get('prompt', ''),
+    'session_id': data.get('session_id', ''),
 }
-with open('$DATA_DIR/current.jsonl', 'a') as f:
+log_file = os.path.join('$DATA_DIR', 'current.jsonl')
+with open(log_file, 'a') as f:
     f.write(json.dumps(entry, ensure_ascii=False) + '\n')
 " <<< "$INPUT" 2>/dev/null || true
 HOOKEOF
-    chmod +x "$role_runtime/.claude/hooks/log_action.sh"
+        chmod +x "$role_runtime/$HOOKS_DIR/log_prompt.sh"
 
-    # Generate SessionStart violations check hook
-    cat > "$role_runtime/.claude/hooks/check_violations.sh" << HOOKEOF2
+        # Hook script: log_tool.sh (PreToolUse)
+        cat > "$role_runtime/$HOOKS_DIR/log_tool.sh" << 'HOOKEOF'
 #!/usr/bin/env bash
-# SessionStart hook — check for unresolved constraint violations
+# PreToolUse hook — record tool calls for commitment analysis
 set -euo pipefail
-SCRIPT_DIR="\$(cd "\$(dirname "\$0")" && pwd)"
-RUNTIME_DIR="\$(cd "\$SCRIPT_DIR/../.." && pwd)"
-VIOLATIONS_DIR="\$(cd "\$RUNTIME_DIR/../.." && pwd)/data/violations"
-ROLE_NAME="$role_name"
+INPUT=$(cat)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-if [ ! -d "\$VIOLATIONS_DIR" ]; then
-    cat <<JSONEOF
-{
-  "hookSpecificOutput": {
-    "hookEventName": "SessionStart",
-    "additionalContext": "No violations directory found."
-  }
-}
-JSONEOF
-    exit 0
+if [ -f "$(cd "$SCRIPT_DIR" && pwd)/../../.workspace_root" ]; then
+    WORKSPACE_ROOT=$(cat "$(cd "$SCRIPT_DIR" && pwd)/../../.workspace_root")
+else
+    WORKSPACE_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 fi
+DATA_DIR="$WORKSPACE_ROOT/.runtime/data/prompts"
+mkdir -p "$DATA_DIR"
 
-# Count unresolved violations for this role
-COUNT=\$(python3 -c "
-import json, glob, sys
-count = 0
-details = []
-for f in glob.glob('\$VIOLATIONS_DIR/*.jsonl'):
-    for line in open(f):
-        try:
-            v = json.loads(line.strip())
-            if not v.get('resolved', False) and v.get('trigger_role') == '\$ROLE_NAME':
-                count += 1
-                details.append(f\"{v.get('constraint','?')}: {v.get('description','')}\")
-        except: pass
-if count > 0:
-    print(f'{count} unresolved violation(s): ' + '; '.join(details[:3]))
-else:
-    print('No pending violations.')
-" 2>/dev/null || echo "No pending violations.")
-
-cat <<JSONEOF
-{
-  "hookSpecificOutput": {
-    "hookEventName": "SessionStart",
-    "additionalContext": "\$COUNT"
-  }
+python3 -c "
+import json, sys, os
+from datetime import datetime, timezone
+data = json.loads(sys.stdin.read())
+role = os.path.basename(os.path.dirname(os.path.dirname('$SCRIPT_DIR')))
+entry = {
+    'timestamp': datetime.now(timezone.utc).isoformat(),
+    'type': 'tool_call',
+    'role': role,
+    'tool': data.get('tool_name', ''),
+    'input': data.get('tool_input', {}),
+    'session_id': data.get('session_id', ''),
 }
-JSONEOF
-HOOKEOF2
-    chmod +x "$role_runtime/.claude/hooks/check_violations.sh"
+log_file = os.path.join('$DATA_DIR', 'current.jsonl')
+with open(log_file, 'a') as f:
+    f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+" <<< "$INPUT" 2>/dev/null || true
+HOOKEOF
+        chmod +x "$role_runtime/$HOOKS_DIR/log_tool.sh"
 
-    # Generate .claude/settings.local.json to register hooks
-    cat > "$role_runtime/.claude/settings.local.json" << SETTINGSEOF
+        # Register hooks (platform-specific format)
+        case "$ADAPTER" in
+            claude)
+                mkdir -p "$role_runtime/.claude"
+                cat > "$role_runtime/.claude/settings.local.json" << SETTINGSEOF
 {
   "hooks": {
-    "PostToolUse": [
+    "UserPromptSubmit": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "$role_runtime/.claude/hooks/log_action.sh",
+            "command": "$role_runtime/$HOOKS_DIR/log_prompt.sh",
             "timeout": 5
           }
         ]
       }
     ],
-    "SessionStart": [
+    "PreToolUse": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "$role_runtime/.claude/hooks/check_violations.sh",
-            "timeout": 10
+            "command": "$role_runtime/$HOOKS_DIR/log_tool.sh",
+            "timeout": 5
           }
         ]
       }
@@ -265,18 +264,48 @@ HOOKEOF2
   }
 }
 SETTINGSEOF
-
-    # Copy commitment constraints configuration
-    if [ -f "$AGENT_DIR/commitment/commitment.yaml" ]; then
-        cp "$AGENT_DIR/commitment/commitment.yaml" "$role_runtime/commitment.yaml"
+                ;;
+            codex)
+                mkdir -p "$role_runtime/.codex"
+                cat > "$role_runtime/.codex/hooks.json" << HOOKSEOF
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$role_runtime/$HOOKS_DIR/log_prompt.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$role_runtime/$HOOKS_DIR/log_tool.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
+HOOKSEOF
+                cat > "$role_runtime/.codex/config.toml" << CONFIGEOF
+[features]
+codex_hooks = true
+CONFIGEOF
+                ;;
+        esac
     fi
 
-    # Copy flow.yaml for reference
-    if [ -f "$FLOW_YAML" ]; then
-        cp "$FLOW_YAML" "$role_runtime/flow.yaml"
-    fi
-
-    echo "    SOUL.md: $(wc -l < "$role_runtime/SOUL.md") lines"
+    line_count=$(wc -l < "$role_runtime/$PROMPT_FILE")
+    echo "  Role: $role_name"
+    echo "    $PROMPT_FILE: $line_count lines"
     echo "    Skills: $skill_count"
     echo ""
 done
@@ -285,4 +314,4 @@ echo "Deploy complete."
 echo "  Data: $RUNTIME_DIR/data/"
 echo "  Agents: $RUNTIME_DIR/agents/"
 echo ""
-echo "Start with: ./agent/start.sh --role <role_name>"
+echo "Start with: ./agent/start.sh --role <role_name> --adapter $ADAPTER"

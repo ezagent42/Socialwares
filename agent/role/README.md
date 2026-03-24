@@ -38,5 +38,5 @@ Role files define **identity only** — operational details belong in flow/ skil
 For each `role/*.md` file, deploy.sh:
 1. Creates `.runtime/agents/{role_name}/`
 2. Merges `scope/scope.md` + `role/{name}.md` → `.runtime/agents/{name}/SOUL.md`
-3. Copies allowed flow/ skills (per flow.yaml) into `.runtime/agents/{name}/.claude/skills/`
+3. Symlinks allowed flow/ skills (per flow.yaml) into `.runtime/agents/{name}/.claude/skills/` (claude) or `.agents/skills/` (codex/kimi)
 4. Writes `.workspace_root` marker pointing to workspace root
