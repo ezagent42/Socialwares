@@ -8,11 +8,13 @@ Commitment is NOT:
 - API testing or eval metrics (that's eval)
 - Skill execution instructions (that belongs in flow/SKILL.md)
 - Agent behavior rules (that belongs in role .md)
+- Automated enforcement hooks
 
 Commitment IS:
 - A promise from one role to another (or to itself)
 - A condition that must be met between two actions
 - Part of the collaboration contract between agents
+- An agent-readable spec — the agent reads it and follows it
 
 ### Example
 
@@ -61,9 +63,6 @@ condition: "within 24h"
 # Precondition
 condition: "review_code completed with result approved"
 
-# Quality (natural language — agent/evolver interprets)
-condition: "customer rates 4+ stars"
-
 # Span constraint (from/to can be non-adjacent)
 condition: "within 48h"
 ```
@@ -97,19 +96,24 @@ commitments:
 ## Lifecycle
 
 1. **Declaration** — developer writes constraints.yaml
-2. **Activation** — when `from.action` occurs in conversation log, the commitment activates
-3. **Verification** — check if `to.action` happened and whether `condition` was met
-4. **Recording** — each commitment instance is fulfilled or broken, recorded in conversation data
-5. **Signal** — evolver computes fulfillment rate for improvement decisions
+2. **Deploy** — deploy.sh copies constraints.yaml to each role's `.runtime/agents/{name}/`
+3. **Agent reads** — agent starts with constraints.yaml in its working directory; it knows what commitments exist and is expected to follow them
+4. **Agent follows** — during operation, the agent respects commitments (e.g., completes review within 24h) because it has read the spec
+5. **Evolver checks** — evolver reads conversation logs, checks if each commitment's condition was actually met, computes fulfillment rate
+
+There is NO automatic enforcement hook. The agent follows commitments because it reads the spec (like an employee following a handbook). The evolver verifies compliance afterwards (like a manager reviewing performance).
 
 ## deploy.sh Processing
 
 `constraints.yaml` is copied to each role's `.runtime/agents/{name}/constraints.yaml`.
 
-## SessionStart Hook
+## Evolver Verification
 
-deploy.sh generates a `check_violations.sh` hook for each role.
-On session start, it reads `.runtime/data/violations/*.jsonl` and reports
-unresolved violations assigned to the current role.
+The evolver reads conversation logs (`.runtime/data/conversations/*.jsonl`) and for each commitment:
+1. Finds `from.action` events (trigger)
+2. Finds corresponding `to.action` events (fulfillment)
+3. Checks if `condition` was met (LLM interprets natural language)
+4. Computes fulfillment rate = fulfilled / total
+5. Low fulfillment → suggests improvements to four primitives
 
 See [docs/discuss/commitment.md](../../docs/discuss/commitment.md) for full design discussion.
