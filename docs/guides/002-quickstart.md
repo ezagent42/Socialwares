@@ -21,7 +21,7 @@ uv sync
 make create ROOM=my-team APP=task-manager DESC="Task Manager"
 ```
 
-This copies the template (including a workspace `Makefile`), customizes SOUL files, and runs initial deploy. Fails if workspace already exists.
+This copies the template (including a workspace `Makefile` from `agent/Makefile.template`), customizes SOUL files, and runs initial deploy. Fails if workspace already exists.
 
 ## Step 3: Enter Your Workspace
 
@@ -34,8 +34,10 @@ cd .socialware/workspace/my-team/task-manager
 ## Step 4: Start the Agent
 
 ```bash
-make start                   # launches agent as default role
+make start                   # launches agent as default role (auto-deploys if needed)
 ```
+
+`make start` automatically runs deploy if sources have changed, so you do not need to run `make deploy` separately the first time.
 
 Try: "check health" — the agent runs the check_health skill.
 
@@ -109,3 +111,6 @@ make deploy
 ### Q: How does conversation logging work?
 - Shell mode: PostToolUse hook auto-captures to .runtime/data/conversations/
 - SDK mode: adapter's log_conversation() function
+
+### Q: Where do deploy and start run?
+Always from within a workspace (`cd .socialware/workspace/{room}/{app}`). The repo root Makefile only has `make create` and `make test` — running `make deploy` or `make start` at the root will display an error.

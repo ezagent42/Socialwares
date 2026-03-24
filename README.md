@@ -21,7 +21,7 @@ make create ROOM=my-team APP=task-manager DESC="Task Manager"
 # 4. Enter your workspace (all development happens here)
 cd .socialware/workspace/my-team/task-manager
 
-# 5. Start agent (ready — create already deployed)
+# 5. Start agent (auto-deploys if sources changed)
 make start
 
 # 6. Edit four primitives as you develop
@@ -38,46 +38,55 @@ make start ROLE=default
 
 ```
 socialwares/
-├── app/                          ← Frontend (Next.js: UI + Chat)
-├── src/                          ← Backend (FastAPI)
-│   ├── app.py                    ← API entry point (/health, /violations)
-│   └── start_agent.py            ← SDK mode Agent startup
+├── app/.gitkeep                  ← Frontend placeholder
+├── src/
+│   ├── __init__.py
+│   ├── app.py                    ← FastAPI (/health, /violations)
+│   └── start_agent.py            ← SDK mode launch
 ├── agent/                        ← Four primitives + toolchain
-│   ├── role/                     ← Who: Subagent identities
+│   ├── role/                     ← Who: flat .md files (one per role)
 │   │   ├── default.md            ← App user role
 │   │   ├── dev.md                ← Developer role (env setup)
 │   │   └── evolver.md            ← Evolver role (diagnose + improve)
 │   ├── scope/                    ← Where: App capability boundary
 │   │   └── scope.md
 │   ├── commitment/               ← What: Constraints on flow edges
-│   │   └── constraints.yaml
+│   │   └── constraints.yaml      ← Unified schema: from/to/condition/on_violation
 │   ├── flow/                     ← How: Skills + action registry
 │   │   ├── flow.yaml             ← Action registry (roles → actions)
 │   │   ├── check_health/         ← default + dev + evolver
-│   │   ├── inspect/              ← default + dev + evolver
+│   │   ├── inspect/              ← dev + evolver
 │   │   ├── setup_claude/         ← dev only
 │   │   ├── evolve_diagnose/      ← evolver only (+ scripts/diagnose.py)
 │   │   ├── evolve_eval/          ← evolver only (+ scripts/run_eval.py)
 │   │   ├── evolve_improve/       ← evolver only
 │   │   └── evolve_auto/          ← evolver only (+ scripts/run_loop.py)
+│   ├── adapters/                 ← Platform adapters (Claude/Codex/Kimi)
+│   │   ├── base.py
+│   │   ├── claude/ (shell.sh + sdk.py)
+│   │   ├── codex/ (shell.sh + sdk.py)
+│   │   └── kimicode/ (shell.sh + sdk.py)
+│   ├── Makefile.template         ← Source for workspace Makefile
 │   ├── deploy.sh                 ← Compile four primitives → .runtime/
-│   ├── start.sh                  ← Launch agent (requires deploy first)
-│   └── adapters/                 ← Platform adapters (Claude/Codex/Kimi)
+│   └── start.sh                  ← Launch agent (requires deploy first)
 ├── Makefile                      ← Root: make create + make test only
 ├── scripts/
 │   └── create-my-socialware.py   ← Create new App instance
 ├── claude.sh                     ← Claude Code launcher (agent-setup)
 ├── .socialware/workspace/        ← Workspace instances (each has its own Makefile)
 ├── tests/
-└── docs/
-    └── guides/                   ← User guides (architecture, quickstart, etc.)
+├── docs/
+│   ├── discuss/commitment.md     ← Commitment design discussion
+│   ├── designs/
+│   └── guides/                   ← User guides (architecture, quickstart, etc.)
+└── pyproject.toml
 ```
 
 Each workspace has its own `Makefile` (copied from `agent/Makefile.template` during `make create`):
 
 ```
 .socialware/workspace/{room}/{app}/
-├── Makefile                      ← make deploy / make start / make clean
+├── Makefile                      ← make deploy / make start / make test / make clean
 ├── agent/                        ← Four primitives + toolchain
 │   └── Makefile.template         ← Template for workspace Makefile
 ├── src/
@@ -92,7 +101,7 @@ Each Socialware App defines Agent behavior through four primitives in `agent/`:
 
 ### Role — Who
 
-Subagent identities. Each role gets its own `.md` file and a filtered set of skills (from flow.yaml).
+Subagent identities. Each role gets its own flat `.md` file and a filtered set of skills (from flow.yaml).
 
 | Role | Purpose | Skills |
 |------|---------|--------|
@@ -108,29 +117,26 @@ App capability boundary via `scope/scope.md`.
 - **External**: Public description (other Agents read this to decide delegation)
 - **Participation**: Who can join, minimum members
 
-### Commitment — What (Constraints)
+### Commitment — What (Constraints on Flow Edges)
 
-Constraints bind to flow edges — enforce time, quality, or certainty on state transitions.
+Commitment constrains the edges of the flow graph — what must be true between two role-actions. Uses a unified schema:
 
 ```yaml
 # agent/commitment/constraints.yaml
-transition_constraints:
+commitments:
   C1:
-    description: "Review within 72h"
-    on: { flow: F1, from: submitted, action: review }
-    type: time
-    deadline: 72h
-    on_violation:
-      trigger_action: force_resolve
-      trigger_role: admin
+    from: { role: coder, action: submit_code }
+    to:   { role: pm, action: review_code }
+    condition: "within 24h"
+    on_violation: { role: tech_lead, action: escalate }
 ```
 
-**Violation lifecycle:**
-1. App backend detects violation → writes to `.runtime/data/violations/current.jsonl`
-2. On session start → hook notifies the responsible role
-3. Role handles it (e.g., admin force_resolves)
+- `from` — edge start: who did what (trigger)
+- `to` — edge end: who must do what (responsible party)
+- `condition` — natural language condition that must be true
+- `on_violation` — escalation when condition is not met
 
-Detection is the app developer's responsibility. See [agent/commitment/README.md](agent/commitment/README.md) for implementation guide.
+See [docs/discuss/commitment.md](docs/discuss/commitment.md) for full design discussion.
 
 ### Flow — How
 
@@ -141,13 +147,14 @@ Actions the Agent can execute, registered in `flow.yaml`:
 direct_actions:
   - { action: check_health,     role: [default, dev, evolver], description: "Check app health" }
   - { action: setup_claude,     role: [dev],                   description: "Configure Claude Code" }
+  - { action: inspect,          role: [dev, evolver],          description: "Show project structure" }
   - { action: evolve_diagnose,  role: [evolver],               description: "Diagnose from runtime data" }
   - { action: evolve_eval,      role: [evolver],               description: "Run eval cases" }
   - { action: evolve_improve,   role: [evolver],               description: "Apply improvements" }
   - { action: evolve_auto,      role: [evolver],               description: "Automated evolution loop" }
 ```
 
-Each action has a `SKILL.md` (+ optional `scripts/`). `deploy.sh` reads `flow.yaml` and only symlinks actions allowed for each role.
+Each action has a `SKILL.md` (+ optional `scripts/`). `deploy.sh` reads `flow.yaml` and copies only the actions allowed for each role into `.runtime/`.
 
 ## Workflows
 
@@ -158,10 +165,12 @@ Run from within a workspace. Not available at repo root.
 Compiles `agent/` four primitives into `.runtime/`. Idempotent — detects added/removed roles and skills.
 
 What it generates per role:
-- `.claude/skills/` — symlinks to allowed flow/ actions (per flow.yaml)
+- `.claude/skills/` — copies of allowed flow/ actions (per flow.yaml)
 - `.claude/hooks/log_action.sh` — PostToolUse hook for conversation logging
 - `.claude/hooks/check_violations.sh` — SessionStart hook for violation notifications
+- `.claude/settings.local.json` — registers hooks
 - `SOUL.md` — merged scope/scope.md + role/{name}.md
+- `.workspace_root` — marker pointing to workspace root
 - `constraints.yaml` — copied from commitment/
 - `flow.yaml` — copied for reference
 
@@ -176,11 +185,15 @@ What it generates per role:
     ├── default/                ← default role's $PROJECT_DIR
     │   ├── .claude/skills/     ← check_health (per flow.yaml)
     │   ├── .claude/hooks/      ← log_action.sh + check_violations.sh
+    │   ├── .claude/settings.local.json
+    │   ├── .workspace_root
     │   ├── SOUL.md
     │   └── constraints.yaml
     └── evolver/                ← evolver role's $PROJECT_DIR
-        ├── .claude/skills/     ← diagnose + eval + improve + auto
+        ├── .claude/skills/     ← diagnose + eval + improve + auto + inspect + check_health
         ├── .claude/hooks/
+        ├── .claude/settings.local.json
+        ├── .workspace_root
         ├── SOUL.md
         └── constraints.yaml
 ```
@@ -189,7 +202,7 @@ What it generates per role:
 
 Run from within a workspace. Not available at repo root.
 
-Launches agent. Requires `.runtime/` to exist (run `make deploy` or `./agent/deploy.sh` first).
+Launches agent. Requires `.runtime/` to exist (run `make deploy` or `./agent/deploy.sh` first). When using `make start`, deploy is automatic.
 
 ```bash
 ./agent/start.sh --role default              # App user
@@ -228,10 +241,8 @@ Written by PostToolUse hook (shell mode) or adapter (SDK mode):
 Written by app backend when constraints are violated:
 
 ```json
-{"id": "v-001", "constraint": "C1", "description": "review overdue 72h", "trigger_action": "force_resolve", "trigger_role": "admin", "detected_at": "2026-03-20T10:00:00Z", "resolved": false}
+{"id": "v-001", "constraint": "C1", "description": "review overdue 24h", "detected_at": "2026-03-20T10:00:00Z", "resolved": false}
 ```
-
-API endpoints: `GET /violations`, `POST /violations/{id}/resolve`
 
 ## Evolver
 
@@ -239,21 +250,23 @@ Built-in role for improving your app based on runtime evidence.
 
 | Skill | Mode | What it does |
 |-------|------|-------------|
-| `evolve_diagnose` | Manual | Scan conversations + violations → diagnostic report |
-| `evolve_eval` | Manual | Run eval_cases.yaml → score |
+| `evolve_diagnose` | Manual | Scan conversations + constraints → diagnostic report |
+| `evolve_eval` | Manual | Run eval_cases.yaml → score (api_checks + conversation_checks) |
 | `evolve_improve` | Manual | Map problems to primitives → propose + apply changes |
 | `evolve_auto` | Auto | Automated loop: evaluate → diagnose → propose → apply → re-evaluate |
 
 ```bash
 # From within a workspace:
-./agent/start.sh --role evolver
-# "diagnose"       → analyze runtime data
+make start ROLE=evolver
+# "diagnose"       → analyze runtime data, compute fulfillment rates
 # "evaluate"       → run eval cases, report score
 # "improve"        → fix issues based on evidence
 # "auto-optimize"  → automated improvement loop
 ```
 
-See [docs/guides/using-evolver.md](docs/guides/using-evolver.md) for full guide.
+Fulfillment rate = fulfilled / total per commitment. The evolver reads conversation logs, checks each commitment's condition, and maps low fulfillment to specific four-primitive improvements.
+
+See [docs/guides/004-commitment-and-evolve.md](docs/guides/004-commitment-and-evolve.md) for full guide.
 
 ## Platform Adapters
 
@@ -284,7 +297,7 @@ uv sync
 make test        # run template tests
 make create ROOM=dev APP=sandbox DESC="Development sandbox"
 cd .socialware/workspace/dev/sandbox
-make deploy && make start
+make start       # auto-deploys, then starts
 ```
 
 ## License

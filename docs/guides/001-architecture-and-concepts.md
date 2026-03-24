@@ -17,6 +17,54 @@ User → Login → Session (role assigned)
   → API checks constraints → response back to chat
 ```
 
+## Directory Structure
+
+```
+socialwares/
+├── app/.gitkeep                  ← Frontend placeholder
+├── src/
+│   ├── __init__.py
+│   ├── app.py                    ← FastAPI (/health, /violations)
+│   └── start_agent.py            ← SDK mode launch
+├── agent/                        ← Four primitives + toolchain
+│   ├── role/                     ← Flat .md files (one per role)
+│   │   ├── default.md
+│   │   ├── dev.md
+│   │   └── evolver.md
+│   ├── scope/
+│   │   └── scope.md              ← App capability boundary
+│   ├── commitment/
+│   │   └── constraints.yaml      ← Unified schema: from/to/condition/on_violation
+│   ├── flow/
+│   │   ├── flow.yaml             ← Action registry (roles → actions)
+│   │   ├── check_health/SKILL.md
+│   │   ├── setup_claude/SKILL.md
+│   │   ├── inspect/SKILL.md
+│   │   ├── evolve_diagnose/SKILL.md + scripts/diagnose.py
+│   │   ├── evolve_eval/SKILL.md + scripts/run_eval.py + eval_cases.yaml
+│   │   ├── evolve_improve/SKILL.md
+│   │   └── evolve_auto/SKILL.md + scripts/run_loop.py
+│   ├── adapters/                 ← Platform adapters (Claude/Codex/Kimi)
+│   │   ├── base.py
+│   │   ├── claude/ (shell.sh + sdk.py)
+│   │   ├── codex/ (shell.sh + sdk.py)
+│   │   └── kimicode/ (shell.sh + sdk.py)
+│   ├── Makefile.template         ← Source for workspace Makefile
+│   ├── deploy.sh                 ← Compile four primitives → .runtime/
+│   └── start.sh                  ← Launch agent (requires deploy first)
+├── Makefile                      ← Root: make create + make test only
+├── scripts/
+│   └── create-my-socialware.py   ← Create new App instance
+├── claude.sh                     ← Claude Code launcher (agent-setup)
+├── .socialware/workspace/        ← Workspace instances
+├── tests/
+├── docs/
+│   ├── discuss/commitment.md     ← Commitment design discussion
+│   ├── designs/
+│   └── guides/ (001-005)
+└── pyproject.toml
+```
+
 ## Four Primitives
 
 Every Socialware App defines Agent behavior through four primitives:
@@ -34,7 +82,7 @@ Every Socialware App defines Agent behavior through four primitives:
 |------|---------|--------|
 | `default` | App user | check_health |
 | `dev` | Developer (env setup, project nav) | check_health, setup_claude, inspect |
-| `evolver` | Diagnose + improve | diagnose, eval, improve, auto, inspect |
+| `evolver` | Diagnose + improve | check_health, inspect, diagnose, eval, improve, auto |
 
 ## Progressive Growth
 
@@ -68,3 +116,26 @@ Each workspace is a self-contained copy of the template. Deploy and start only h
 - Each workspace has its own dependencies (pyproject.toml)
 - `.runtime/` is gitignored — only exists inside workspaces, never at repo root
 - Root Makefile only provides `make create` and `make test`
+
+## Makefile Split
+
+| Makefile | Location | Commands |
+|----------|----------|----------|
+| Root Makefile | `socialwares/Makefile` | `make create`, `make test` |
+| Workspace Makefile | `.socialware/workspace/{room}/{app}/Makefile` | `make deploy`, `make start`, `make test`, `make clean` |
+| Makefile.template | `agent/Makefile.template` | Source copied to workspace during `make create` |
+
+## Commitment: Unified Schema
+
+Commitment constrains the edges of the flow graph — what must be true between two role-actions. Every commitment uses the same four fields:
+
+```yaml
+commitments:
+  C1:
+    from: { role: coder, action: submit_code }
+    to:   { role: pm, action: review_code }
+    condition: "within 24h"
+    on_violation: { role: tech_lead, action: escalate }
+```
+
+See [docs/discuss/commitment.md](../discuss/commitment.md) for full design discussion.

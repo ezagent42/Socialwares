@@ -8,12 +8,23 @@ Defines operations the Agent can execute (Skills) and their state machines.
 flow/
 ├── flow.yaml             ← Action registry: state machines + direct actions
 ├── check_health/
-│   └── SKILL.md          ← Skill definition (how to execute this action)
+│   └── SKILL.md
 ├── setup_claude/
 │   └── SKILL.md
-└── create_task/
+├── inspect/
+│   └── SKILL.md
+├── evolve_diagnose/
+│   ├── SKILL.md
+│   └── scripts/diagnose.py
+├── evolve_eval/
+│   ├── SKILL.md
+│   ├── scripts/run_eval.py
+│   └── eval_cases.yaml
+├── evolve_improve/
+│   └── SKILL.md
+└── evolve_auto/
     ├── SKILL.md
-    └── scripts/          ← Optional: helper scripts
+    └── scripts/run_loop.py
 ```
 
 ## flow.yaml — Action Registry
@@ -36,16 +47,18 @@ flows:
 
 ```yaml
 direct_actions:
-  - { action: check_health, role: [default, dev], description: "Check app health" }
+  - { action: check_health, role: [default, dev, evolver], description: "Check app health" }
   - { action: setup_claude, role: [dev], description: "Configure Claude Code" }
+  - { action: inspect, role: [dev, evolver], description: "Show project structure" }
 ```
 
 ## Role-Based Skill Allocation
 
-`deploy.sh` reads `flow.yaml` and only symlinks actions allowed for each role:
+`deploy.sh` reads `flow.yaml` and **copies** (not symlinks) only the actions allowed for each role into `.runtime/agents/{name}/.claude/skills/`. Copying prevents accidental modification of the template source.
 
 - `default` role → gets `check_health` skill only
-- `dev` role → gets `check_health` + `setup_claude` skills
+- `dev` role → gets `check_health` + `setup_claude` + `inspect` skills
+- `evolver` role → gets `check_health` + `inspect` + all `evolve_*` skills
 
 ## SKILL.md Format
 
@@ -64,3 +77,4 @@ Followed by Markdown: trigger conditions, execution steps, API calls.
 - Permissions are checked by the App API
 - flow.yaml is the single source of truth for "what actions exist and who can use them"
 - SKILL.md is "how to execute the action"
+- Skills are **copies** in `.runtime/`, not symlinks — safe to modify template without affecting deployed agents

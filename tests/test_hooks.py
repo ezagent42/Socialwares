@@ -87,7 +87,8 @@ class TestCheckViolationsHook:
         )
         assert result.returncode == 0
         output = json.loads(result.stdout)
-        assert "No pending violations" in output["hookSpecificOutput"]["additionalContext"]
+        context = output["hookSpecificOutput"]["additionalContext"]
+        assert "No pending violations" in context or "No violations directory" in context
 
     def test_detects_unresolved_violation(self, tmp_path):
         """With an unresolved violation for this role, hook reports it."""

@@ -2,7 +2,7 @@
 
 ## claude.sh — First-Time Setup
 
-`claude.sh` is a tmux-based launcher that auto-installs the [agent-setup](https://github.com/ezagent42/agent-setup) plugin.
+`claude.sh` at the repo root is a tmux-based launcher that auto-installs the [agent-setup](https://github.com/ezagent42/agent-setup) plugin.
 
 ```bash
 # From repo root (first-time template setup)
@@ -35,11 +35,13 @@ make start ROLE=dev
 # In Claude Code: "setup claude"
 ```
 
-This runs two commands directly (no claude.sh needed):
+The dev role's `setup_claude` skill runs two plugin commands directly (no claude.sh needed):
 ```bash
 claude plugin marketplace add https://github.com/ezagent42/agent-setup
 claude plugin install agent-setup@agent-setup --scope project
 ```
+
+This sets up the Claude Code environment within the workspace context, using the workspace's `.runtime/agents/dev/` as the project directory.
 
 ## claude.sh vs dev role vs start.sh
 

@@ -1,15 +1,16 @@
 # Scope — Where
 
-Defines the App's capability boundary and public identity via scope.md.
+Defines the App's capability boundary and public identity via `scope.md`.
 
 ## What Scope Means
 
-Scope serves two purposes:
+Scope serves three purposes:
 
 - **Internal (boundary)**: What the Agent can and cannot do.
   Constrains Agent behavior — operations outside scope should be refused.
 - **External (declaration)**: Public description of this App's capabilities.
   Other Agents read this to decide whether to delegate tasks here (via /zchat).
+- **Participation**: Who can join, minimum members.
 
 This combines what SwSim called "Arena" (participation boundary: who can enter,
 minimum participants) with the Agent's identity declaration.
