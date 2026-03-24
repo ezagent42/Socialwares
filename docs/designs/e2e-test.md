@@ -53,7 +53,7 @@ ls .runtime/agents/evolver/.claude/skills/
 # Expected: check_health, evolve_auto, evolve_diagnose, evolve_eval, evolve_improve, inspect
 
 ls .runtime/agents/default/.claude/hooks/
-# Expected: check_violations.sh  log_action.sh
+# Expected: log_prompt.sh  log_tool.sh
 ```
 
 ### 1.3 Check SOUL.md merge
@@ -330,35 +330,39 @@ curl http://localhost:8001/health
 kill %1
 ```
 
-### 4.3 Violations hook
+### 4.3 Logging hooks
 
 | | |
 |---|---|
-| **Action** | Check hook exists and is executable |
-| **Purpose** | Verify deploy generates violations hook |
-| **Verify** | check_violations.sh is executable |
+| **Action** | Check hooks exist and are executable |
+| **Purpose** | Verify deploy generates logging hooks |
+| **Verify** | log_prompt.sh and log_tool.sh are executable |
 
 ```bash
 # From within workspace:
-ls -la .runtime/agents/default/.claude/hooks/check_violations.sh
+ls -la .runtime/agents/default/.claude/hooks/log_prompt.sh
+# Expected: -rwxr-xr-x
+ls -la .runtime/agents/default/.claude/hooks/log_tool.sh
 # Expected: -rwxr-xr-x
 ```
 
 ---
 
-## 5. Conversation Logging
+## 5. Prompt & Tool Logging
 
-### 5.1 Logging hook exists
+### 5.1 Logging hooks exist
 
 | | |
 |---|---|
-| **Action** | Check log_action.sh hook |
-| **Purpose** | Verify deploy generates logging hook |
-| **Verify** | log_action.sh is executable |
+| **Action** | Check log_prompt.sh and log_tool.sh hooks |
+| **Purpose** | Verify deploy generates logging hooks |
+| **Verify** | log_prompt.sh and log_tool.sh are executable |
 
 ```bash
 # From within workspace:
-ls -la .runtime/agents/default/.claude/hooks/log_action.sh
+ls -la .runtime/agents/default/.claude/hooks/log_prompt.sh
+# Expected: -rwxr-xr-x
+ls -la .runtime/agents/default/.claude/hooks/log_tool.sh
 # Expected: -rwxr-xr-x
 ```
 
@@ -393,7 +397,7 @@ make start ROLE=evolver
 ```bash
 uv run agent/flow/evolve_diagnose/scripts/diagnose.py \
   --data-dir .runtime/data \
-  --constraints agent/commitment/commitment.yaml
+  --commitment agent/commitment/commitment.yaml
 # Expected: DIAGNOSTIC REPORT with "No conversation data yet"
 ```
 
@@ -528,29 +532,24 @@ cat .runtime/agents/default/.workspace_root
 |---|---|
 | **Action** | Run hook scripts manually with test data |
 | **Purpose** | Verify hooks actually execute and produce output |
-| **Verify** | conversation log written, violations detected |
+| **Verify** | prompt and tool logs written |
 
 ```bash
-# Test conversation logging hook
-mkdir -p .runtime/data/conversations
+# Test prompt logging hook (UserPromptSubmit)
+mkdir -p .runtime/data/prompts
+echo '{"prompt":"hello"}' | \
+  bash .runtime/agents/default/.claude/hooks/log_prompt.sh
+cat .runtime/data/prompts/current.jsonl
+# Should have a JSONL entry with timestamp + prompt
+
+# Test tool logging hook (PreToolUse)
 echo '{"tool_name":"Bash","tool_input":{"command":"test"}}' | \
-  bash .runtime/agents/default/.claude/hooks/log_action.sh
-cat .runtime/data/conversations/current.jsonl
+  bash .runtime/agents/default/.claude/hooks/log_tool.sh
+cat .runtime/data/prompts/current.jsonl
 # Should have a JSONL entry with timestamp + tool name
 
-# Test violations hook with no violations
-bash .runtime/agents/default/.claude/hooks/check_violations.sh
-# Should output JSON with "No pending violations"
-
-# Test violations hook with a violation
-mkdir -p .runtime/data/violations
-echo '{"id":"v-001","constraint":"C1","description":"test","trigger_role":"default","resolved":false}' \
-  > .runtime/data/violations/current.jsonl
-bash .runtime/agents/default/.claude/hooks/check_violations.sh
-# Should report "1 unresolved violation(s): C1: test"
-
 # Clean up test data
-rm -f .runtime/data/violations/current.jsonl .runtime/data/conversations/current.jsonl
+rm -f .runtime/data/prompts/current.jsonl
 ```
 
 ### 10.4 Add backend API

@@ -177,7 +177,7 @@ agent/flow/
 ├── evolve_improve/SKILL.md
 └── evolve_auto/
     ├── SKILL.md
-    └── scripts/run_loop.py
+    └── scripts/run_auto.py
 ```
 
 ### deploy.sh Processing

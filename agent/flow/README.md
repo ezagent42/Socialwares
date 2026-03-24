@@ -24,7 +24,7 @@ flow/
 │   └── SKILL.md
 └── evolve_auto/
     ├── SKILL.md
-    └── scripts/run_loop.py
+    └── scripts/run_auto.py
 ```
 
 ## flow.yaml — Action Registry

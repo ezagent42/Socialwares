@@ -60,7 +60,7 @@ socialwares/
 │   │   ├── evolve_diagnose/      ← evolver only (+ scripts/diagnose.py)
 │   │   ├── evolve_eval/          ← evolver only (+ scripts/run_eval.py)
 │   │   ├── evolve_improve/       ← evolver only
-│   │   └── evolve_auto/          ← evolver only (+ scripts/run_loop.py)
+│   │   └── evolve_auto/          ← evolver only (+ scripts/run_auto.py)
 │   ├── adapters/                 ← Platform adapters (Claude/Codex/Kimi)
 │   │   ├── base.py
 │   │   ├── claude/ (shell.sh + sdk.py)

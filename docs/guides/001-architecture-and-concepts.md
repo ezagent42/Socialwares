@@ -43,7 +43,7 @@ socialwares/
 │   │   ├── evolve_diagnose/SKILL.md + scripts/diagnose.py
 │   │   ├── evolve_eval/SKILL.md + scripts/run_eval.py + eval_cases.yaml
 │   │   ├── evolve_improve/SKILL.md
-│   │   └── evolve_auto/SKILL.md + scripts/run_loop.py
+│   │   └── evolve_auto/SKILL.md + scripts/run_auto.py
 │   ├── adapters/                 ← Platform adapters (Claude/Codex/Kimi)
 │   │   ├── base.py
 │   │   ├── claude/ (shell.sh + sdk.py)
