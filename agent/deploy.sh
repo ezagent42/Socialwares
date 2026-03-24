@@ -100,9 +100,15 @@ for role_dir in "$AGENT_DIR"/role/*/; do
     mkdir -p "$role_runtime/.claude/skills"
     mkdir -p "$role_runtime/.claude/hooks"
 
-    # Merge SOUL.md: scope/SOUL.md + role/{name}/SOUL.md
+    # Merge SOUL.md: app scope + agent scope (if exists) + role identity
     {
         cat "$AGENT_DIR/scope/SOUL.md" 2>/dev/null || true
+        if [ -f "$AGENT_DIR/scope/$role_name/SOUL.md" ]; then
+            echo ""
+            echo "---"
+            echo ""
+            cat "$AGENT_DIR/scope/$role_name/SOUL.md"
+        fi
         echo ""
         echo "---"
         echo ""
