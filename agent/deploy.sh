@@ -78,10 +78,14 @@ if [ -d "$RUNTIME_DIR/agents" ]; then
     done
 fi
 
+# Detect python command (python3 on Unix, python on Windows)
+PYTHON="python3"
+command -v python3 >/dev/null 2>&1 || PYTHON="python"
+
 # 3. Parse flow.yaml for role-action mapping (if pyyaml available)
 ROLE_ACTIONS=""
-if python3 -c "import yaml" 2>/dev/null; then
-    ROLE_ACTIONS=$(python3 -c "
+if $PYTHON -c "import yaml" 2>/dev/null; then
+    ROLE_ACTIONS=$($PYTHON -c "
 import yaml, json
 with open('$FLOW_YAML') as f:
     data = yaml.safe_load(f) or {}
@@ -122,7 +126,7 @@ for role_file in "$AGENT_DIR"/role/*.md; do
     # Symlink skills (filtered by flow.yaml)
     allowed_actions=""
     if [ -n "$ROLE_ACTIONS" ]; then
-        allowed_actions=$(echo "$ROLE_ACTIONS" | python3 -c "
+        allowed_actions=$(echo "$ROLE_ACTIONS" | $PYTHON -c "
 import json, sys
 data = json.load(sys.stdin)
 for a in data.get('$role_name', []):
@@ -144,7 +148,7 @@ for a in data.get('$role_name', []):
         [ -L "$link" ] && rm "$link"
         [ -d "$link" ] && rm -rf "$link"
         link_dir=$(dirname "$link")
-        target=$(python3 -c "import os.path; print(os.path.relpath('$skill_dir', '$link_dir'))")
+        target=$($PYTHON -c "import os.path; print(os.path.relpath('$skill_dir', '$link_dir'))")
         ln -s "$target" "$link"
         skill_count=$((skill_count + 1))
     done
@@ -166,18 +170,18 @@ for a in data.get('$role_name', []):
 set -euo pipefail
 INPUT=$(cat)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PY="python3"; command -v python3 >/dev/null 2>&1 || PY="python"
 
 # Find prompts directory
 if [ -f "$(cd "$SCRIPT_DIR" && pwd)/../../.workspace_root" ]; then
     WORKSPACE_ROOT=$(cat "$(cd "$SCRIPT_DIR" && pwd)/../../.workspace_root")
 else
-    # Fallback: navigate from hook location
     WORKSPACE_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 fi
 DATA_DIR="$WORKSPACE_ROOT/.runtime/data/prompts"
 mkdir -p "$DATA_DIR"
 
-python3 -c "
+$PY -c "
 import json, sys, os
 from datetime import datetime, timezone
 data = json.loads(sys.stdin.read())
@@ -203,6 +207,7 @@ HOOKEOF
 set -euo pipefail
 INPUT=$(cat)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PY="python3"; command -v python3 >/dev/null 2>&1 || PY="python"
 
 if [ -f "$(cd "$SCRIPT_DIR" && pwd)/../../.workspace_root" ]; then
     WORKSPACE_ROOT=$(cat "$(cd "$SCRIPT_DIR" && pwd)/../../.workspace_root")
@@ -212,7 +217,7 @@ fi
 DATA_DIR="$WORKSPACE_ROOT/.runtime/data/prompts"
 mkdir -p "$DATA_DIR"
 
-python3 -c "
+$PY -c "
 import json, sys, os
 from datetime import datetime, timezone
 data = json.loads(sys.stdin.read())
