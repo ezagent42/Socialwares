@@ -8,6 +8,7 @@ help: ## Show this help
 
 create: ## Create new workspace: make create ROOM=my-team APP=my-app DESC="description"
 	uv run scripts/create-my-socialware.py --room $(ROOM) --app $(APP) --description "$(or $(DESC),$(APP) Socialware App)"
+	$(MAKE) -C .socialware/workspace/$(ROOM)/$(APP) deploy
 	@echo ""
 	@echo "Next: cd .socialware/workspace/$(ROOM)/$(APP)"
 

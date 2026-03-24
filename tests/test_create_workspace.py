@@ -47,6 +47,14 @@ class TestCreateWorkspace:
 
             assert result.returncode == 0, f"Failed:\n{result.stderr}\n{result.stdout}"
 
+            # Run deploy (create no longer auto-deploys; Make handles it)
+            deploy_result = subprocess.run(
+                [str(workspace_dir / "agent" / "deploy.sh")],
+                capture_output=True, text=True,
+                cwd=str(workspace_dir),
+            )
+            assert deploy_result.returncode == 0, f"Deploy failed:\n{deploy_result.stderr}"
+
             # Check directory structure
             assert workspace_dir.exists()
             assert (workspace_dir / "src").is_dir()
@@ -73,9 +81,9 @@ class TestCreateWorkspace:
             makefile_content = (workspace_dir / "Makefile").read_text()
             assert "deploy" in makefile_content
 
-            # Check auto-deploy ran (.runtime/ should exist)
+            # Check deploy ran (.runtime/ should exist)
             assert (workspace_dir / ".runtime").is_dir(), \
-                ".runtime/ should exist — create runs initial deploy"
+                ".runtime/ should exist after deploy"
             assert (workspace_dir / ".runtime" / "agents" / "default").is_dir()
 
             # Check pyproject.toml copied with app name

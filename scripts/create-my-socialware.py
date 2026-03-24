@@ -140,27 +140,6 @@ Operate {app} according to user instructions.
         print(f"  Customized agent/role/default.md")
 
 
-def run_deploy(workspace_dir: Path) -> bool:
-    """Run deploy.sh from within the workspace."""
-    deploy_sh = workspace_dir / "agent" / "deploy.sh"
-    if not deploy_sh.exists():
-        print(f"  Warning: deploy.sh not found, skipping initial deploy")
-        return False
-
-    result = subprocess.run(
-        [str(deploy_sh)],
-        capture_output=True,
-        text=True,
-        cwd=str(workspace_dir),
-    )
-
-    if result.returncode == 0:
-        print(f"  Initial deploy complete")
-        return True
-    else:
-        print(f"  Deploy failed: {result.stderr}")
-        return False
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Create a new Socialware App instance")
@@ -189,9 +168,6 @@ def main() -> None:
     # 2. Customize
     customize_workspace(workspace_dir, app, description)
     print()
-
-    # 3. Initial deploy
-    run_deploy(workspace_dir)
 
     ws_rel = f".socialware/workspace/{room}/{app}"
     print()
