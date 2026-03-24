@@ -1,86 +1,213 @@
-# Evolve V3 — Hook + SDK + Evolver Improvement Plan
+# Evolve V3 — Hook + Deploy + SDK + Evolver Improvement Plan
 
-> Based on discussions about commitment execution, evolver mechanism, and agent startup modes.
+> Based on discussions about commitment execution, evolver mechanism, agent startup modes, and cross-platform compatibility.
 
 ---
 
-## 1. Hook 改进
+## 0. 三平台配置对照（已查实）
 
-### 设计原则
+| 配置项 | Claude Code | Codex CLI | Kimi Code |
+|--------|-------------|-----------|-----------|
+| **Skills 目录** | `.claude/skills/` | `.agents/skills/` | `.agents/skills/` (首选) 或 `.claude/skills/` |
+| **System prompt 文件** | `CLAUDE.md` | `AGENTS.md` | `AGENTS.md` |
+| **System prompt 注入** | `--append-system-prompt-file` | 自动读 `AGENTS.md` | 自动读 `AGENTS.md` |
+| **Hook 配置文件** | `.claude/settings.local.json` | `.codex/hooks.json` | ❌ 无 |
+| **Hook 格式** | `{ "hooks": { ... } }` | `{ "hooks": { ... } }` (几乎一致) | — |
+| **Hook feature gate** | 默认启用 | 需 `config.toml` 加 `codex_hooks = true` | — |
+| **项目配置** | `.claude/settings.json` (JSON) | `.codex/config.toml` (TOML) | 无项目级配置 |
+| **SDK** | `claude_agent_sdk` | `openai-agents` (内置 tracing) | ❌ 无 |
+| **支持的 Hook 类型** | SessionStart, PreToolUse, PostToolUse, UserPromptSubmit | SessionStart, PreToolUse, UserPromptSubmit, Stop | — |
 
-- Hook 用于 TUI 模式的数据采集（commitment 评估数据）
-- 只使用跨平台通用的 hook 类型
-- SDK 模式不依赖 hook（Python wrapper 自己记录）
+---
 
-### 跨平台 Hook 兼容性（已查实）
+## 1. deploy.sh 改进 — 按 adapter 生成配置
 
-| Hook | Claude Code | Codex CLI | Kimi Code | 收到什么 |
-|------|-------------|-----------|-----------|---------|
-| **UserPromptSubmit** | ✅ | ✅ | ❌ | `{ prompt }` — 用户输入文本 |
-| **PreToolUse** | ✅ | ✅ | ❌ | `{ tool_name, tool_input }` — 工具调用 |
-| PostToolUse | ✅ | ❌ | ❌ | `{ tool_name, tool_input, tool_response }` |
-| SessionStart | ✅ | ✅ | ❌ | `{ session_id, cwd }` |
+### 当前问题
 
-**选择 UserPromptSubmit + PreToolUse**（Claude + Codex 通用）。不用 PostToolUse（Codex 不支持）。
+deploy.sh 硬编码 `.claude/` 目录。只对 Claude Code 有效。
 
-**Kimi 不支持任何 hook** — TUI 模式无法自动采集数据。Kimi 用户只能通过 SDK 模式（如果有）或手动导出对话。需在文档中明确标注。
+### 改进方案
 
-### 两个 Hook 的职责
+deploy.sh 接收 `--adapter` 参数，根据平台生成不同的目录结构和配置。
 
-**UserPromptSubmit — 记录用户意图**
 ```bash
-# log_prompt.sh
-# 收到: { "prompt": "submit my code for review" }
-# 写入: .runtime/data/prompts/{role}.jsonl
-{"timestamp":"2026-03-24T10:00:00Z","role":"coder","type":"user_prompt","content":"submit my code for review"}
+./agent/deploy.sh                    # 默认 claude
+./agent/deploy.sh --adapter codex
+./agent/deploy.sh --adapter kimi
 ```
 
-**PreToolUse — 记录工具调用**
+### 每个 adapter 生成什么
+
+**Claude Code (`--adapter claude`):**
+```
+.runtime/agents/{role}/
+├── .claude/
+│   ├── skills/{action}/  → symlink to agent/flow/{action}/
+│   ├── hooks/
+│   │   ├── log_prompt.sh    (UserPromptSubmit)
+│   │   └── log_tool.sh      (PreToolUse)
+│   └── settings.local.json  (注册 hooks)
+├── SOUL.md                  (merged scope + role)
+├── .workspace_root
+├── commitment.yaml
+└── flow.yaml
+```
+
+**Codex CLI (`--adapter codex`):**
+```
+.runtime/agents/{role}/
+├── .agents/
+│   └── skills/{action}/  → symlink to agent/flow/{action}/
+├── .codex/
+│   ├── hooks.json           (注册 hooks，格式同 Claude 但文件不同)
+│   └── config.toml          (加 codex_hooks = true)
+├── AGENTS.md                (从 SOUL.md 复制，改名)
+├── .workspace_root
+├── commitment.yaml
+└── flow.yaml
+```
+
+**Kimi Code (`--adapter kimi`):**
+```
+.runtime/agents/{role}/
+├── .agents/
+│   └── skills/{action}/  → symlink to agent/flow/{action}/
+├── AGENTS.md                (从 SOUL.md 复制，改名)
+├── .workspace_root
+├── commitment.yaml
+└── flow.yaml
+# 无 hooks（Kimi 不支持）
+```
+
+### deploy.sh 内部结构
+
 ```bash
-# log_tool.sh
-# 收到: { "tool_name": "Bash", "tool_input": {"command": "curl -X POST /tasks/submit"} }
-# 写入: .runtime/data/prompts/{role}.jsonl (追加到同一文件)
-{"timestamp":"2026-03-24T10:00:05Z","role":"coder","type":"tool_call","tool":"Bash","input":{"command":"curl -X POST /tasks/submit"}}
+# 通用部分（所有 adapter 都做的）
+merge_soul()          # scope.md + role.md → SOUL.md/AGENTS.md
+copy_commitment()     # commitment.yaml
+copy_flow_yaml()      # flow.yaml
+write_workspace_root() # .workspace_root
+link_skills()         # symlink skills（目标目录由 adapter 决定）
+
+# adapter 专有部分
+case "$ADAPTER" in
+  claude)
+    SKILLS_DIR=".claude/skills"
+    PROMPT_FILE="SOUL.md"
+    generate_claude_hooks()    # settings.local.json + hook scripts
+    ;;
+  codex)
+    SKILLS_DIR=".agents/skills"
+    PROMPT_FILE="AGENTS.md"
+    generate_codex_hooks()     # .codex/hooks.json + .codex/config.toml + hook scripts
+    ;;
+  kimi)
+    SKILLS_DIR=".agents/skills"
+    PROMPT_FILE="AGENTS.md"
+    # 无 hooks
+    ;;
+esac
 ```
 
-两个 hook 写入同一个 JSONL 文件，按时间序排列：
+### Hook 生成（Claude 和 Codex 共用脚本，不同注册方式）
 
-```jsonl
-{"timestamp":"...","role":"coder","type":"user_prompt","content":"submit my code for review"}
-{"timestamp":"...","role":"coder","type":"tool_call","tool":"Bash","input":{"command":"curl -X POST /tasks/submit"}}
-{"timestamp":"...","role":"pm","type":"user_prompt","content":"review the submitted code"}
-{"timestamp":"...","role":"pm","type":"tool_call","tool":"Bash","input":{"command":"curl -X POST /tasks/review"}}
+**两个 hook 脚本是一样的**（平台无关的 bash 脚本）：
+
+`log_prompt.sh` (UserPromptSubmit):
+```bash
+#!/usr/bin/env bash
+# 收到 stdin: { "prompt": "用户输入", "session_id": "...", "cwd": "..." }
+INPUT=$(cat)
+# 提取 prompt，写入 JSONL
+python3 -c "
+import json, sys
+from datetime import datetime, timezone
+data = json.loads(sys.stdin.read())
+entry = {
+    'timestamp': datetime.now(timezone.utc).isoformat(),
+    'type': 'user_prompt',
+    'content': data.get('prompt', ''),
+    'session_id': data.get('session_id', ''),
+}
+# 写入 .runtime/data/prompts/
+..." <<< "$INPUT"
 ```
 
-Evolver 读这个文件 → LLM 匹配 commitment 的 from/to action → 计算履约率。不需要 commitment_watch.yaml（LLM 直接从自然语言匹配）。
-
-### 当前 → 改进
-
-| 当前 | 改进 |
-|------|------|
-| PostToolUse: log_action.sh (全量记录) | **替换为** PreToolUse: log_tool.sh |
-| SessionStart: check_violations.sh | **删除**（violations 由 evolver 管理，不需要 hook 广播） |
-| 无 UserPromptSubmit | **新增** UserPromptSubmit: log_prompt.sh |
-| settings.local.json 注册 2 个 hook | **改为** 注册 UserPromptSubmit + PreToolUse |
-
-### deploy.sh 生成内容
-
+`log_tool.sh` (PreToolUse):
+```bash
+#!/usr/bin/env bash
+# 收到 stdin: { "tool_name": "Bash", "tool_input": {...}, "session_id": "..." }
+INPUT=$(cat)
+python3 -c "
+import json, sys
+from datetime import datetime, timezone
+data = json.loads(sys.stdin.read())
+entry = {
+    'timestamp': datetime.now(timezone.utc).isoformat(),
+    'type': 'tool_call',
+    'tool': data.get('tool_name', ''),
+    'input': data.get('tool_input', {}),
+    'session_id': data.get('session_id', ''),
+}
+..." <<< "$INPUT"
 ```
-每个 role 的 .runtime/agents/{role}/:
-  .claude/hooks/log_prompt.sh        ← UserPromptSubmit hook
-  .claude/hooks/log_tool.sh          ← PreToolUse hook
-  .claude/settings.local.json        ← 注册这两个 hook
+
+**注册方式不同：**
+
+Claude — `.claude/settings.local.json`:
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "/path/log_prompt.sh" }] }],
+    "PreToolUse": [{ "hooks": [{ "type": "command", "command": "/path/log_tool.sh" }] }]
+  }
+}
 ```
 
-不再生成 commitment_watch.yaml（不需要）。
+Codex — `.codex/hooks.json`:
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "/path/log_prompt.sh" }] }],
+    "PreToolUse": [{ "hooks": [{ "type": "command", "command": "/path/log_tool.sh" }] }]
+  }
+}
+```
+
+Codex 还需要 `.codex/config.toml`:
+```toml
+[features]
+codex_hooks = true
+```
+
+### Makefile.template 更新
+
+```makefile
+# 默认 adapter
+ADAPTER ?= claude
+
+deploy: $(STAMP)
+
+$(STAMP): $(SOURCES)
+	./$(AGENT_DIR)/deploy.sh --adapter $(ADAPTER)
+	@mkdir -p $(RUNTIME)
+	@touch $@
+
+start: deploy
+	./$(AGENT_DIR)/start.sh --role $(or $(ROLE),default) --adapter $(ADAPTER)
+
+run: deploy  ## SDK mode: make run ROLE=default
+	uv run src/start_agent.py --role $(or $(ROLE),default) --adapter $(ADAPTER)
+```
 
 ### 需要实现
 
 | 文件 | 操作 |
 |------|------|
-| `agent/deploy.sh` | 重写 hook 生成：log_prompt.sh + log_tool.sh，去掉 check_violations.sh |
-| `agent/deploy.sh` | settings.local.json 改为注册 UserPromptSubmit + PreToolUse |
-| 测试 | 重写 test_hooks.py（测试新 hook），更新 test_deploy.py |
+| `agent/deploy.sh` | 重写：加 --adapter 参数，按平台生成不同目录/配置 |
+| `agent/Makefile.template` | 加 ADAPTER 变量 + run target |
+| `agent/start.sh` | 已有 --adapter 支持，保持 |
+| 测试 | 更新 test_deploy.py（测试不同 adapter 输出） |
 
 ---
 
@@ -91,83 +218,98 @@ Evolver 读这个文件 → LLM 匹配 commitment 的 from/to action → 计算�
 | | TUI 模式 | SDK 模式 |
 |---|---|---|
 | **用途** | 开发调试 | 业务运行 / evolver 自动测试 |
-| **启动** | `make start ROLE=X` → start.sh → shell adapter | `make run ROLE=X` → start_agent.py → SDK adapter |
+| **启动** | `make start` → start.sh → shell adapter | `make run` → start_agent.py → SDK adapter |
 | **交互** | 人在终端对话 | 程序发消息、收回复 |
-| **数据采集** | hook (UserPromptSubmit + PreToolUse) | Python wrapper 保存完整对话 |
-| **配置加载** | 自动读 .claude/ | 需要 `setting_sources=["project","local"]` |
+| **数据采集** | hooks (Claude/Codex) 或 无 (Kimi) | Python wrapper 保存完整对话 |
 
-### TUI 模式（保持现有 + 更新 hook）
+### TUI 模式 — shell adapter
 
 ```
-start.sh → adapter/shell.sh → exec claude/codex/kimi
+start.sh --role X --adapter Y → agent/adapters/Y/shell.sh
 ```
 
-- Claude/Codex: hooks 自动工作，采集 prompt + tool 数据
-- Kimi: 无 hook，TUI 不采集数据（文档标注）
+| adapter | 命令 | prompt 注入 |
+|---------|------|-----------|
+| claude | `claude --dangerously-skip-permissions --append-system-prompt-file SOUL.md` | SOUL.md (CLI flag) |
+| codex | `codex --cd $dir --full-auto` | 自动读 AGENTS.md |
+| kimi | `kimi --work-dir $dir --yolo` | 自动读 AGENTS.md |
 
-### SDK 模式（需要重写 adapter）
+shell adapter 不需要大改——只是 deploy 生成的目录/文件名不同。
 
-参考 autoservice 实现。SDK wrapper 完整记录对话。
+### SDK 模式 — Python adapter
+
+```
+start_agent.py --role X --adapter Y → agent/adapters/Y/sdk.py
+```
 
 **Claude SDK adapter:**
 ```python
-async def launch_sdk(self, prompt: str) -> AsyncIterator[Any]:
-    from claude_agent_sdk import query, ClaudeAgentOptions
-    options = ClaudeAgentOptions(
-        cwd=str(self.config.project_dir),
-        system_prompt=self.config.soul,
-        setting_sources=["project", "local"],  # hooks + skills 都加载
-    )
-    async for message in query(prompt=prompt, options=options):
-        yield message
+class ClaudeAdapter(BaseAdapter):
+    async def launch_sdk(self, prompt: str) -> AsyncIterator[Any]:
+        from claude_agent_sdk import query, ClaudeAgentOptions
+        options = ClaudeAgentOptions(
+            cwd=str(self.config.project_dir),
+            system_prompt=self.config.soul,
+            setting_sources=["project", "local"],  # 加载 .claude/ (hooks + skills)
+        )
+        async for message in query(prompt=prompt, options=options):
+            yield message
 ```
 
 **Codex SDK adapter:**
 ```python
-async def launch_sdk(self, prompt: str) -> AsyncIterator[Any]:
-    from agents import Agent, Runner
-    agent = Agent(name=self.config.name, instructions=self.config.soul)
-    result = await Runner.run(agent, prompt)
-    # OpenAI Agents SDK 内置 tracing，自动记录
-    yield result
+class CodexAdapter(BaseAdapter):
+    async def launch_sdk(self, prompt: str) -> AsyncIterator[Any]:
+        from agents import Agent, Runner
+        agent = Agent(
+            name=self.config.name,
+            instructions=self.config.soul,
+        )
+        # OpenAI Agents SDK 内置 tracing，自动记录到 OpenAI dashboard
+        # 本地保存需要 add_trace_processor()
+        result = await Runner.run(agent, prompt)
+        yield result
 ```
 
 **Kimi adapter:**
 ```python
-async def launch_sdk(self, prompt: str) -> AsyncIterator[Any]:
-    raise NotImplementedError("Kimi Code has no SDK. Use TUI mode.")
+class KimiCodeAdapter(BaseAdapter):
+    async def launch_sdk(self, prompt: str) -> AsyncIterator[Any]:
+        raise NotImplementedError(
+            "Kimi Code has no SDK. Use TUI mode (make start)."
+        )
 ```
 
-### Skill 目录兼容性（已查实）
-
-| 平台 | Skill 目录 |
-|------|-----------|
-| Claude Code | `.claude/skills/` |
-| Codex CLI | `.agents/skills/` |
-| Kimi Code | `.agents/skills/` 或 `.claude/skills/` |
-
-deploy.sh 当前生成到 `.claude/skills/`。对于 Codex/Kimi 需要同时生成到 `.agents/skills/`（或用 symlink）。
-
-### BaseAdapter 接口变更
+### BaseAdapter 接口
 
 ```python
 class BaseAdapter(abc.ABC):
+    def __init__(self, config: RoleConfig) -> None:
+        self.config = config
+
     @abc.abstractmethod
     def launch_shell(self) -> None:
-        """TUI mode — interactive, dev use."""
+        """TUI mode — interactive terminal."""
 
     @abc.abstractmethod
     async def launch_sdk(self, prompt: str) -> AsyncIterator[Any]:
-        """SDK mode — programmatic, full conversation capture."""
+        """SDK mode — programmatic, yields messages."""
 ```
 
 ### 对话保存
 
-SDK 模式保存完整 session 到 `.runtime/data/sessions/`:
+SDK wrapper（在 `start_agent.py` 层面）保存完整 session：
+
+```
+.runtime/data/sessions/
+└── {role}_session_{YYYYMMDD_HHMMSS}.json
+```
+
 ```json
 {
   "session_id": "session_20260324_120000",
   "role": "default",
+  "adapter": "claude",
   "started_at": "2026-03-24T12:00:00Z",
   "messages": [
     {"role": "user", "content": "submit my code"},
@@ -181,13 +323,15 @@ SDK 模式保存完整 session 到 `.runtime/data/sessions/`:
 
 | 文件 | 操作 |
 |------|------|
-| `agent/adapters/base.py` | launch_sdk 改为 async generator + 加 save_session |
-| `agent/adapters/claude/sdk.py` | 重写：用 claude_agent_sdk，加 setting_sources |
-| `agent/adapters/codex/sdk.py` | 重写：用 openai-agents，内置 tracing |
+| `agent/adapters/base.py` | launch_sdk 改为 async generator |
+| `agent/adapters/claude/sdk.py` | 重写：用 claude_agent_sdk + setting_sources |
+| `agent/adapters/claude/shell.sh` | 保持（deploy 已生成正确的 SOUL.md） |
+| `agent/adapters/codex/sdk.py` | 重写：用 openai-agents + tracing |
+| `agent/adapters/codex/shell.sh` | 保持（deploy 已生成正确的 AGENTS.md） |
 | `agent/adapters/kimicode/sdk.py` | 标注 NotImplementedError |
-| `src/start_agent.py` | 改为 async，消费 launch_sdk |
-| `agent/Makefile.template` | 加 `run` target (SDK 模式) |
-| `agent/deploy.sh` | 为 Codex/Kimi 同时生成 .agents/skills/ |
+| `agent/adapters/kimicode/shell.sh` | 保持（deploy 已生成正确的 AGENTS.md） |
+| `src/start_agent.py` | 改为 async + 保存 session JSON |
+| `agent/Makefile.template` | 加 `ADAPTER` 变量 + `run` target |
 
 ---
 
@@ -195,11 +339,11 @@ SDK 模式保存完整 session 到 `.runtime/data/sessions/`:
 
 ### 数据来源
 
-| 来源 | 由谁产生 | 格式 | 位置 |
-|------|---------|------|------|
-| Hook 日志 | TUI 模式的 hook | JSONL (prompt + tool) | `.runtime/data/prompts/{role}.jsonl` |
-| SDK 完整对话 | SDK 模式的 wrapper | JSON (full session) | `.runtime/data/sessions/*.json` |
-| Evolver 自动测试 | evolve_auto 通过 SDK | JSON (test traces) | `.runtime/data/auto_tests/*.json` |
+| 来源 | 由谁产生 | 格式 | 位置 | 平台支持 |
+|------|---------|------|------|---------|
+| Hook 日志 | TUI 的 hook | JSONL (prompt + tool) | `.runtime/data/prompts/{role}.jsonl` | Claude ✅ Codex ✅ Kimi ❌ |
+| SDK 完整对话 | SDK wrapper | JSON (full session) | `.runtime/data/sessions/*.json` | Claude ✅ Codex ✅ Kimi ❌ |
+| 自动测试 trace | evolve_auto 的 SDK | JSON (test traces) | `.runtime/data/auto_tests/*.json` | Claude ✅ Codex ✅ Kimi ❌ |
 
 ### 功能清单
 
@@ -245,11 +389,11 @@ SDK 模式保存完整 session 到 `.runtime/data/sessions/`:
 做什么:
   1. 读 cursor → 只分析新数据
   2. 对每个 commitment: 从数据中匹配 from/to action → 计算履约率
-  3. 分析完整对话: scope 外请求？失败的操作？
+  3. 分析完整对话 (如有): scope 外请求？失败的操作？
   4. 更新 cursor + 写 violations
 输出:
   诊断报告 (stdout)
-  .runtime/data/violations/*.jsonl (如发现违约)
+  .runtime/data/violations/*.jsonl
   .runtime/data/evolve_state.yaml (更新 cursor)
 ```
 
@@ -271,34 +415,19 @@ SDK 模式保存完整 session 到 `.runtime/data/sessions/`:
 ```
 输入:
   eval_cases.yaml 的 conversation_checks
-  SDK adapter
+  SDK adapter (通过 start_agent.py 调用)
 需要: app 运行 + SDK 可用
 做什么:
   1. 对每个 conversation_check:
-     a. SDK 启动 agent
+     a. SDK 启动 agent (指定 role)
      b. 发送 input
-     c. 收集 trace (tool calls + 回复)
+     c. 收集 trace
      d. 检查: 选了 expected_skill？结果正确？
   2. 打分
   3. 失败 trace → 分析原因 → 建议改进
 输出:
   自动测试报告
   .runtime/data/auto_tests/*.json (traces)
-```
-
-### Evolver 使用时机
-
-```
-开发完一轮 (P2 加了 skills + API)
-  → "check structure" (纯静态)
-  → "evaluate" (API 测试，需 app 运行)
-
-运行一段时间后 (有 hook/SDK 数据)
-  → "diagnose" (分析对话 + 履约率)
-  → "improve" (根据诊断改进)
-
-主动改进 (有 eval_cases + SDK)
-  → "auto-test" (自动对话测试)
 ```
 
 ### evolve_state.yaml
@@ -334,41 +463,44 @@ last_analysis:
 
 | 功能 | Claude Code | Codex CLI | Kimi Code |
 |------|-------------|-----------|-----------|
-| TUI 启动 | ✅ | ✅ | ✅ |
-| SDK 启动 | ✅ claude_agent_sdk | ✅ openai-agents | ❌ 无 SDK |
-| Hook (UserPromptSubmit) | ✅ | ✅ | ❌ |
-| Hook (PreToolUse) | ✅ | ✅ | ❌ |
-| Skills 目录 | .claude/skills/ | .agents/skills/ | .agents/skills/ 或 .claude/skills/ |
+| TUI 启动 | ✅ `claude` | ✅ `codex` | ✅ `kimi` |
+| SDK 启动 | ✅ `claude_agent_sdk` | ✅ `openai-agents` | ❌ 无 SDK |
+| Skills 目录 | `.claude/skills/` | `.agents/skills/` | `.agents/skills/` |
+| Prompt 文件 | `SOUL.md` (CLI flag) | `AGENTS.md` (自动读) | `AGENTS.md` (自动读) |
+| Hook 配置 | `.claude/settings.local.json` | `.codex/hooks.json` + `config.toml` | ❌ 无 |
+| Hook: UserPromptSubmit | ✅ | ✅ (需 feature gate) | ❌ |
+| Hook: PreToolUse | ✅ | ✅ (需 feature gate) | ❌ |
 | **TUI 数据采集** | ✅ 两个 hook | ✅ 两个 hook | ❌ 不支持 |
 | **SDK 数据采集** | ✅ wrapper | ✅ 内置 tracing | ❌ 不支持 |
 | **Commitment 评估** | ✅ | ✅ | ❌ 无数据来源 |
 
-**Kimi Code 限制：** 无 hook、无 SDK，TUI 模式下无法自动采集数据。Commitment 评估不可用。如需 commitment 功能，建议使用 Claude Code 或 Codex。
+**Kimi Code 限制：** 无 hook、无 SDK、无项目级配置。TUI 模式下只有 skills 和 AGENTS.md 工作。Commitment 评估不可用。
 
 ---
 
 ## 5. 执行顺序
 
 ```
-Phase 1: Hook 改进
-  - deploy.sh: 替换为 log_prompt.sh + log_tool.sh
-  - 删除 check_violations.sh + SessionStart 注册
-  - 更新测试
+Phase 1: deploy.sh 重写
+  - 加 --adapter 参数
+  - 按平台生成不同目录 (.claude/ vs .agents/ vs .codex/)
+  - 按平台生成 hook 注册 (settings.local.json vs hooks.json vs 无)
+  - SOUL.md vs AGENTS.md 根据平台选择
+  - 更新 Makefile.template (ADAPTER 变量)
 
-Phase 2: SDK 模式
-  - 重写 adapters (claude/codex/kimi)
-  - 更新 base.py + start_agent.py
-  - 对话保存到 .runtime/data/sessions/
+Phase 2: SDK adapter 重写
+  - claude/sdk.py (claude_agent_sdk + setting_sources)
+  - codex/sdk.py (openai-agents + tracing)
+  - kimi/sdk.py (NotImplementedError)
+  - base.py (async generator 接口)
+  - start_agent.py (async + session 保存)
 
 Phase 3: Evolver 功能
-  - 新增 evolve_check
+  - 新增 evolve_check (结构检查)
   - 重写 diagnose.py (履约率 + cursor)
   - 重写 run_auto.py (SDK 自动对话)
 
-Phase 4: deploy.sh 跨平台
-  - 为 Codex/Kimi 生成 .agents/skills/ (除 .claude/skills/ 外)
-
-Phase 5: 文档
+Phase 4: 文档
   - 更新所有 guides + READMEs
-  - 明确标注 Kimi 限制
+  - 明确标注各平台限制
 ```
