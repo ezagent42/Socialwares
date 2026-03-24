@@ -39,3 +39,4 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+agent/flow/evolve_eval/last_eval_results.json
