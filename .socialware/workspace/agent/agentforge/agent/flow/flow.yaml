@@ -1,0 +1,51 @@
+# AgentForge — action registry
+#
+# All management actions are bound to the agentforge role.
+# check_health and setup_claude are inherited from the template.
+
+flows: {}
+
+direct_actions:
+  - action: create_role
+    role: [agentforge]
+    description: "Create a new Agent role with SOUL.md"
+
+  - action: create_skill
+    role: [agentforge]
+    description: "Create a new skill: SKILL.md + API endpoint + flow.yaml registration"
+
+  - action: edit_primitives
+    role: [agentforge]
+    description: "Edit existing four-primitive files"
+
+  - action: export_bundle
+    role: [agentforge]
+    description: "Export a role and its skills as a portable bundle directory"
+
+  - action: import_bundle
+    role: [agentforge]
+    description: "Import a role bundle into the current project"
+
+  - action: evaluate
+    role: [agentforge]
+    description: "Run commitment evaluations"
+
+  - action: eval_report
+    role: [agentforge]
+    description: "Generate evaluation summary report"
+
+  - action: evolve
+    role: [agentforge]
+    description: "Analyze eval results and optimize Agent configuration"
+
+  - action: zchat_connect
+    role: [agentforge]
+    description: "Connect to another Socialware App via ZChat"
+
+  - action: check_health
+    role: [agentforge, default, dev]
+    description: "Check app health status"
+
+  - action: setup_claude
+    role: [dev]
+    description: "Configure Claude Code environment"
