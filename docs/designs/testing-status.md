@@ -104,7 +104,7 @@ evolve-v2 分支覆盖:
 | Skill symlink 断裂 | test_deploy | flow.yaml 注册 vs flow/ 目录不匹配 | Flow |
 | commitment 引用无效 role/action | test_check_structure | commitment.yaml 的 from/to 字段 | Commitment |
 | Hook 脚本未生成 | test_hooks | deploy.sh 的 hook 生成逻辑 | 基础设施 |
-| eval.yaml 内容不一致 | test_deploy | 重新 deploy | Commitment |
+| commitment/eval 文件内容不一致 | test_deploy | 重新 deploy（.runtime/ 不应手动改） | Commitment |
 | 幂等性失败 | test_deploy | deploy.sh 清理逻辑 | 基础设施 |
 
 ### 第二层失败路由

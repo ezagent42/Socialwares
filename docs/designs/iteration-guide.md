@@ -73,7 +73,7 @@ P3 不是 Dev 主动发起，而是用户感知到了不满：
 ```
 用户: "我三天前提交的任务还没人 review！"
   → Commitment 指标 C1 的需求来源
-  → Dev 写 eval.yaml + remind_review Skill + /metrics endpoint
+  → Dev 写 commitment.yaml + remind_review Skill + 评估端点
 ```
 
 ### P4/P5 是批量操作
@@ -526,8 +526,8 @@ P5: add reviewer role, approval flow
 | 迭代产物 | 用户感知 | Dev 感知 | 项目感知 |
 |----------|----------|----------|----------|
 | 新 Skill | "你能做什么"列表变长 | deploy 输出 `+ Skill added` | git log flow.yaml |
-| Scope 更新 | Agent 拒绝越界请求 | deploy 输出 `~ Scope updated` | git diff scope/SOUL.md |
-| Commitment | Agent 主动提醒/监控 | /metrics API 有数据 | eval.yaml 从空到有 |
+| Scope 更新 | Agent 拒绝越界请求 | deploy 输出 `~ Scope updated` | git diff scope/ |
+| Commitment | Agent 主动提醒/监控 | evolve 报告有数据 | commitment.yaml 从空到有 |
 | 新 Role | 不同窗口 Agent 行为不同 | deploy 输出新 role + skill 数量 | git log role/ |
 
 ---
@@ -542,7 +542,7 @@ P5: add reviewer role, approval flow
 □ 写 src/app.py 对应 API endpoint
 □ 注册 agent/flow/flow.yaml（action + role 权限）
 □ deploy + 验证（start.sh → 用户再试一次 → 成功）
-□ 更新 agent/scope/SOUL.md Capabilities 列表
+□ 更新 Scope 文件 Capabilities 列表（main: scope/SOUL.md, evolve-v2: scope/scope.md）
 □ Git commit 标注 Phase: "P2: add {action}"
 ```
 
@@ -875,16 +875,16 @@ Dev 做:   写 Skill、写 API、定义原语、所有决策
 ```
 Agent 做: 修改 SKILL.md 的 Flow 步骤（如 HEAR → SPIN）
 Dev 做:   写 API、定义原语、review Agent 的修改
-信任门槛: /metrics 改善 + 测试通过
+信任门槛: evolve 报告改善 + 测试通过
 
 解锁条件:
-  ✅ /metrics API 已存在
-  ✅ eval.yaml 有明确阈值
-  ✅ pytest 能跑 Skill 端到端测试
+  ✅ commitment.yaml 有明确标准（evolve-v2 已实现）
+  ✅ Hook 日志采集运行数据（evolve-v2 已实现）
+  ✅ evolve_eval / evolve_auto 能跑端到端测试（evolve-v2 已实现）
   ✅ git diff 可 review（Agent 的修改留在 PR 里）
 ```
 
-> **这一级现在就可以做**。Evolve Skill（9.2 节）已设计好，缺的是 /metrics endpoint 和 Commitment 测试。
+> **合并 evolve-v2 后即可解锁此级别**。详见 9.8 节。
 
 #### L2: 创建新 Skill
 
@@ -972,8 +972,8 @@ Dev 做:   设定"不可变规则"（constitutional constraints）+ 偶尔审查
             L0 执行        L1 优化       L2-L3         L4-L6
                           Skill        创建+写代码     改边界+造App
 
-需要什么     已有           /metrics     Skill 校验器   变更提案机制
-                          + eval.yaml  + 沙箱测试     + A/B 验证
+需要什么     已有           commitment   Skill 校验器   变更提案机制
+                          + Hook 日志  + 沙箱测试     + A/B 验证
                           + Evolve     + PR 自动化    + 不可变规则
                           Skill        + 代码模板
 
@@ -1003,8 +1003,8 @@ Agent 自治   0%            20%          60%           90%
 ```
 evolve-v2 已实现                          对应 L1 解锁条件
 ─────────────                            ──────────────
-✅ commitment.yaml (4 字段 schema)        eval.yaml 有明确阈值
-✅ Hook 日志采集 + 增量扫描               /metrics 等价物
+✅ commitment.yaml (4 字段 schema)        有明确评估标准
+✅ Hook 日志采集 + 增量扫描               有运行时数据采集
 ✅ 5 个 Evolve Skill + evolver 角色       自我改善入口
 ✅ evolve_eval + evolve_auto 题集测试     pytest 端到端验证
 ✅ evolve_diagnose → improve 闭环         指标驱动改进
