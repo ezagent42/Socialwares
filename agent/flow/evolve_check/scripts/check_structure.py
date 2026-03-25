@@ -10,8 +10,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -198,6 +200,35 @@ def main() -> None:
     else:
         print(f"ISSUES: {total_issues} problem(s) found.")
     print("=" * 60)
+
+    # Save report
+    report_dir = Path(".runtime/data/evolve/reports")
+    report_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc)
+    report_file = report_dir / f"check_{timestamp.strftime('%Y%m%d_%H%M%S')}.json"
+
+    report_data = {
+        "type": "check",
+        "timestamp": timestamp.isoformat(),
+        "source": str(agent_dir),
+        "score": 1.0 if total_issues == 0 else max(0, 1.0 - total_issues * 0.1),
+        "passed": (len(flow_issues) == 0) + (len(commit_issues) == 0),
+        "total": 2,
+        "summary": "All structure checks passed" if total_issues == 0 else f"{total_issues} issues found",
+        "details": flow_issues + commit_issues,
+        "suggestions": [
+            {"primitive": "flow", "action": f"Create SKILL.md for: {issue.split(chr(39))[1]}", "reason": issue}
+            for issue in flow_issues if "MISSING" in issue
+        ] + [
+            {"primitive": "commitment" if "commitment" in issue.lower() else "role",
+             "action": "Add missing reference", "reason": issue}
+            for issue in commit_issues
+        ],
+    }
+
+    with open(report_file, "w") as f:
+        json.dump(report_data, f, indent=2, ensure_ascii=False)
+    print(f"Report saved to {report_file}")
 
     sys.exit(1 if total_issues > 0 else 0)
 

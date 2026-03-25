@@ -18,9 +18,11 @@ Run `evolve_diagnose` and/or `evolve_eval` first to gather evidence.
 **Working directory**: Read .workspace_root to find workspace root.
 Only modify files inside the workspace — NEVER modify template files at the repo root.
 
-1. Review the diagnostic report (.runtime/data/last_diagnosis.txt)
-2. Review eval results (agent/flow/evolve_eval/last_eval_results.json)
-3. Map each problem to a specific primitive:
+1. Review diagnostic reports in `.runtime/data/evolve/reports/diagnose_*.json`
+2. Review eval reports in `.runtime/data/evolve/reports/eval_*.json`
+3. Review auto-test reports in `.runtime/data/evolve/reports/auto_test_*.json`
+4. Review structure check reports in `.runtime/data/evolve/reports/check_*.json`
+5. Map each problem to a specific primitive:
 
    | Problem | Primitive | Action |
    |---------|-----------|--------|
@@ -31,8 +33,8 @@ Only modify files inside the workspace — NEVER modify template files at the re
    | Permission issues | Role | Add/adjust role/ |
    | Overall poor performance | Scope | Improve scope/scope.md reasoning |
 
-4. Propose specific changes to the developer
-5. On approval, make the changes:
+6. Propose specific changes to the developer
+7. On approval, make the changes:
    - Edit the relevant files (scope.md, role/*.md, SKILL.md, flow.yaml, commitment.yaml)
    - Run `./agent/deploy.sh` to recompile
    - Optionally re-run `evolve_eval` to measure improvement

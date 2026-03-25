@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -128,16 +129,29 @@ def main() -> None:
     score = passed / total if total > 0 else 0
     print(f"\nAPI Score: {passed}/{total} ({score:.0%})")
 
-    # Save results for evolver to read
-    results_file = Path(args.cases).parent / "last_eval_results.json"
-    with open(results_file, "w") as f:
-        json.dump({
-            "score": score,
-            "passed": passed,
-            "total": total,
-            "results": results,
-        }, f, indent=2)
-    print(f"Results saved to {results_file}")
+    # Save report
+    report_dir = Path(".runtime/data/evolve/reports")
+    report_dir.mkdir(parents=True, exist_ok=True)
+    timestamp_str = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+    report_file = report_dir / f"eval_{timestamp_str}.json"
+
+    report_data = {
+        "type": "eval",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "source": str(args.cases),
+        "score": score,
+        "passed": passed,
+        "total": total,
+        "summary": f"API Score: {passed}/{total} ({score:.0%})",
+        "details": results,
+        "suggestions": [
+            {"primitive": "flow", "action": f"Fix API for: {r['description']}", "reason": r.get("status_mismatch", r.get("body_mismatch", "failed"))}
+            for r in results if not r["passed"]
+        ],
+    }
+    with open(report_file, "w") as f:
+        json.dump(report_data, f, indent=2, ensure_ascii=False)
+    print(f"Report saved to {report_file}")
 
 
 if __name__ == "__main__":

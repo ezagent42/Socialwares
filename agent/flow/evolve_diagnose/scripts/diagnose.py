@@ -30,8 +30,8 @@ def load_commitment(path: Path) -> dict:
 
 
 def load_cursor(data_dir: Path) -> dict:
-    """Load evolve_state.yaml cursor."""
-    state_file = data_dir / "evolve_state.yaml"
+    """Load evolve/state.yaml cursor."""
+    state_file = data_dir / "evolve" / "state.yaml"
     if not state_file.exists():
         return {}
     with open(state_file) as f:
@@ -39,8 +39,9 @@ def load_cursor(data_dir: Path) -> dict:
 
 
 def save_cursor(data_dir: Path, state: dict) -> None:
-    """Save evolve_state.yaml."""
-    state_file = data_dir / "evolve_state.yaml"
+    """Save evolve/state.yaml."""
+    state_file = data_dir / "evolve" / "state.yaml"
+    state_file.parent.mkdir(parents=True, exist_ok=True)
     with open(state_file, "w") as f:
         yaml.dump(state, f, default_flow_style=False)
 
@@ -235,10 +236,45 @@ def main() -> None:
     report = generate_report(commitments, fulfillment, len(prompt_entries), len(sessions))
     print(report)
 
-    # Save report
-    report_file = data_dir / "last_diagnosis.txt"
-    data_dir.mkdir(parents=True, exist_ok=True)
-    report_file.write_text(report)
+    # Compute average fulfillment rate
+    rated = [r["rate"] for r in fulfillment.values() if r["rate"] is not None]
+    avg_rate = sum(rated) / len(rated) if rated else 0.0
+
+    # Build recommendations for suggestions
+    suggestions = []
+    for cid, result in fulfillment.items():
+        if result["rate"] is not None and result["rate"] < 0.8:
+            suggestions.append({
+                "primitive": "commitment",
+                "action": f"Improve fulfillment for {cid}",
+                "reason": f"Fulfillment rate {result['rate']:.0%} — below 80% threshold",
+            })
+        if result["triggered"] == 0:
+            suggestions.append({
+                "primitive": "flow",
+                "action": f"Check if from.action '{result['from_action']}' is being used",
+                "reason": f"{cid} never triggered",
+            })
+
+    # Save report as JSON
+    report_dir = data_dir / "evolve" / "reports"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    timestamp_str = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+    report_file = report_dir / f"diagnose_{timestamp_str}.json"
+
+    report_data = {
+        "type": "diagnose",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "source": "prompts/*.jsonl + sessions/*.json",
+        "score": avg_rate,
+        "passed": sum(1 for r in fulfillment.values() if r["rate"] is not None and r["rate"] >= 0.8),
+        "total": len(fulfillment),
+        "summary": report,
+        "details": fulfillment,
+        "suggestions": suggestions,
+    }
+    with open(report_file, "w") as f:
+        json.dump(report_data, f, indent=2, ensure_ascii=False, default=str)
     print(f"Report saved to {report_file}")
 
     # Update cursor

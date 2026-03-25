@@ -47,10 +47,11 @@ uv run agent/flow/evolve_diagnose/scripts/diagnose.py \
 4. For each commitment, finds from.action and to.action events in the data
 5. Computes fulfillment rate (triggered vs fulfilled)
 6. Generates report with per-commitment rates and recommendations
-7. Updates cursor in evolve_state.yaml for next incremental run
+7. Updates cursor in evolve/state.yaml for next incremental run
 
 ## Output
 
 - Console report with commitment fulfillment rates
-- Saved to `.runtime/data/last_diagnosis.txt`
-- Cursor state saved to `.runtime/data/evolve_state.yaml`
+- JSON report saved to `.runtime/data/evolve/reports/diagnose_<timestamp>.json`
+- Cursor state saved to `.runtime/data/evolve/state.yaml`
+- Violations written to `.runtime/data/evolve/violations/current.jsonl`

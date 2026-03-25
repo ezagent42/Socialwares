@@ -190,23 +190,42 @@ def main() -> None:
     print()
     print(f"Conversation Score: {passed}/{total} ({score:.0%})")
 
-    # Save results
-    auto_dir = Path(".runtime/data/auto_tests")
-    auto_dir.mkdir(parents=True, exist_ok=True)
+    # Save report
+    report_dir = Path(".runtime/data/evolve/reports")
+    report_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    results_file = auto_dir / f"auto_test_{timestamp}.json"
-    with open(results_file, "w") as f:
+    report_file = report_dir / f"auto_test_{timestamp}.json"
+
+    report_data = {
+        "type": "auto_test",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "source": str(args.tests_dir),
+        "score": score,
+        "passed": passed,
+        "total": total,
+        "summary": f"Conversation Score: {passed}/{total} ({score:.0%})",
+        "details": results,
+        "suggestions": [
+            {"primitive": "flow", "action": f"Check agent/flow/{f['expected_skill']}/SKILL.md", "reason": f"Test failed: {f['description']}"}
+            for f in failures
+        ],
+    }
+    with open(report_file, "w") as f:
+        json.dump(report_data, f, indent=2, ensure_ascii=False, default=str)
+
+    # Save auto-generated sessions to isolated directory
+    sessions_dir = Path(".runtime/data/evolve/auto_sessions")
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+    sessions_file = sessions_dir / f"session_{timestamp}.json"
+    with open(sessions_file, "w") as f:
         json.dump({
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "role": args.role,
             "adapter": args.adapter,
-            "score": score,
-            "passed": passed,
-            "total": total,
-            "results": results,
+            "conversations": results,
         }, f, indent=2, ensure_ascii=False, default=str)
 
-    print(f"Results saved to {results_file}")
+    print(f"Report saved to {report_file}")
 
 
 if __name__ == "__main__":

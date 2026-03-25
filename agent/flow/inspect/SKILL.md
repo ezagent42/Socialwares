@@ -28,9 +28,12 @@ workspace/                            ← all dev happens here (cd into workspac
 │   ├── Makefile.template             ← Source for workspace Makefile
 │   └── adapters/                     ← Claude/Codex/Kimi
 ├── .runtime/                         ← Deploy output (gitignored, workspace-only)
-│   ├── data/prompts/                 ← Agent interaction logs
-│   ├── data/sessions/                ← Session metadata
-│   ├── data/violations/              ← Constraint violation queue
+│   ├── data/prompts/                 ← Hook logs (user prompts + tool calls)
+│   ├── data/sessions/                ← SDK full conversations
+│   ├── data/evolve/                  ← Evolver output
+│   │   ├── reports/                  ← Unified reports (check/eval/diagnose/auto_test)
+│   │   ├── violations/               ← Commitment violations
+│   │   └── auto_sessions/            ← Auto-test generated conversations
 │   └── agents/{role}/                ← Per-role $PROJECT_DIR
 └── pyproject.toml                    ← Independent dependencies
 ```

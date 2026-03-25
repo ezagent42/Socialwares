@@ -50,7 +50,8 @@ cd "$WORKSPACE_ROOT"
    - Per-case PASS/FAIL
    - Failure analysis with improvement suggestions
    - Overall conversation score
-7. Results saved to `.runtime/data/auto_tests/`
+7. Report saved to `.runtime/data/evolve/reports/auto_test_<timestamp>.json`
+8. Auto-generated sessions saved to `.runtime/data/evolve/auto_sessions/`
 
 ## Prerequisites
 

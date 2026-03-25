@@ -36,6 +36,11 @@ uv run agent/flow/evolve_check/scripts/check_structure.py --agent-dir agent
 3. Every commitment's from/to action exists in flow.yaml
 4. Scope capabilities are listed for manual review
 
+## Output
+
+- Console report with structural issues
+- JSON report saved to `.runtime/data/evolve/reports/check_<timestamp>.json`
+
 ## Notes
 
 - Does NOT require app to be running

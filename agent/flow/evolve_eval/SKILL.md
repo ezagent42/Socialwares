@@ -41,6 +41,11 @@ API eval cases — direct HTTP checks for backend endpoints. The file grows with
 
 Conversation tests have moved to `agent/flow/evolve_auto/conversation_tests/`.
 
+## Output
+
+- Console report with per-case pass/fail and overall score
+- JSON report saved to `.runtime/data/evolve/reports/eval_<timestamp>.json`
+
 ## Notes
 
 - App backend must be running for eval to work

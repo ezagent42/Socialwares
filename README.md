@@ -178,9 +178,12 @@ What it generates per role:
 ├── data/
 │   ├── Files/                  ← App runtime files
 │   ├── Sqlite/                 ← App database
-│   ├── prompts/                ← Agent interaction logs (JSONL)
-│   ├── sessions/               ← Session metadata
-│   └── violations/             ← Constraint violation queue (JSONL)
+│   ├── prompts/                ← Hook logs (user prompts + tool calls)
+│   ├── sessions/               ← SDK full conversations
+│   └── evolve/                 ← Evolver output
+│       ├── reports/            ← Unified reports (check/eval/diagnose/auto_test)
+│       ├── violations/         ← Commitment violations
+│       └── auto_sessions/      ← Auto-test generated conversations
 └── agents/
     ├── default/                ← default role's $PROJECT_DIR
     │   ├── .claude/skills/     ← check_health (per flow.yaml) [or .agents/skills/ for codex/kimi]
@@ -218,7 +221,7 @@ Launches agent. Requires `.runtime/` to exist (run `make deploy` or `./agent/dep
 make create ROOM=my-team APP=task-manager DESC="Task Manager"
 ```
 
-Copies template → workspace (including `Makefile` from `agent/Makefile.template`), customizes scope.md and role files, runs initial deploy. Fails if workspace already exists.
+Copies template → workspace (including `Makefile` from `agent/Makefile.template`), customizes scope.md and role files. Then Make runs deploy. Fails if workspace already exists.
 
 ### claude.sh
 
@@ -236,7 +239,7 @@ Written by UserPromptSubmit hook (log_prompt.sh) and PreToolUse hook (log_tool.s
 {"timestamp": "2026-03-20T10:00:00Z", "role": "default", "type": "tool_call", "tool": "create_task", "input": {"title": "GPS"}, "session_id": "..."}
 ```
 
-### Violation Queue (`.runtime/data/violations/*.jsonl`)
+### Violation Queue (`.runtime/data/evolve/violations/*.jsonl`)
 
 Written by evolver's `diagnose.py` when it finds commitment violations during conversation analysis:
 

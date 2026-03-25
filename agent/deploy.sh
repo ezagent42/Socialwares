@@ -65,6 +65,9 @@ mkdir -p "$RUNTIME_DIR/data/Files"
 mkdir -p "$RUNTIME_DIR/data/Sqlite"
 mkdir -p "$RUNTIME_DIR/data/prompts"
 mkdir -p "$RUNTIME_DIR/data/sessions"
+mkdir -p "$RUNTIME_DIR/data/evolve/reports"
+mkdir -p "$RUNTIME_DIR/data/evolve/violations"
+mkdir -p "$RUNTIME_DIR/data/evolve/auto_sessions"
 
 # 2. Clean removed roles
 if [ -d "$RUNTIME_DIR/agents" ]; then
