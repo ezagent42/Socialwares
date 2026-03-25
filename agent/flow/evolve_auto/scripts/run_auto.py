@@ -166,21 +166,17 @@ def main() -> None:
 
     results = asyncio.run(run_all_tests(adapter, cases))
 
-    # Analyze failures
+    # List failures (no suggestions — evolver LLM analyzes these)
     failures = [r for r in results if not r["passed"]]
     if failures:
         print()
-        print("Failure Analysis:")
+        print("Failures:")
         for f in failures:
-            print(f"  [{f['expected_skill']}] Input: \"{f['input']}\"")
+            print(f"  [{f.get('expected_skill', '?')}] Input: \"{f.get('input', '')}\"")
             if "error" in f:
                 print(f"    Error: {f['error']}")
             else:
-                print(f"    Expected skill '{f['expected_skill']}' not found in trace")
-            # Map to four-primitive improvement
-            print(f"    Suggestion: Check agent/flow/{f['expected_skill']}/SKILL.md")
-            print(f"                - Is the trigger description clear enough?")
-            print(f"                - Does the skill match the input pattern?")
+                print(f"    Expected skill '{f.get('expected_skill', '')}' not found in trace")
 
     # Score
     passed = sum(1 for r in results if r["passed"])
@@ -205,10 +201,8 @@ def main() -> None:
         "total": total,
         "summary": f"Conversation Score: {passed}/{total} ({score:.0%})",
         "details": results,
-        "suggestions": [
-            {"primitive": "flow", "action": f"Check agent/flow/{f['expected_skill']}/SKILL.md", "reason": f"Test failed: {f['description']}"}
-            for f in failures
-        ],
+        "failures": [{"input": f.get("input"), "expected_skill": f.get("expected_skill"), "error": f.get("error")} for f in failures],
+        "note": "Improvement suggestions are made by evolver (LLM), not this script.",
     }
     with open(report_file, "w") as f:
         json.dump(report_data, f, indent=2, ensure_ascii=False, default=str)

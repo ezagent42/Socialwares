@@ -32,7 +32,7 @@ class TestDiagnose:
             capture_output=True, text=True,
         )
         assert result.returncode == 0
-        assert "DIAGNOSTIC REPORT" in result.stdout
+        assert "DIAGNOSTIC DATA EXTRACTION" in result.stdout
 
     def test_runs_with_prompt_data(self, tmp_path):
         """Diagnose reads hook prompt logs."""
