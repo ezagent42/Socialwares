@@ -25,7 +25,6 @@ workspace/                            ← all dev happens here (cd into workspac
 │   ├── flow/                         ← How: flow.yaml + {action}/SKILL.md
 │   ├── deploy.sh                     ← Compile → .runtime/
 │   ├── start.sh                      ← Launch agent
-│   ├── Makefile.template             ← Source for workspace Makefile
 │   └── adapters/                     ← Claude/Codex/Kimi
 ├── .runtime/                         ← Deploy output (gitignored, workspace-only)
 │   ├── data/prompts/                 ← Hook logs (user prompts + tool calls)
@@ -44,7 +43,7 @@ workspace/                            ← all dev happens here (cd into workspac
 |-----------|-----------|----------|---------|
 | **Role** | agent/role/ | {name}.md | Agent identity + permissions |
 | **Scope** | agent/scope/ | scope.md | App capability boundary |
-| **Commitment** | agent/commitment/ | commitment.yaml | Constraints on flow edges |
+| **Commitment** | agent/commitment/ | commitment.yaml | Evaluation standards on flow edges |
 | **Flow** | agent/flow/ | flow.yaml + SKILL.md | Actions + how to execute |
 
 ## Development Workflow

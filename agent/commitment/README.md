@@ -19,8 +19,9 @@ Commitment IS:
 
 ```
 commitment.yaml → defines standards
-log_prompt.sh + log_tool.sh → capture data (tagged with commitment IDs)
-evolver         → compares data vs standards → fulfillment rate → improvement suggestions
+log_prompt.sh + log_tool.sh → capture all prompts + tool calls
+diagnose.py     → matches log events to commitment actions
+evolver (LLM)   → judges conditions → fulfillment rate → improvement suggestions
 ```
 
 The agent is NOT given commitment in its SOUL.md (that would make it enforcement). Only the evolver sees commitment standards for evaluation.
@@ -80,32 +81,24 @@ commitments:
 ## Lifecycle
 
 1. **Declaration** — developer writes commitment.yaml
-2. **Deploy** — deploy.sh:
-   - Copies commitment.yaml to each role's .runtime/
-   - Generates `commitment_watch.yaml` per role (lists which actions to tag)
-   - Hooks use commitment_watch.yaml to tag relevant log entries
-3. **Data capture** — log_prompt.sh + log_tool.sh hooks capture interaction data to .runtime/data/prompts/; for actions listed in commitment_watch.yaml, adds commitment tags and extra fields (output, duration)
-4. **Evolver evaluates** — evolver reads tagged conversation logs + commitment.yaml → checks if conditions were met → computes fulfillment rate
+2. **Deploy** — deploy.sh copies commitment.yaml to each role's `.runtime/agents/{name}/`
+3. **Data capture** — log_prompt.sh (UserPromptSubmit) + log_tool.sh (PreToolUse) hooks capture all prompts and tool calls to `.runtime/data/prompts/`
+4. **Evolver evaluates** — diagnose.py reads logs + commitment.yaml, matches events to commitment actions; evolver (LLM) judges conditions and computes fulfillment rate
 5. **Improvement** — low fulfillment → evolver suggests changes to four primitives
 
 ## deploy.sh Processing
 
 1. Copies `commitment.yaml` to each role's `.runtime/agents/{name}/`
-2. Generates `commitment_watch.yaml` per role — lists actions this role should tag:
-   ```yaml
-   # .runtime/agents/reviewer/commitment_watch.yaml (auto-generated)
-   watch:
-     - commitment: C1
-       action: review_code
-       capture: [timestamp, output, duration]
-   ```
-3. `log_prompt.sh` + `log_tool.sh` hooks read `commitment_watch.yaml` — when a matching action is seen, the log entry is tagged with commitment ID and extra data is captured
+2. Copies `flow.yaml` for reference
+3. Generates hooks (`log_prompt.sh` + `log_tool.sh`) that capture all prompts and tool calls
+
+Hooks do NOT tag entries with commitment IDs. The evolver's `diagnose.py` later reads these logs alongside commitment.yaml to match events to commitments.
 
 ## Evolver Verification
 
 Evolver reads conversation logs and for each commitment:
-1. Filters log entries tagged with the commitment ID
-2. Checks if `condition` was met (LLM interprets natural language)
+1. `diagnose.py` extracts events matching `from` and `to` actions from logs
+2. Evolver (LLM) checks if `condition` was met (interprets natural language)
 3. Computes fulfillment rate = fulfilled / total
 4. Low fulfillment → suggests improvements to four primitives
 

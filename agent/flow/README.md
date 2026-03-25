@@ -13,6 +13,9 @@ flow/
 │   └── SKILL.md
 ├── inspect/
 │   └── SKILL.md
+├── evolve_check/
+│   ├── SKILL.md
+│   └── scripts/check_structure.py
 ├── evolve_diagnose/
 │   ├── SKILL.md
 │   └── scripts/diagnose.py
@@ -58,7 +61,7 @@ direct_actions:
 
 - `default` role → gets `check_health` skill only
 - `dev` role → gets `check_health` + `setup_claude` + `inspect` skills
-- `evolver` role → gets `check_health` + `inspect` + all `evolve_*` skills
+- `evolver` role → gets `check_health` + `inspect` + all `evolve_*` skills (check, diagnose, eval, improve, auto)
 
 ## SKILL.md Format
 

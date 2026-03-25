@@ -82,20 +82,12 @@ It IS:
 
 **Important**: Commitment is NOT included in non-evolver roles' SOUL.md. Only the evolver sees commitment standards for evaluation. Other roles operate based on their skills and role definitions.
 
-### Deploy and Hook Tagging
+### Deploy Processing
 
-Deploy processes commitment.yaml in three steps:
+Deploy processes commitment.yaml:
 1. Copies `commitment.yaml` to each role's `.runtime/agents/{name}/`
-2. Generates `commitment_watch.yaml` per role — lists which actions to tag
-3. `log_prompt.sh` + `log_tool.sh` hooks read `commitment_watch.yaml` and tag matching log entries with commitment IDs
-
-```yaml
-# .runtime/agents/reviewer/commitment_watch.yaml (auto-generated)
-watch:
-  - commitment: C1
-    action: review_code
-    capture: [timestamp, output, duration]
-```
+2. `log_prompt.sh` (UserPromptSubmit) + `log_tool.sh` (PreToolUse) hooks capture all prompts and tool calls to `.runtime/data/prompts/`
+3. Evolver's `diagnose.py` later reads these logs + `commitment.yaml` and compares events against conditions
 
 ### Unified Schema
 
@@ -167,6 +159,9 @@ agent/flow/
 ├── check_health/SKILL.md
 ├── setup_claude/SKILL.md
 ├── inspect/SKILL.md
+├── evolve_check/
+│   ├── SKILL.md
+│   └── scripts/check_structure.py
 ├── evolve_diagnose/
 │   ├── SKILL.md
 │   └── scripts/diagnose.py
@@ -190,4 +185,4 @@ Reads flow.yaml → **symlinks** only the actions allowed for each role into `.r
 
 - `default` role → gets `check_health` skill only
 - `dev` role → gets `check_health` + `setup_claude` + `inspect` skills
-- `evolver` role → gets `check_health` + `inspect` + all evolve_* skills
+- `evolver` role → gets `check_health` + `inspect` + all `evolve_*` skills (check, diagnose, eval, improve, auto)

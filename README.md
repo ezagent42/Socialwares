@@ -50,13 +50,14 @@ socialwares/
 │   │   └── evolver.md            ← Evolver role (diagnose + improve)
 │   ├── scope/                    ← Where: App capability boundary
 │   │   └── scope.md
-│   ├── commitment/               ← What: Constraints on flow edges
+│   ├── commitment/               ← What: Evaluation standards on flow edges
 │   │   └── commitment.yaml      ← Unified schema: from/to/condition/on_violation
 │   ├── flow/                     ← How: Skills + action registry
 │   │   ├── flow.yaml             ← Action registry (roles → actions)
 │   │   ├── check_health/         ← default + dev + evolver
 │   │   ├── inspect/              ← dev + evolver
 │   │   ├── setup_claude/         ← dev only
+│   │   ├── evolve_check/         ← evolver only (+ scripts/check_structure.py)
 │   │   ├── evolve_diagnose/      ← evolver only (+ scripts/diagnose.py)
 │   │   ├── evolve_eval/          ← evolver only (+ scripts/run_eval.py)
 │   │   ├── evolve_improve/       ← evolver only
@@ -87,8 +88,7 @@ Each app has its own `Makefile`, `pyproject.toml`, and `.venv/` (copied from tem
 ```
 .socialware/workspace/{room}/{app}/
 ├── Makefile                      ← make deploy / start / run / test / clean / sync
-├── agent/                        ← Four primitives + toolchain
-│   └── Makefile.template         ← Template for workspace Makefile
+├── agent/                        ← Four primitives + toolchain (role/, scope/, commitment/, flow/)
 ├── src/
 ├── app/
 ├── .runtime/                     ← Deploy output (gitignored)
@@ -107,7 +107,7 @@ Subagent identities. Each role gets its own flat `.md` file and a filtered set o
 |------|---------|--------|
 | `default` | App user | check_health |
 | `dev` | Developer (env setup) | check_health, setup_claude, inspect |
-| `evolver` | Diagnose + improve | check_health, inspect, diagnose, eval, improve, auto |
+| `evolver` | Diagnose + improve | check_health, inspect, check, diagnose, eval, improve, auto |
 
 ### Scope — Where
 
@@ -117,9 +117,9 @@ App capability boundary via `scope/scope.md`.
 - **External**: Public description (other Agents read this to decide delegation)
 - **Participation**: Who can join, minimum members
 
-### Commitment — What (Constraints on Flow Edges)
+### Commitment — What (Evaluation Standards on Flow Edges)
 
-Commitment constrains the edges of the flow graph — what must be true between two role-actions. Uses a unified schema:
+Commitment defines evaluation standards for the edges of the flow graph — what "good" looks like between two role-actions. It is NOT an enforcement mechanism; only the evolver sees these for assessment. Uses a unified schema:
 
 ```yaml
 # agent/commitment/commitment.yaml
@@ -148,13 +148,14 @@ direct_actions:
   - { action: check_health,     role: [default, dev, evolver], description: "Check app health" }
   - { action: setup_claude,     role: [dev],                   description: "Configure Claude Code" }
   - { action: inspect,          role: [dev, evolver],          description: "Show project structure" }
+  - { action: evolve_check,     role: [evolver],               description: "Check structural consistency" }
   - { action: evolve_diagnose,  role: [evolver],               description: "Diagnose from runtime data" }
   - { action: evolve_eval,      role: [evolver],               description: "Run eval cases" }
   - { action: evolve_improve,   role: [evolver],               description: "Apply improvements" }
   - { action: evolve_auto,      role: [evolver],               description: "Automated evolution loop" }
 ```
 
-Each action has a `SKILL.md` (+ optional `scripts/`). `deploy.sh` reads `flow.yaml` and copies only the actions allowed for each role into `.runtime/`.
+Each action has a `SKILL.md` (+ optional `scripts/`). `deploy.sh` reads `flow.yaml` and symlinks only the actions allowed for each role into `.runtime/`.
 
 ## Workflows
 
@@ -231,7 +232,7 @@ make sync
 make clean && make deploy
 ```
 
-Updates adapters, deploy.sh, start.sh, Makefile from the template root. Use when the template has been updated and you want the latest scripts in your workspace. Skills (agent/flow/) are not synced — those are your app's custom content.
+Updates adapters, deploy.sh, start.sh, start_agent.py, and Makefile from the template root. Use when the template has been updated and you want the latest scripts in your workspace. Skills (agent/flow/) are not synced — those are your app's custom content.
 
 ### claude.sh
 
@@ -239,7 +240,7 @@ First-time Claude Code environment setup. See [docs/guides/005-claude-setup.md](
 
 ## Runtime Data
 
-Agent interactions and constraint violations are logged to `.runtime/data/`:
+Agent interactions and commitment violations are logged to `.runtime/data/`:
 
 ### Prompt & Tool Logs (`.runtime/data/prompts/*.jsonl`)
 
@@ -254,7 +255,7 @@ Written by UserPromptSubmit hook (log_prompt.sh) and PreToolUse hook (log_tool.s
 Written by evolver's `diagnose.py` when it finds commitment violations during conversation analysis:
 
 ```json
-{"id": "v-001", "constraint": "C1", "description": "review overdue 24h", "detected_at": "2026-03-20T10:00:00Z", "resolved": false}
+{"id": "v-001", "commitment": "C1", "description": "review overdue 24h", "detected_at": "2026-03-20T10:00:00Z", "resolved": false}
 ```
 
 ## Evolver
@@ -263,7 +264,8 @@ Built-in role for improving your app based on runtime evidence.
 
 | Skill | Mode | What it does |
 |-------|------|-------------|
-| `evolve_diagnose` | Manual | Scan conversations + constraints → diagnostic report |
+| `evolve_check` | Manual | Check structural consistency of four primitives (no app needed) |
+| `evolve_diagnose` | Manual | Scan conversations + commitments → diagnostic report |
 | `evolve_eval` | Manual | Run eval_cases.yaml → score (API checks) |
 | `evolve_improve` | Manual | Map problems to primitives → propose + apply changes |
 | `evolve_auto` | Auto | Automated loop: evaluate → diagnose → propose → apply → re-evaluate |
@@ -271,10 +273,11 @@ Built-in role for improving your app based on runtime evidence.
 ```bash
 # From within a workspace:
 make start ROLE=evolver
-# "diagnose"       → analyze runtime data, compute fulfillment rates
-# "evaluate"       → run eval cases, report score
-# "improve"        → fix issues based on evidence
-# "auto-optimize"  → automated improvement loop
+# "check structure" → verify four primitives consistency (no app needed)
+# "diagnose"        → analyze runtime data, compute fulfillment rates
+# "evaluate"        → run eval cases, report score
+# "improve"         → fix issues based on evidence
+# "auto-optimize"   → automated improvement loop
 ```
 
 Fulfillment rate = fulfilled / total per commitment. The evolver reads conversation logs, checks each commitment's condition, and maps low fulfillment to specific four-primitive improvements.

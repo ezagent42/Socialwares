@@ -40,6 +40,7 @@ socialwares/
 │   │   ├── check_health/SKILL.md
 │   │   ├── setup_claude/SKILL.md
 │   │   ├── inspect/SKILL.md
+│   │   ├── evolve_check/SKILL.md + scripts/check_structure.py
 │   │   ├── evolve_diagnose/SKILL.md + scripts/diagnose.py
 │   │   ├── evolve_eval/SKILL.md + scripts/run_eval.py + eval_cases.yaml
 │   │   ├── evolve_improve/SKILL.md
@@ -73,7 +74,7 @@ Every Socialware App defines Agent behavior through four primitives:
 |-----------|-----------|----------|---------|
 | **Role** (Who) | agent/role/ | {name}.md | Agent identities + permissions |
 | **Scope** (Where) | agent/scope/ | scope.md | App capability boundary + public identity |
-| **Commitment** (What) | agent/commitment/ | commitment.yaml | Constraints on flow edges |
+| **Commitment** (What) | agent/commitment/ | commitment.yaml | Evaluation standards on flow edges |
 | **Flow** (How) | agent/flow/ | flow.yaml + SKILL.md | Actions the agent can execute |
 
 ## Three Built-in Roles
@@ -82,7 +83,7 @@ Every Socialware App defines Agent behavior through four primitives:
 |------|---------|--------|
 | `default` | App user | check_health |
 | `dev` | Developer (env setup, project nav) | check_health, setup_claude, inspect |
-| `evolver` | Diagnose + improve | check_health, inspect, diagnose, eval, improve, auto |
+| `evolver` | Diagnose + improve | check_health, inspect, check, diagnose, eval, improve, auto |
 
 ## Progressive Growth
 
@@ -104,8 +105,7 @@ Each workspace is a self-contained copy of the template. Deploy and start only h
 └── {room}/{app}/              ← cd here to develop
     ├── Makefile               ← make deploy / make start / make clean
     ├── src/                   ← your app code
-    ├── agent/                 ← your four primitives
-    │   └── Makefile.template  ← source for workspace Makefile
+    ├── agent/                 ← your four primitives (role/, scope/, commitment/, flow/)
     ├── .runtime/              ← deploy output (gitignored)
     └── pyproject.toml         ← independent dependencies
 ```
@@ -122,5 +122,5 @@ Each workspace is a self-contained copy of the template. Deploy and start only h
 | Makefile | Location | Commands |
 |----------|----------|----------|
 | Root Makefile | `socialwares/Makefile` | `make create`, `make test` |
-| Workspace Makefile | `.socialware/workspace/{room}/{app}/Makefile` | `make deploy`, `make start`, `make test`, `make clean` |
+| Workspace Makefile | `.socialware/workspace/{room}/{app}/Makefile` | `make deploy`, `make start`, `make run`, `make test`, `make clean`, `make sync` |
 | Makefile.template | `agent/Makefile.template` | Source copied to workspace during `make create` |

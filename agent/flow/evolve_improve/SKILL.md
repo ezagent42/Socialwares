@@ -64,7 +64,7 @@ Only modify files inside the workspace — NEVER modify template files at the re
 |---------|-----------|--------|
 | Missing capability | Flow | Create new skill in agent/flow/ |
 | High error rate on a skill | Flow | Edit the SKILL.md |
-| Constraint violations | Commitment | Adjust commitment.yaml |
+| Low fulfillment rate | Commitment | Adjust commitment.yaml |
 | Out-of-scope requests | Scope | Expand scope/scope.md |
 | Permission issues | Role | Add/adjust role/ |
 | Overall poor performance | Scope | Improve scope/scope.md reasoning |

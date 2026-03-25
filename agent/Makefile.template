@@ -8,13 +8,13 @@ ADAPTER    ?= claude
 
 ROLES      := $(filter-out $(AGENT_DIR)/role/README.md, $(wildcard $(AGENT_DIR)/role/*.md))
 SCOPE      := $(AGENT_DIR)/scope/scope.md
-CONSTRAINTS:= $(AGENT_DIR)/commitment/commitment.yaml
+COMMITMENT := $(AGENT_DIR)/commitment/commitment.yaml
 FLOW_YAML  := $(AGENT_DIR)/flow/flow.yaml
 SKILLS     := $(wildcard $(AGENT_DIR)/flow/*/SKILL.md)
 # Include directories as deps so file additions/deletions trigger rebuild
 ROLE_DIR   := $(AGENT_DIR)/role
 FLOW_DIR   := $(AGENT_DIR)/flow
-SOURCES    := $(ROLES) $(SCOPE) $(CONSTRAINTS) $(FLOW_YAML) $(SKILLS) $(ROLE_DIR) $(FLOW_DIR)
+SOURCES    := $(ROLES) $(SCOPE) $(COMMITMENT) $(FLOW_YAML) $(SKILLS) $(ROLE_DIR) $(FLOW_DIR)
 
 # Template root (for sync command)
 TEMPLATE_ROOT := $(shell git rev-parse --show-toplevel 2>/dev/null)
@@ -43,7 +43,7 @@ test: ## Run tests
 clean: ## Remove .runtime/
 	rm -rf $(RUNTIME)
 
-sync: ## Sync scripts from template (adapters, deploy, start, skills, Makefile)
+sync: ## Sync scripts from template (adapters, deploy, start, Makefile, start_agent.py)
 	@if [ -z "$(TEMPLATE_ROOT)" ]; then echo "Error: not in a git repo, cannot find template root"; exit 1; fi
 	@echo "Syncing from template: $(TEMPLATE_ROOT)"
 	@cp "$(TEMPLATE_ROOT)/agent/adapters/base.py" $(AGENT_DIR)/adapters/base.py

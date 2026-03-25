@@ -1,40 +1,33 @@
-# Constraints — bind to flow edges (state machine transitions or direct actions)
+# Commitment — evaluation standards for flow edges
 #
-# Transition constraints: enforce rules on state machine edges
-# Action constraints: postconditions on direct actions
+# Each commitment defines what "good" looks like between two role-actions.
+# Commitment is an evaluation standard, NOT an enforcement mechanism.
+# Agents are not forced to comply; only the evolver sees these for assessment.
 #
-# Violations are written to .runtime/data/violations/ by evolver's diagnose.py.
-# UserPromptSubmit (log_prompt.sh) + PreToolUse (log_tool.sh) hooks capture
-# prompts and tool calls for analysis — they do NOT check violations.
+# Unified schema: from/to/condition/on_violation
+#   from       — edge start: who did what (trigger)
+#   to         — edge end: who must do what (responsible party)
+#   condition  — natural language evaluation standard
+#   on_violation — suggested escalation path (optional)
 #
-# Flow: hooks record data → diagnose.py analyzes → writes violations
-# The violations API (GET /violations) reads these files.
+# Data flow:
+#   UserPromptSubmit (log_prompt.sh) + PreToolUse (log_tool.sh) hooks
+#   capture prompts and tool calls to .runtime/data/prompts/.
+#   Evolver's diagnose.py reads these logs + commitment.yaml,
+#   compares events against conditions, and computes fulfillment rates.
+#   Violations are written to .runtime/data/evolve/violations/.
 
-# Transition constraints — bind to flow.yaml state machine edges
-transition_constraints: {}
-  # Example:
+commitments: {}
+  # Example (uncomment and customize for your app):
+  #
   # C1:
-  #   description: "Review within 72h"
-  #   on: { flow: F1, from: submitted, action: review }
-  #   type: time
-  #   deadline: 72h
-  #   on_violation:
-  #     trigger_action: force_resolve
-  #     trigger_role: admin
+  #   from: { role: coder, action: submit_code }
+  #   to:   { role: pm, action: review_code }
+  #   condition: "within 24h"
+  #   on_violation: { role: tech_lead, action: escalate }
   #
   # C2:
-  #   description: "Review must include justification"
-  #   on: { flow: F1, from: under_review, action: approve }
-  #   type: quality
-  #   postcondition: "response must contain 'reason' field"
-  #   on_violation:
-  #     trigger_action: reject
-  #     reason: "insufficient justification"
-
-# Action constraints — postconditions on direct actions
-action_constraints:
-  C1:
-    description: "Health check returns ok"
-    on: { action: check_health }
-    type: postcondition
-    expected: '{"status": "ok"}'
+  #   from: { role: coder, action: submit_code }
+  #   to:   { role: coder, action: merge_code }
+  #   condition: "review_code completed with result approved"
+  #   on_violation: null
