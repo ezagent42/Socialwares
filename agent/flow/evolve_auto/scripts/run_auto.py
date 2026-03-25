@@ -83,44 +83,24 @@ async def run_single_test(adapter, case: dict) -> dict:
     print(f"    > {user_input}")
     try:
         async for message in adapter.launch_sdk(user_input):
-            # Get message type/subtype
-            msg_type = getattr(message, "type", "") or ""
-            msg_subtype = getattr(message, "subtype", "") or ""
+            # SDK adapter now yields pre-serialized dicts (via _serialize)
+            msg = message if isinstance(message, dict) else {"_type": "raw", "content": str(message)}
 
-            # Skip system noise: hooks, init, rate limits
-            if any(skip in str(msg_type).lower() + str(msg_subtype).lower()
-                   for skip in ["rate_limit", "hook_started", "hook_response", "init"]):
+            # Skip system noise
+            msg_type = msg.get("_type", "").lower()
+            subtype = msg.get("subtype", "").lower() if isinstance(msg.get("subtype"), str) else ""
+            if any(skip in msg_type + subtype for skip in ["ratelimit", "hook", "init", "system"]):
                 continue
 
-            # Serialize to dict — only keep conversation-relevant fields
-            if hasattr(message, "__dict__"):
-                raw = message.__dict__
-                msg_dict = {
-                    "type": str(raw.get("type", "")),
-                    "subtype": str(raw.get("subtype", "")),
-                }
-                # Extract content from various message shapes
-                if "content" in raw:
-                    msg_dict["content"] = str(raw["content"])[:2000]
-                if "data" in raw and isinstance(raw["data"], dict):
-                    d = raw["data"]
-                    if "content" in d:
-                        msg_dict["content"] = str(d["content"])[:2000]
-                    if "tool_name" in d:
-                        msg_dict["tool"] = d["tool_name"]
-                    if "tool_input" in d:
-                        msg_dict["input"] = d["tool_input"]
-            elif isinstance(message, dict):
-                msg_dict = {k: v for k, v in message.items()
-                            if k in ("type", "subtype", "content", "tool", "input")}
-            else:
-                msg_dict = {"type": "raw", "content": str(message)[:2000]}
+            messages.append(msg)
 
-            messages.append(msg_dict)
-
-            # Real-time stdout
-            content = msg_dict.get("content", "")
-            if content and isinstance(content, str):
+            # Real-time stdout — extract readable content
+            content = ""
+            if "content" in msg and isinstance(msg["content"], str):
+                content = msg["content"]
+            elif "result" in msg and isinstance(msg["result"], str):
+                content = msg["result"]
+            if content:
                 print(f"    < {content[:200]}")
     except NotImplementedError:
         return {
