@@ -114,24 +114,33 @@ def analyze_commitment_fulfillment(
         to_events = []
 
         for entry in prompt_entries:
-            content = entry.get("content", "")
             tool = entry.get("tool", "")
             tool_input = entry.get("input", {})
 
-            # Match by action name appearing in prompt or tool input
-            text = f"{content} {tool} {json.dumps(tool_input)}"
-            if from_action and from_action.replace("_", " ") in text.lower():
-                from_events.append(entry)
-            if to_action and to_action.replace("_", " ") in text.lower():
-                to_events.append(entry)
+            # Match by: Skill tool call with matching action name
+            skill_name = ""
+            if tool == "Skill" and isinstance(tool_input, dict):
+                skill_name = tool_input.get("skill", "")
+
+            # Also check Bash commands for API endpoint patterns
+            bash_cmd = ""
+            if tool == "Bash" and isinstance(tool_input, dict):
+                bash_cmd = tool_input.get("command", "")
+
+            if from_action:
+                if skill_name == from_action or from_action in bash_cmd:
+                    from_events.append(entry)
+            if to_action:
+                if skill_name == to_action or to_action in bash_cmd:
+                    to_events.append(entry)
 
         # Also check SDK sessions
         for session in sessions:
             for msg in session.get("messages", []):
                 msg_text = json.dumps(msg)
-                if from_action and from_action.replace("_", " ") in msg_text.lower():
+                if from_action and from_action in msg_text:
                     from_events.append({"timestamp": session.get("started_at", ""), **msg})
-                if to_action and to_action.replace("_", " ") in msg_text.lower():
+                if to_action and to_action in msg_text:
                     to_events.append({"timestamp": session.get("started_at", ""), **msg})
 
         # Calculate fulfillment
