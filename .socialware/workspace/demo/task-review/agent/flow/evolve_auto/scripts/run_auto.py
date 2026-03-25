@@ -80,8 +80,14 @@ async def run_single_test(adapter, case: dict) -> dict:
     description = case.get("description", user_input)
 
     messages = []
+    print(f"    > {user_input}")
     try:
         async for message in adapter.launch_sdk(user_input):
+            # Skip non-content messages (rate limits, system events)
+            msg_type = getattr(message, "type", "") or ""
+            if "rate_limit" in str(msg_type).lower():
+                continue
+
             if hasattr(message, "__dict__"):
                 msg_dict = {k: str(v) if not isinstance(v, (str, int, float, bool, list, dict, type(None))) else v
                             for k, v in message.__dict__.items()}
@@ -90,6 +96,11 @@ async def run_single_test(adapter, case: dict) -> dict:
             else:
                 msg_dict = {"content": str(message)}
             messages.append(msg_dict)
+
+            # Real-time stdout: print text content
+            content = msg_dict.get("content", "")
+            if content and isinstance(content, str) and len(content) < 500:
+                print(f"    < {content[:200]}")
     except NotImplementedError:
         return {
             "description": description,
@@ -106,7 +117,7 @@ async def run_single_test(adapter, case: dict) -> dict:
         }
 
     # Check if expected skill was used
-    trace_text = json.dumps(messages)
+    trace_text = json.dumps(messages, default=str)
     skill_found = expected_skill.lower() in trace_text.lower() if expected_skill else True
 
     return {
@@ -119,9 +130,11 @@ async def run_single_test(adapter, case: dict) -> dict:
 
 
 async def run_all_tests(adapter, cases: list[dict]) -> list[dict]:
-    """Run all conversation test cases sequentially."""
+    """Run all conversation test cases sequentially with delay to avoid rate limits."""
     results = []
-    for case in cases:
+    for i, case in enumerate(cases):
+        if i > 0:
+            await asyncio.sleep(3)  # avoid rate limiting
         result = await run_single_test(adapter, case)
         status = "PASS" if result["passed"] else "FAIL"
         print(f"  [{status}] {result['description']}")

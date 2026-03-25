@@ -47,8 +47,17 @@ class ClaudeAdapter(BaseAdapter):
             allowed_tools=["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill"],
         )
 
-        async for message in query(prompt=prompt, options=options):
-            yield message
+        try:
+            async for message in query(prompt=prompt, options=options):
+                yield message
+        except Exception as e:
+            err_msg = str(e)
+            # SDK may throw on unknown message types (e.g., rate_limit_event)
+            # Yield error as a message instead of crashing
+            if "Unknown message type" in err_msg:
+                yield {"type": "error", "content": f"SDK error (non-fatal): {err_msg}"}
+            else:
+                raise
 
 
 if __name__ == "__main__":
