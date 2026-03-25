@@ -11,7 +11,10 @@ SCOPE      := $(AGENT_DIR)/scope/scope.md
 CONSTRAINTS:= $(AGENT_DIR)/commitment/commitment.yaml
 FLOW_YAML  := $(AGENT_DIR)/flow/flow.yaml
 SKILLS     := $(wildcard $(AGENT_DIR)/flow/*/SKILL.md)
-SOURCES    := $(ROLES) $(SCOPE) $(CONSTRAINTS) $(FLOW_YAML) $(SKILLS)
+# Include directories as deps so file additions/deletions trigger rebuild
+ROLE_DIR   := $(AGENT_DIR)/role
+FLOW_DIR   := $(AGENT_DIR)/flow
+SOURCES    := $(ROLES) $(SCOPE) $(CONSTRAINTS) $(FLOW_YAML) $(SKILLS) $(ROLE_DIR) $(FLOW_DIR)
 
 .PHONY: start run test clean help
 
