@@ -40,7 +40,7 @@ make create ROOM=demo APP=task-review DESC="Task review workflow"
 cd .socialware/workspace/demo/task-review
 uv sync
 
-ls             # agent  app  Makefile  pyproject.toml  src  .runtime
+ls -a          # .  ..  agent  app  Makefile  pyproject.toml  src  .runtime
 ls agent/role/ # default.md  dev.md  evolver.md  README.md
 cat agent/scope/scope.md    # Contains "task-review"
 cat Makefile | head -2       # "Socialware App — Workspace Makefile"
@@ -617,7 +617,7 @@ uv run agent/flow/evolve_auto/scripts/run_auto.py \
   --tests-dir agent/flow/evolve_auto/conversation_tests \
   --adapter claude
 # If SDK installed: Conversation Score: x/N
-# If not: "claude-agent-sdk not installed"
+# If not: "claude-agent-sdk not installed" (exact message may vary by version)
 kill %1
 
 # Verify reports exist
@@ -663,7 +663,7 @@ make start ROLE=evolver
 #   → reads commitment.yaml → understands each condition
 #   → JUDGES each commitment:
 #     C1: "submit_task at 02:33, review_task never happened → VIOLATED"
-#     C2: "create_task at 02:31, submit_task at 02:33, diff=116s > 10s → VIOLATED"
+#     C2: "create_task at 02:31, submit_task at 02:33 — only 2 minutes, well within 48h → FULFILLED"
 #   → Maps violations to primitives
 #   → Expected: evolver correctly identifies violations with time calculations
 
@@ -672,8 +672,7 @@ make start ROLE=evolver
 #   → proposes specific changes:
 #     "C1 violated — review_task never happens because no reviewer is using the app.
 #      Suggestion: adjust commitment condition or add reminder skill."
-#     "C2 violated — 116s > 10s. Either the condition is too strict (10s is unrealistic)
-#      or the workflow needs a direct submit button after create."
+#     "C2 fulfilled — 2 minutes well within 48h. No action needed."
 #   → developer approves → evolver edits files → runs deploy
 #   → Expected: evolver only modifies workspace files, NOT template
 
@@ -733,58 +732,6 @@ curl -s http://localhost:8001/violations
 curl -s -X POST http://localhost:8001/violations/v-001/resolve
 # Expected: {"status":"resolved","id":"v-001"}
 kill %1
-rm .runtime/data/evolve/violations/current.jsonl
-```
-| **Expected** | Evolver reads evolve/reports/*.json, proposes changes, applies them |
-
-```bash
-make start ROLE=evolver
-# In Claude Code:
-#   "check structure"     → runs check_structure.py, report saved
-#   "diagnose"            → runs diagnose.py, shows fulfillment rates
-#   "evaluate"            → runs run_eval.py (needs app running)
-#   "improve the review_task skill — add rejection handling"
-#     → reads evolve/reports/*.json
-#     → proposes edit → apply → make deploy
-#
-#   Verify: evolver only modifies workspace files (not template)
-#   Exit: Ctrl+C
-
-# Check template untouched:
-cd ../../../..
-git diff agent/
-# Should show NO changes
-cd .socialware/workspace/demo/task-review
-```
-
-### 4.7 Violations API
-
-| | |
-|---|---|
-| **Action** | Check violations API end-to-end (write, list, resolve) |
-| **Purpose** | Verify violations in evolve/violations/ are readable via API |
-| **Expected** | API returns violations list, resolve marks them resolved |
-
-```bash
-# Write a test violation (simulating diagnose.py output)
-mkdir -p .runtime/data/evolve/violations
-echo '{"id":"v-001","commitment":"C1","description":"review overdue","role":"reviewer","resolved":false}' \
-  > .runtime/data/evolve/violations/current.jsonl
-
-lsof -ti:8001 | xargs kill -9 2>/dev/null
-uv run uvicorn src.app:app --port 8001 &
-sleep 2
-curl -s http://localhost:8001/violations
-# Expected: [{"id":"v-001","commitment":"C1",...}]
-
-curl -s -X POST http://localhost:8001/violations/v-001/resolve
-# Expected: {"status":"resolved","id":"v-001"}
-
-curl -s http://localhost:8001/violations
-# Expected: [] (resolved)
-kill %1
-
-# Clean up
 rm .runtime/data/evolve/violations/current.jsonl
 ```
 
