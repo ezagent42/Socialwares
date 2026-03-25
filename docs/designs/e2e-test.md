@@ -573,143 +573,168 @@ make deploy
 
 All evolver reports save to `.runtime/data/evolve/reports/` in unified JSON format.
 
-### 4.1 evolve_check — structure consistency (no app needed)
+Scripts do mechanical work (extract data, run tests). The evolver LLM does reasoning (judge conditions, analyze failures, suggest improvements).
+
+### 4.1 Verify scripts work standalone
 
 | | |
 |---|---|
-| **Action** | Run check_structure.py |
-| **Purpose** | Verify all four-primitive cross-references are valid |
-| **Expected** | PASS, report saved to evolve/reports/check_*.json |
+| **Action** | Run each evolver script directly to verify they produce output |
+| **Purpose** | Verify scripts themselves work before using through evolver TUI |
+| **Expected** | Each script produces output + saves report JSON |
 
 ```bash
+# 4.1a check_structure (no app needed)
 uv run agent/flow/evolve_check/scripts/check_structure.py --agent-dir agent
-# Expected: STRUCTURE CHECK REPORT
-#   Flow Actions -> SKILL.md: ✓ All actions have SKILL.md
-#   Commitment References: ✓ (checks C1, C2 roles/actions exist)
-#   Scope Capabilities: listed for review
-#   PASS: No structural issues found.
-#   Report saved to .runtime/data/evolve/reports/check_*.json
+# Expected: STRUCTURE CHECK REPORT with ✓/✗ per check
+# Report saved to .runtime/data/evolve/reports/check_*.json
 
-# Verify report exists
-ls .runtime/data/evolve/reports/check_*.json
-cat .runtime/data/evolve/reports/check_*.json | python3 -m json.tool | head -10
-# Should have: type, timestamp, score, suggestions
-```
-
-### 4.2 evolve_eval — API testing (needs app running)
-
-| | |
-|---|---|
-| **Action** | Run eval against live app |
-| **Purpose** | Verify API endpoints work, report saved |
-| **Expected** | API Score: 4/4 (100%), report in evolve/reports/eval_*.json |
-
-```bash
+# 4.1b run_eval (needs app)
 lsof -ti:8001 | xargs kill -9 2>/dev/null
 uv run uvicorn src.app:app --port 8001 &
 sleep 2
 uv run agent/flow/evolve_eval/scripts/run_eval.py \
   --cases agent/flow/evolve_eval/eval_cases.yaml \
   --base-url http://localhost:8001
-# Expected:
-#   [PASS] Health check
-#   [PASS] Create task
-#   [PASS] List tasks
-#   [PASS] Non-existent task 404
-#   API Score: 4/4 (100%)
-#   Report saved to .runtime/data/evolve/reports/eval_*.json
+# Expected: API Score: 4/4 (100%)
+# Report saved to .runtime/data/evolve/reports/eval_*.json
 kill %1
 
-# Verify report
-ls .runtime/data/evolve/reports/eval_*.json
-```
-
-### 4.3 evolve_diagnose — conversation analysis (needs hook/SDK data)
-
-| | |
-|---|---|
-| **Action** | Run diagnose.py (should have hook data from Phase 2.5 TUI session) |
-| **Purpose** | Analyze hook data + commitment fulfillment, saves report + cursor |
-| **Expected** | Diagnostic report, fulfillment rates, report in evolve/reports/diagnose_*.json |
-
-```bash
+# 4.1c diagnose (needs hook data from Phase 2.5)
 uv run agent/flow/evolve_diagnose/scripts/diagnose.py \
   --data-dir .runtime/data \
   --commitment agent/commitment/commitment.yaml
-# Expected: DIAGNOSTIC REPORT
-#   Data Sources: Hook log entries: N, SDK sessions: M
-#   Commitment Fulfillment: C1, C2 status
-#   Recommendations
-#   Report saved to .runtime/data/evolve/reports/diagnose_*.json
+# Expected: DIAGNOSTIC DATA EXTRACTION
+#   Lists from/to events per commitment with timestamps
+#   NOTE: "Fulfillment NOT judged" — that's correct, evolver LLM judges
+# Report saved to .runtime/data/evolve/reports/diagnose_*.json
 
-# Verify report + cursor
-ls .runtime/data/evolve/reports/diagnose_*.json
-cat .runtime/data/evolve/state.yaml
-# Should have last_analysis timestamp + cursor positions
-```
-
-### 4.4 evolve_auto — automated conversation testing (needs SDK)
-
-| | |
-|---|---|
-| **Action** | Run run_auto.py with conversation test cases |
-| **Purpose** | Run agent on preset Q&A via SDK, score behavior |
-| **Expected** | Conversation score, failure analysis, report in evolve/reports/auto_test_*.json |
-
-```bash
+# 4.1d run_auto (needs SDK — may not be installed)
 lsof -ti:8001 | xargs kill -9 2>/dev/null
 uv run uvicorn src.app:app --port 8001 &
 sleep 2
 uv run agent/flow/evolve_auto/scripts/run_auto.py \
   --tests-dir agent/flow/evolve_auto/conversation_tests \
   --adapter claude
-# Expected (if claude-code-sdk installed):
-#   Running N conversation checks...
-#   [PASS/FAIL] Agent uses create_task skill
-#   [PASS/FAIL] Agent uses list_tasks skill
-#   ...
-#   Conversation Score: x/N
-#   Failure Analysis: (if any failures, lists suggestions per primitive)
-#   Results saved to .runtime/data/evolve/reports/auto_test_*.json
-#
-# Expected (if SDK not installed):
-#   [Claude SDK] claude-code-sdk not installed.
+# If SDK installed: Conversation Score: x/N
+# If not: "claude-code-sdk not installed"
 kill %1
 
-# Verify report + auto sessions isolated
-ls .runtime/data/evolve/reports/auto_test_*.json
-ls .runtime/data/evolve/auto_sessions/
-# auto_sessions should NOT appear in .runtime/data/sessions/
+# Verify reports exist
+ls .runtime/data/evolve/reports/
 ```
 
-### 4.5 Verify unified report format
+### 4.2 Evolver TUI — full cycle
 
 | | |
 |---|---|
-| **Action** | Check all 4 reports have consistent format |
-| **Purpose** | Verify unified JSON format across all report types |
-| **Expected** | All reports have: type, timestamp, score, suggestions |
+| **Action** | Start evolver, run all 5 skills through conversation |
+| **Purpose** | Verify evolver understands skills, reads references, makes judgments |
+| **Expected** | Evolver runs scripts + interprets results + judges commitments + proposes improvements |
+
+This is the CORE test — the evolver LLM must:
+- Use scripts as tools (run them, read output)
+- Read references/ for guidance on how to interpret results
+- Judge commitment conditions (natural language → LLM reasoning)
+- Map problems to four primitives
+- Propose specific improvements
 
 ```bash
-for report in .runtime/data/evolve/reports/*.json; do
-  echo "=== $(basename $report) ==="
-  python3 -c "
-import json
-with open('$report') as f:
-    r = json.load(f)
-print(f\"  type: {r['type']}\")
-print(f\"  score: {r.get('score', 'N/A')}\")
-print(f\"  suggestions: {len(r.get('suggestions', []))}\")
-"
-done
+# Start backend first (evolver needs it for eval)
+lsof -ti:8001 | xargs kill -9 2>/dev/null
+uv run uvicorn src.app:app --port 8001 &
+sleep 2
+
+make start ROLE=evolver
+# In Claude Code, do the full cycle:
+
+# Step 1: "check structure"
+#   → evolver runs check_structure.py
+#   → reads output → explains results
+#   → Expected: "All 4 checks passed" or lists specific gaps
+
+# Step 2: "evaluate" (app must be running)
+#   → evolver runs run_eval.py
+#   → reads output → maps any failures to primitives
+#   → Expected: "API Score 4/4" or "X failed — the /tasks endpoint..."
+
+# Step 3: "diagnose"
+#   → evolver runs diagnose.py → gets DATA EXTRACTION (events + timestamps)
+#   → reads commitment.yaml → understands each condition
+#   → JUDGES each commitment:
+#     C1: "submit_task at 02:33, review_task never happened → VIOLATED"
+#     C2: "create_task at 02:31, submit_task at 02:33, diff=116s > 10s → VIOLATED"
+#   → Maps violations to primitives
+#   → Expected: evolver correctly identifies violations with time calculations
+
+# Step 4: "improve" (based on all above)
+#   → evolver reads evolve/reports/*.json
+#   → proposes specific changes:
+#     "C1 violated — review_task never happens because no reviewer is using the app.
+#      Suggestion: adjust commitment condition or add reminder skill."
+#     "C2 violated — 116s > 10s. Either the condition is too strict (10s is unrealistic)
+#      or the workflow needs a direct submit button after create."
+#   → developer approves → evolver edits files → runs deploy
+#   → Expected: evolver only modifies workspace files, NOT template
+
+# Exit: Ctrl+C
+kill %1  # stop uvicorn
+
+# Verify template untouched:
+cd ../../../..
+git diff agent/
+# Should show NO changes
+cd .socialware/workspace/demo/task-review
 ```
 
-### 4.6 Evolver TUI — interactive improvement
+### 4.3 Verify reports after evolver session
 
 | | |
 |---|---|
-| **Action** | Start evolver role, do full check/diagnose/improve cycle |
-| **Purpose** | Verify evolver reads reports + proposes changes |
+| **Action** | Check all reports and evolve directory |
+| **Purpose** | Verify complete evolve output structure |
+| **Expected** | Reports from each script, cursor updated |
+
+```bash
+# All reports
+ls .runtime/data/evolve/reports/
+# Should have: check_*.json, eval_*.json, diagnose_*.json
+# (auto_test_*.json only if SDK installed)
+
+# Cursor
+cat .runtime/data/evolve/state.yaml
+# Should have last_extraction timestamp + cursor
+
+# Data dirs
+ls .runtime/data/evolve/
+# Expected: auto_sessions  reports  state.yaml  violations
+```
+
+### 4.4 Violations API
+
+| | |
+|---|---|
+| **Action** | Check violations API (evolve/violations/) |
+| **Purpose** | Verify violations readable + resolvable via API |
+| **Expected** | API returns violations, resolve works |
+
+```bash
+# Write a test violation (simulating diagnose output)
+mkdir -p .runtime/data/evolve/violations
+echo '{"id":"v-001","commitment":"C1","description":"review overdue","role":"reviewer","resolved":false}' \
+  > .runtime/data/evolve/violations/current.jsonl
+
+lsof -ti:8001 | xargs kill -9 2>/dev/null
+uv run uvicorn src.app:app --port 8001 &
+sleep 2
+curl -s http://localhost:8001/violations
+# Expected: [{"id":"v-001",...}]
+
+curl -s -X POST http://localhost:8001/violations/v-001/resolve
+# Expected: {"status":"resolved","id":"v-001"}
+kill %1
+rm .runtime/data/evolve/violations/current.jsonl
+```
 | **Expected** | Evolver reads evolve/reports/*.json, proposes changes, applies them |
 
 ```bash
