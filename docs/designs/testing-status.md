@@ -3,6 +3,7 @@
 > 盘点当前已有测试、evolve-v2 分支新增测试、缺口分析，以及测试信号如何路由到四原语改进。
 >
 > 理论框架见 [iteration-guide.md](iteration-guide.md) 第五章（测试与迭代）、第九章（Agent 自迭代）。
+> 参考实现见 [autoservice-evolve-design.md](../../../autoservice/docs/socialware_0324/autoservice-evolve-design.md)（四层诊断 × 四原语精确映射）。
 
 ---
 
@@ -186,4 +187,36 @@ evolve-v2 分支覆盖:
 优先级 4: 渐进自治的显式标注
   · evolver Skill 中标注当前自治等级（L1）
   · 随着验证通过率上升，逐步放开等级（iteration-guide 第九章 9.7）
+```
+
+### autoservice 参考架构的增强方向
+
+> 来源：[autoservice-evolve-design.md](../../../autoservice/docs/socialware_0324/autoservice-evolve-design.md)
+
+以下是 autoservice 设计中已详细规划、evolve-v2 尚未实现的增强点：
+
+```
+优先级 5: 四层诊断增强
+  · evolve_diagnose 从单层诊断升级为 L1→L4 分层
+  · L1: 数据层脚本（kb_checker 等价物）
+  · L2: Prompt 质量题集
+  · L3: 流程逻辑路径分析（trace_analyzer 等价物）
+  · L4: 模型行为多次重复验证
+  · 参考: autoservice-evolve-design.md §3
+
+优先级 6: evaluator / evolver 角色分离
+  · evaluator 只做测量（diagnose + batch-eval 两种模式）
+  · evolver 只做改进（map → branch → compare → materialize）
+  · 参考: autoservice-evolve-design.md §4
+
+优先级 7: 蒙特卡洛分支验证
+  · evolve_improve 从直接修改 → 生成 2-3 个 delta 变体
+  · evaluator batch-eval 对各分支打分
+  · skill_diff 对比 → 选最优 → materialize
+  · 参考: autoservice-evolve-design.md §4
+
+优先级 8: Commitment 自动升级
+  · 同类问题 3 次出现 → 自动触发增加基线测试用例
+  · 升级后验证闭环：全量回归 + 通过率不降 >5%
+  · 参考: autoservice-evolve-design.md §5
 ```
