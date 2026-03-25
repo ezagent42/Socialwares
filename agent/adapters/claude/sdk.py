@@ -84,11 +84,12 @@ class ClaudeAdapter(BaseAdapter):
                 print("  Install: uv pip install 'claude-agent-sdk>=0.1.16'")
                 return
 
+        project_dir = str(self.config.project_dir)
         options = ClaudeAgentOptions(
-            cwd=str(self.config.project_dir),  # so SDK finds .claude/skills/
+            cwd=project_dir,
             system_prompt=self.config.soul,
             allowed_tools=["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill"],
-            setting_sources=["user", "project"],
+            setting_sources=["user", "project", "local"],
             permission_mode="acceptEdits",
         )
 
