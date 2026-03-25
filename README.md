@@ -251,7 +251,7 @@ Built-in role for improving your app based on runtime evidence.
 | Skill | Mode | What it does |
 |-------|------|-------------|
 | `evolve_diagnose` | Manual | Scan conversations + constraints → diagnostic report |
-| `evolve_eval` | Manual | Run eval_cases.yaml → score (api_checks + conversation_checks) |
+| `evolve_eval` | Manual | Run eval_cases.yaml → score (API checks) |
 | `evolve_improve` | Manual | Map problems to primitives → propose + apply changes |
 | `evolve_auto` | Auto | Automated loop: evaluate → diagnose → propose → apply → re-evaluate |
 

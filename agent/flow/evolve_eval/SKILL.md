@@ -1,6 +1,6 @@
 ---
 name: evolve_eval
-description: "Run eval cases against live app and report performance score"
+description: "Run API eval cases against live app and report performance score"
 ---
 
 # Evaluate Performance
@@ -33,11 +33,13 @@ uv run agent/flow/evolve_eval/scripts/run_eval.py \
 
 ## eval_cases.yaml
 
-The eval cases file grows with your app through progressive phases:
+API eval cases — direct HTTP checks for backend endpoints. The file grows with your app through progressive phases:
 - P1: basic health check
 - P2: add task CRUD cases
 - P3: add quality/SLA cases
 - P5: add role-based permission cases
+
+Conversation tests have moved to `agent/flow/evolve_auto/conversation_tests/`.
 
 ## Notes
 

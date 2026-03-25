@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Automated conversation testing — run agent on test cases via SDK.
 
-Sends each conversation_check input to the agent via SDK,
+Sends each conversation test input to the agent via SDK,
 collects traces, checks if expected skill was used, scores results.
 
 Usage:
-    uv run run_auto.py --cases eval_cases.yaml --adapter claude --role default
+    uv run run_auto.py --tests-dir agent/flow/evolve_auto/conversation_tests --adapter claude
 """
 from __future__ import annotations
 
@@ -21,11 +21,29 @@ from pathlib import Path
 import yaml
 
 
-def load_conversation_checks(path: Path) -> list[dict]:
-    """Load conversation_checks from eval_cases.yaml."""
-    with open(path) as f:
-        data = yaml.safe_load(f) or {}
-    return data.get("conversation_checks", [])
+def load_conversation_tests(path: Path) -> list[dict]:
+    """Load conversation tests from a YAML file or directory.
+
+    If path is a directory, reads all *.yaml files.
+    If path is a file, reads that file.
+    """
+    cases = []
+    if path.is_dir():
+        for f in sorted(path.glob("*.yaml")):
+            with open(f) as fh:
+                data = yaml.safe_load(fh) or {}
+            role = data.get("role", f.stem)
+            for case in data.get("cases", []):
+                case["role"] = role
+                cases.append(case)
+    elif path.is_file():
+        with open(path) as fh:
+            data = yaml.safe_load(fh) or {}
+        role = data.get("role", "default")
+        for case in data.get("cases", []):
+            case["role"] = role
+            cases.append(case)
+    return cases
 
 
 def load_adapter(adapter_name: str, project_dir: Path):
@@ -121,16 +139,17 @@ def main() -> None:
         os.chdir(workspace_root)
 
     parser = argparse.ArgumentParser(description="Automated conversation testing")
-    parser.add_argument("--cases", required=True, help="Path to eval_cases.yaml")
+    parser.add_argument("--tests-dir", default="agent/flow/evolve_auto/conversation_tests",
+                        help="Directory with conversation test YAML files")
     parser.add_argument("--adapter", default="claude", help="Platform adapter")
     parser.add_argument("--role", default="default", help="Role to test")
     args = parser.parse_args()
 
-    cases_path = Path(args.cases)
-    cases = load_conversation_checks(cases_path)
+    tests_path = Path(args.tests_dir)
+    cases = load_conversation_tests(tests_path)
 
     if not cases:
-        print("No conversation_checks found in eval_cases.yaml.")
+        print("No conversation tests found.")
         sys.exit(0)
 
     # Find project dir
@@ -142,10 +161,26 @@ def main() -> None:
 
     adapter = load_adapter(args.adapter, project_dir)
 
-    print(f"Running {len(cases)} conversation checks (role: {args.role}, adapter: {args.adapter})")
+    print(f"Running {len(cases)} conversation tests (role: {args.role}, adapter: {args.adapter})")
     print()
 
     results = asyncio.run(run_all_tests(adapter, cases))
+
+    # Analyze failures
+    failures = [r for r in results if not r["passed"]]
+    if failures:
+        print()
+        print("Failure Analysis:")
+        for f in failures:
+            print(f"  [{f['expected_skill']}] Input: \"{f['input']}\"")
+            if "error" in f:
+                print(f"    Error: {f['error']}")
+            else:
+                print(f"    Expected skill '{f['expected_skill']}' not found in trace")
+            # Map to four-primitive improvement
+            print(f"    Suggestion: Check agent/flow/{f['expected_skill']}/SKILL.md")
+            print(f"                - Is the trigger description clear enough?")
+            print(f"                - Does the skill match the input pattern?")
 
     # Score
     passed = sum(1 for r in results if r["passed"])

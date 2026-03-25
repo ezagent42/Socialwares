@@ -50,3 +50,11 @@ class TestEvalScript:
         )
         assert result.returncode == 0
         assert "Score:" in result.stdout
+
+    def test_api_only_no_conversation_checks(self, tmp_path):
+        """eval_cases.yaml should only contain api_checks, no conversation_checks."""
+        import yaml
+        with open(EVAL_CASES) as f:
+            data = yaml.safe_load(f) or {}
+        assert "api_checks" in data
+        assert "conversation_checks" not in data

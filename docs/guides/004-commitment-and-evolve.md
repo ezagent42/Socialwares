@@ -161,9 +161,8 @@ Reads conversations + commitment standards. The diagnose script scans:
 
 #### Eval
 
-Two sections in `eval_cases.yaml`:
-- `api_checks` — HTTP endpoint verification
-- `conversation_checks` — conversation-based behavior verification
+`eval_cases.yaml` contains API checks — HTTP endpoint verification.
+Conversation tests live in `agent/flow/evolve_auto/conversation_tests/*.yaml`.
 
 #### Improve
 

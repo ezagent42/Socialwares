@@ -14,7 +14,7 @@ User says "auto-test", "run conversation checks", "automated testing", "test via
 Runs automated conversation tests against the agent via SDK adapter:
 
 ```
-For each conversation_check in eval_cases.yaml:
+For each conversation test in conversation_tests/*.yaml:
   1. Send user input to agent via SDK
   2. Collect response trace
   3. Check if expected skill was used
@@ -27,9 +27,8 @@ For each conversation_check in eval_cases.yaml:
 WORKSPACE_ROOT=$(cat .workspace_root)
 cd "$WORKSPACE_ROOT"
 uv run agent/flow/evolve_auto/scripts/run_auto.py \
-  --cases agent/flow/evolve_eval/eval_cases.yaml \
-  --adapter claude \
-  --role default
+  --tests-dir agent/flow/evolve_auto/conversation_tests \
+  --adapter claude
 ```
 
 ## Flow
@@ -43,18 +42,19 @@ cd "$WORKSPACE_ROOT"
 ```
 
 1. Developer says "run conversation checks" or "auto-test with claude adapter"
-2. Evolver runs `scripts/run_auto.py --cases ... --adapter claude --role default`
-3. Script loads conversation_checks from eval_cases.yaml
+2. Evolver runs `scripts/run_auto.py --tests-dir ... --adapter claude`
+3. Script loads conversation tests from `conversation_tests/*.yaml`
 4. Each test input is sent to the agent via SDK adapter
 5. Response traces are checked for expected_skill usage
 6. Reports results:
    - Per-case PASS/FAIL
+   - Failure analysis with improvement suggestions
    - Overall conversation score
 7. Results saved to `.runtime/data/auto_tests/`
 
 ## Prerequisites
 
-- eval_cases.yaml must have `conversation_checks` entries
+- `conversation_tests/` directory must have test YAML files (e.g., `default.yaml`)
 - SDK adapter must be configured for the chosen platform
 - Role must be deployed to `.runtime/agents/<role>/`
 
@@ -62,5 +62,6 @@ cd "$WORKSPACE_ROOT"
 
 - Tests run sequentially to avoid overwhelming the SDK
 - Each test case specifies input, expected_skill, and description
+- Test files are organized per role: `default.yaml`, `reviewer.yaml`, etc.
 - Results are timestamped and saved for trend analysis
 - Does NOT modify agent/ primitives — only tests and reports
