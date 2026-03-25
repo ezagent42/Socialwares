@@ -587,6 +587,7 @@ Scripts do mechanical work (extract data, run tests). The evolver LLM does reaso
 # 4.1a check_structure (no app needed)
 uv run agent/flow/evolve_check/scripts/check_structure.py --agent-dir agent
 # Expected: STRUCTURE CHECK REPORT with ✓/✗ per check
+# Includes flow graph validation when flows are defined (reachable states, terminal states, no isolation)
 # Report saved to .runtime/data/evolve/reports/check_*.json
 
 # 4.1b run_eval (needs app)
@@ -687,6 +688,8 @@ cd .socialware/workspace/demo/task-review
 ```
 
 ### 4.3 Verify reports after evolver session
+
+diagnose.py also extracts flow transition events (observed vs declared order) when flows are defined in flow.yaml. The report includes a "Flow Transition Events" section showing which transitions actually occurred vs the declared transition order.
 
 | | |
 |---|---|
@@ -1067,12 +1070,16 @@ cat .runtime/agents/default/SOUL.md | head -15
 uv run agent/flow/evolve_check/scripts/check_structure.py --agent-dir agent
 # Expected: STRUCTURE CHECK REPORT
 #   Flow Actions -> SKILL.md: All actions have SKILL.md
+#   Flow State Machine Graph: All state machine graphs valid (if flows defined)
 #   Commitment References: All commitment references valid
 #   Scope Capabilities:
 #     SCOPE: - Health check (/health)
 #     SCOPE: - Create tasks (POST /tasks)
 #     ...
 #   PASS: No structural issues found.
+#
+# Note: SKILL.md files should not contain hardcoded URLs.
+# The agent discovers endpoints from project configuration.
 ```
 
 ---

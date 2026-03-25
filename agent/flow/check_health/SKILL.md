@@ -15,7 +15,7 @@ User says "check status", "health check", "is the App running", etc.
 2. Return status information
 
 ## API
+Call the app's health endpoint: `GET /health`
 
-```bash
-curl http://localhost:8001/health
-```
+The base URL and port depend on your app configuration (see `src/app.py`).
+The agent should discover the correct URL from the project configuration.

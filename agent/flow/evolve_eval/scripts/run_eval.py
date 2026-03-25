@@ -4,6 +4,9 @@
 Reads eval_cases.yaml, makes HTTP requests, compares responses.
 Outputs pass/fail per case and overall score.
 
+The --base-url is configurable; it defaults to http://localhost:8001
+but should be set to match your app's actual deployment URL/port.
+
 Usage:
     uv run run_eval.py --cases eval_cases.yaml --base-url http://localhost:8001
     uv run run_eval.py --cases eval_cases.yaml  # default: http://localhost:8001

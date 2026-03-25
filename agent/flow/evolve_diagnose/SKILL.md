@@ -34,6 +34,7 @@ The script ONLY extracts data. It does NOT judge fulfillment. It:
 - Reads hook prompt logs (prompts/*.jsonl) with cursor-based incremental scan
 - Reads SDK session files (sessions/*.json) with cursor-based incremental scan
 - For each commitment, finds `from` and `to` action events in the data
+- Extracts flow transition events: matches observed Skill calls against declared state machine transitions, preserving order and timestamps for evolver comparison
 - Outputs raw event counts and timestamps
 - Updates cursor in evolve/state.yaml for next incremental run
 

@@ -161,6 +161,75 @@ def check_role_flow(agent_dir: Path) -> list[str]:
     return issues
 
 
+def check_flow_graph(agent_dir: Path) -> list[str]:
+    """Check flow state machine graph completeness."""
+    flow_yaml = agent_dir / "flow" / "flow.yaml"
+    if not flow_yaml.exists():
+        return []
+
+    with open(flow_yaml) as f:
+        data = yaml.safe_load(f) or {}
+
+    flows = data.get("flows") or {}
+    if not flows or not isinstance(flows, dict):
+        return []  # No state machines — not an error
+
+    issues = []
+    for fname, fdata in flows.items():
+        if not isinstance(fdata, dict):
+            continue
+
+        name = fdata.get("name", fname)
+        states = set(fdata.get("states", []))
+        transitions = fdata.get("transitions", [])
+
+        if not states:
+            issues.append(f"FLOW {name}: no states defined")
+            continue
+        if not transitions:
+            issues.append(f"FLOW {name}: no transitions defined")
+            continue
+
+        # Check all transition from/to states are in states list
+        for t in transitions:
+            fr = t.get("from", "")
+            to = t.get("to", "")
+            if fr and fr not in states:
+                issues.append(f"FLOW {name}: transition from '{fr}' not in states list")
+            if to and to not in states:
+                issues.append(f"FLOW {name}: transition to '{to}' not in states list")
+
+        # Check reachability: all states reachable from first state
+        if states:
+            first_state = fdata.get("states", [])[0]
+            reachable = {first_state}
+            changed = True
+            while changed:
+                changed = False
+                for t in transitions:
+                    if t.get("from") in reachable and t.get("to") not in reachable:
+                        reachable.add(t.get("to"))
+                        changed = True
+            unreachable = states - reachable
+            for s in unreachable:
+                issues.append(f"FLOW {name}: state '{s}' is unreachable from '{first_state}'")
+
+        # Check terminal states (states with no outgoing transitions)
+        outgoing = {t.get("from") for t in transitions}
+        terminal = states - outgoing
+        if not terminal:
+            issues.append(f"FLOW {name}: no terminal states (possible infinite loop)")
+
+        # Check isolated states (no incoming AND no outgoing, except first state)
+        incoming = {t.get("to") for t in transitions}
+        first_state = fdata.get("states", [])[0] if fdata.get("states") else None
+        for s in states:
+            if s not in outgoing and s not in incoming and s != first_state:
+                issues.append(f"FLOW {name}: state '{s}' is isolated (no transitions in or out)")
+
+    return issues
+
+
 def check_scope(agent_dir: Path) -> list[str]:
     """List scope capabilities for manual review."""
     scope_file = agent_dir / "scope" / "scope.md"
@@ -227,7 +296,23 @@ def main() -> None:
         print("  ✓ All roles have actions, all flow roles have role files")
     print()
 
-    # 3. Commitment references
+    # 3. Flow State Machine Graph
+    print("## Flow State Machine Graph")
+    graph_issues = check_flow_graph(agent_dir)
+    if graph_issues:
+        for issue in graph_issues:
+            print(f"  ✗ {issue}")
+    else:
+        # Check if any flows exist
+        with open(agent_dir / "flow" / "flow.yaml") as f:
+            fdata = yaml.safe_load(f) or {}
+        if fdata.get("flows") and fdata["flows"] != {}:
+            print("  ✓ All state machine graphs valid")
+        else:
+            print("  ○ No state machines defined (direct actions only)")
+    print()
+
+    # 4. Commitment references
     print("## Commitment References")
     commit_issues = check_commitment_refs(agent_dir)
     if commit_issues:
@@ -237,7 +322,7 @@ def main() -> None:
         print("  ✓ All commitment references valid (or no commitments defined)")
     print()
 
-    # 4. Scope capabilities
+    # 5. Scope capabilities
     print("## Scope Capabilities (for manual review)")
     scope_info = check_scope(agent_dir)
     for info in scope_info:
@@ -245,7 +330,7 @@ def main() -> None:
     print()
 
     # Summary
-    total_issues = len(flow_issues) + len(role_issues) + len(commit_issues)
+    total_issues = len(flow_issues) + len(role_issues) + len(graph_issues) + len(commit_issues)
     print("=" * 60)
     if total_issues == 0:
         print(f"PASS: No structural issues found.")
@@ -264,16 +349,19 @@ def main() -> None:
         "timestamp": timestamp.isoformat(),
         "source": str(agent_dir),
         "score": 1.0 if total_issues == 0 else max(0, 1.0 - total_issues * 0.1),
-        "passed": (len(flow_issues) == 0) + (len(role_issues) == 0) + (len(commit_issues) == 0),
-        "total": 3,
+        "passed": (len(flow_issues) == 0) + (len(role_issues) == 0) + (len(graph_issues) == 0) + (len(commit_issues) == 0),
+        "total": 4,
         "summary": "All structure checks passed" if total_issues == 0 else f"{total_issues} issues found",
-        "details": flow_issues + role_issues + commit_issues,
+        "details": flow_issues + role_issues + graph_issues + commit_issues,
         "suggestions": [
             {"primitive": "flow", "action": f"Create SKILL.md for: {issue.split(chr(39))[1]}", "reason": issue}
             for issue in flow_issues if "MISSING" in issue
         ] + [
             {"primitive": "role", "action": f"Create role/{issue.split(chr(39))[1]}.md" if "MISSING" in issue else "Add actions in flow.yaml", "reason": issue}
             for issue in role_issues
+        ] + [
+            {"primitive": "flow", "action": "Fix state machine graph", "reason": issue}
+            for issue in graph_issues
         ] + [
             {"primitive": "commitment" if "commitment" in issue.lower() else "role",
              "action": "Add missing reference", "reason": issue}

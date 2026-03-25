@@ -140,10 +140,18 @@ See [docs/discuss/commitment.md](docs/discuss/commitment.md) for full design dis
 
 ### Flow — How
 
-Actions the Agent can execute, registered in `flow.yaml`:
+Actions and state machines the Agent can execute, registered in `flow.yaml`:
 
 ```yaml
 # agent/flow/flow.yaml
+flows:
+  F1:
+    name: task_lifecycle
+    resource: task                # what object has this state
+    states: [draft, submitted, approved, closed]
+    transitions:
+      - { from: draft, action: submit, to: submitted, role: [default] }
+
 direct_actions:
   - { action: check_health,     role: [default, dev, evolver], description: "Check app health" }
   - { action: setup_claude,     role: [dev],                   description: "Configure Claude Code" }
@@ -155,7 +163,9 @@ direct_actions:
   - { action: evolve_auto,      role: [evolver],               description: "Automated evolution loop" }
 ```
 
-Each action has a `SKILL.md` (+ optional `scripts/`). `deploy.sh` reads `flow.yaml` and symlinks only the actions allowed for each role into `.runtime/`.
+Flows define state machines with `resource` (what object has the state), `states`, and `transitions`. Direct actions have no state machine.
+
+Each action has a `SKILL.md` (+ optional `scripts/`). SKILL.md files should not contain hardcoded URLs — the agent discovers endpoints from project configuration. `deploy.sh` reads `flow.yaml` and symlinks only the actions allowed for each role into `.runtime/`.
 
 ## Workflows
 
@@ -169,7 +179,7 @@ What it generates per role:
 - Skills dir — symlinks to allowed flow/ actions (per flow.yaml): `.claude/skills/` (claude) or `.agents/skills/` (codex/kimi)
 - Hooks dir — `log_prompt.sh` (UserPromptSubmit) + `log_tool.sh` (PreToolUse): `.claude/hooks/` (claude) or `.codex/hooks/` (codex) or none (kimi)
 - Hook registration — `settings.local.json` (claude) or `.codex/hooks.json` (codex) or none (kimi)
-- Prompt file — merged scope/scope.md + role/{name}.md: `SOUL.md` (claude) or `AGENTS.md` (codex/kimi)
+- Prompt file — merged scope/scope.md + role/{name}.md + workflow text from flows: `SOUL.md` (claude) or `AGENTS.md` (codex/kimi). When flows define state machines, deploy injects a workflow summary (states, transitions) into the prompt file.
 - `.workspace_root` — marker pointing to workspace root
 - `commitment.yaml` — copied from commitment/
 - `flow.yaml` — copied for reference
@@ -264,7 +274,7 @@ Built-in role for improving your app based on runtime evidence.
 
 | Skill | Mode | What it does |
 |-------|------|-------------|
-| `evolve_check` | Manual | Check structural consistency of four primitives (no app needed) |
+| `evolve_check` | Manual | Check structural consistency of four primitives + flow graph completeness (no app needed) |
 | `evolve_diagnose` | Manual | Scan conversations + commitments → diagnostic report |
 | `evolve_eval` | Manual | Run eval_cases.yaml → score (API checks) |
 | `evolve_improve` | Manual | Map problems to primitives → propose + apply changes |

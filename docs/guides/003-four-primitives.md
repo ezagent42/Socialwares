@@ -140,6 +140,7 @@ Actions and state machines in `agent/flow/`.
 flows:
   F1:
     name: task_lifecycle
+    resource: task              # what object has this state (task, order, user, etc.)
     states: [draft, submitted, approved, closed]
     transitions:
       - { from: draft, action: submit, to: submitted, role: [default] }
@@ -148,6 +149,8 @@ flows:
 direct_actions:
   - { action: check_health, role: [default, dev, evolver], description: "Check health" }
 ```
+
+Each flow has a `resource` field identifying what object carries the state (e.g., task, order, user).
 
 ### SKILL.md — Action Definition
 
@@ -178,6 +181,12 @@ agent/flow/
 ### deploy.sh Processing
 
 Reads flow.yaml → **symlinks** only the actions allowed for each role into `.runtime/agents/{name}/.claude/skills/`. Symlinks within workspace mean changes to `agent/flow/` are instantly visible. Template→workspace isolation is handled by `create-my-socialware` (copy).
+
+When flows define state machines, deploy also injects a workflow summary (states, transitions) into SOUL.md/AGENTS.md so the agent knows the valid state machine paths.
+
+### DSL Principle
+
+SKILL.md files should not contain hardcoded URLs. The agent discovers endpoints from project configuration (e.g., `src/app.py`). This keeps skills portable across environments.
 
 ### Role-Based Skill Allocation
 

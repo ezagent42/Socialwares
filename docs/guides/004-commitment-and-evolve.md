@@ -82,7 +82,7 @@ The evolver's `diagnose.py` later reads these logs alongside `commitment.yaml`, 
 
 #### Development Phase (structure check)
 
-Evolver checks consistency between commitment and other primitives:
+Evolver checks consistency between commitment and other primitives, plus flow graph completeness:
 
 ```
 For each commitment:
@@ -93,6 +93,11 @@ For each commitment:
   - on_violation.role exists in agent/role/?
   - on_violation.action exists in flow.yaml?
   - gap found → report to developer
+
+For each flow state machine:
+  - All states reachable from initial state?
+  - Terminal states exist (no infinite loops)?
+  - No isolated states?
 ```
 
 #### Runtime Phase (fulfillment check)
@@ -135,8 +140,8 @@ make start ROLE=evolver
 ### Manual Mode
 
 ```
-You: "check structure" → scripts/check_structure.py verifies four primitives → report
-You: "diagnose"        → scripts/diagnose.py scans runtime data → report
+You: "check structure" → scripts/check_structure.py verifies four primitives + flow graph completeness → report
+You: "diagnose"        → scripts/diagnose.py scans runtime data + flow transition events → report
 You: "evaluate"        → scripts/run_eval.py runs eval cases → score
 You: "improve"         → propose changes based on evidence → apply
 ```
@@ -146,6 +151,7 @@ You: "improve"         → propose changes based on evidence → apply
 Reads conversations + commitment standards. The diagnose script scans:
 - Conversation logs for failed actions and missing capabilities
 - Commitment fulfillment by matching log events to commitment actions
+- Flow transition events (observed vs declared order) when flows are defined
 - Fulfillment rate = fulfilled / total per commitment
 
 #### Eval

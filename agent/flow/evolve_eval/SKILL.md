@@ -9,8 +9,12 @@ description: "Run API eval cases against live app and report performance score"
 
 ```bash
 WORKSPACE_ROOT=$(cat .workspace_root) && cd "$WORKSPACE_ROOT"
-uv run agent/flow/evolve_eval/scripts/run_eval.py --cases agent/flow/evolve_eval/eval_cases.yaml --base-url http://localhost:8001
+uv run agent/flow/evolve_eval/scripts/run_eval.py \
+  --cases agent/flow/evolve_eval/eval_cases.yaml \
+  --base-url <APP_BASE_URL>
 ```
+
+The `--base-url` defaults to `http://localhost:8001` but should match your app's actual configuration.
 
 ## Trigger
 
@@ -60,10 +64,14 @@ cd "$WORKSPACE_ROOT"
 ## Usage
 
 ```bash
+WORKSPACE_ROOT=$(cat .workspace_root)
+cd "$WORKSPACE_ROOT"
 uv run agent/flow/evolve_eval/scripts/run_eval.py \
   --cases agent/flow/evolve_eval/eval_cases.yaml \
-  --base-url http://localhost:8001
+  --base-url <APP_BASE_URL>
 ```
+
+The `--base-url` defaults to `http://localhost:8001` but should match your app's actual configuration.
 
 ## eval_cases.yaml
 

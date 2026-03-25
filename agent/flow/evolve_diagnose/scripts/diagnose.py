@@ -162,11 +162,64 @@ def extract_commitment_events(
     return results
 
 
+def extract_flow_transitions(
+    flow_yaml_path: Path,
+    prompt_entries: list[dict],
+) -> dict:
+    """Extract events that match flow transitions, in order.
+
+    Returns per-flow: list of observed actions with timestamps.
+    Does NOT judge — evolver compares against declared order.
+    """
+    if not flow_yaml_path.exists():
+        return {}
+
+    with open(flow_yaml_path) as f:
+        data = yaml.safe_load(f) or {}
+
+    flows = data.get("flows") or {}
+    if not flows or not isinstance(flows, dict):
+        return {}
+
+    results = {}
+    for fname, fdata in flows.items():
+        if not isinstance(fdata, dict):
+            continue
+
+        name = fdata.get("name", fname)
+        transitions = fdata.get("transitions", [])
+        declared_actions = [t.get("action", "") for t in transitions]
+
+        # Find matching events in conversation log
+        observed = []
+        for entry in prompt_entries:
+            tool = entry.get("tool", "")
+            tool_input = entry.get("input", {})
+            skill_name = ""
+            if tool == "Skill" and isinstance(tool_input, dict):
+                skill_name = tool_input.get("skill", "")
+
+            if skill_name in declared_actions:
+                observed.append({
+                    "timestamp": entry.get("timestamp", ""),
+                    "action": skill_name,
+                    "role": entry.get("role", ""),
+                })
+
+        results[name] = {
+            "declared_order": declared_actions,
+            "observed": observed,
+        }
+
+    return results
+
+
 def generate_report(
     commitments: dict,
     extracted: dict,
     prompt_count: int,
     session_count: int,
+    flow_transitions: dict | None = None,
 ) -> str:
     """Generate extraction report (facts only, no judgment)."""
     lines = []
@@ -194,6 +247,18 @@ def generate_report(
             for evt in data["to_events"]:
                 lines.append(f"           {evt['timestamp']} [{evt['role']}] {evt['detail']}")
             lines.append("")
+
+    if flow_transitions:
+        lines.append("## Flow Transition Events")
+        for fname, data in flow_transitions.items():
+            lines.append(f"  [{fname}]")
+            lines.append(f"    declared order: {' → '.join(data['declared_order'])}")
+            if data['observed']:
+                obs_str = ' → '.join(f"{o['action']}({o['timestamp'][:19]})" for o in data['observed'])
+                lines.append(f"    observed order: {obs_str}")
+            else:
+                lines.append(f"    observed: no matching events")
+        lines.append("")
 
     lines.append("NOTE: Fulfillment judgment is NOT made by this script.")
     lines.append("The evolver (LLM) reads this data + commitment conditions to judge.")
@@ -229,8 +294,12 @@ def main() -> None:
     # Extract events (no judgment)
     extracted = extract_commitment_events(commitments, prompt_entries, sessions)
 
+    # Extract flow transition events
+    flow_yaml_path = Path("agent/flow/flow.yaml")
+    flow_transitions = extract_flow_transitions(flow_yaml_path, prompt_entries)
+
     # Print text report
-    report = generate_report(commitments, extracted, len(prompt_entries), len(sessions))
+    report = generate_report(commitments, extracted, len(prompt_entries), len(sessions), flow_transitions)
     print(report)
 
     # Save structured JSON (for evolver to read and judge)
@@ -246,6 +315,7 @@ def main() -> None:
         "prompt_count": len(prompt_entries),
         "session_count": len(sessions),
         "commitments": extracted,
+        "flow_transitions": flow_transitions,
         "note": "Fulfillment NOT judged. Evolver reads this + conditions to judge.",
     }
     with open(report_file, "w") as f:

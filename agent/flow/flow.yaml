@@ -12,15 +12,15 @@ flows: {}
   #
   # F1:
   #   name: task_lifecycle
+  #   resource: task              # what object has this state (task, order, user, etc.)
   #   description: "Task from creation to closure"
   #   states: [draft, submitted, under_review, approved, rejected, closed]
   #   transitions:
-  #     - { from: _none_,        action: create_task, to: draft,        role: [admin, submitter] }
-  #     - { from: draft,         action: submit,      to: submitted,    role: [submitter] }
+  #     - { from: draft,         action: submit,      to: submitted,    role: [default] }
   #     - { from: submitted,     action: review,      to: under_review, role: [reviewer] }
   #     - { from: under_review,  action: approve,     to: approved,     role: [reviewer] }
   #     - { from: under_review,  action: reject,      to: rejected,     role: [reviewer] }
-  #     - { from: approved,      action: close,       to: closed,       role: [admin] }
+  #     - { from: approved,      action: close,       to: closed,       role: [default] }
 
 direct_actions:
   - action: check_health

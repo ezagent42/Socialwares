@@ -126,6 +126,39 @@ for role_file in "$AGENT_DIR"/role/*.md; do
         cat "$role_file"
     } > "$role_runtime/$PROMPT_FILE"
 
+    # Append workflow from flows (if any state machines defined)
+    if $PYTHON -c "import yaml" 2>/dev/null; then
+        workflow=$($PYTHON -c "
+import yaml
+with open('$FLOW_YAML') as f:
+    data = yaml.safe_load(f) or {}
+flows = data.get('flows') or {}
+if not flows or flows == {}:
+    exit(0)
+lines = ['', '---', '', '## Workflows']
+for fname, fdata in flows.items():
+    if not isinstance(fdata, dict):
+        continue
+    name = fdata.get('name', fname)
+    resource = fdata.get('resource', '')
+    resource_str = f' (resource: {resource})' if resource else ''
+    lines.append(f'### {name}{resource_str}')
+    transitions = fdata.get('transitions', [])
+    # Build transition chain
+    for t in transitions:
+        fr = t.get('from', '?')
+        action = t.get('action', '?')
+        to = t.get('to', '?')
+        roles = ', '.join(t.get('role', []))
+        lines.append(f'  {fr} → {action} (by {roles}) → {to}')
+    lines.append('')
+print('\n'.join(lines))
+" 2>/dev/null) || workflow=""
+        if [ -n "$workflow" ]; then
+            echo "$workflow" >> "$role_runtime/$PROMPT_FILE"
+        fi
+    fi
+
     # Symlink skills (filtered by flow.yaml)
     allowed_actions=""
     if [ -n "$ROLE_ACTIONS" ]; then

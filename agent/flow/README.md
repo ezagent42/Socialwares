@@ -40,11 +40,14 @@ Defines which actions exist and who can use them. Two types:
 flows:
   F1:
     name: task_lifecycle
+    resource: task              # what object has this state (task, order, user, etc.)
     states: [draft, submitted, approved, closed]
     transitions:
       - { from: _none_, action: create_task, to: draft, role: [admin] }
       - { from: draft,  action: submit,      to: submitted, role: [submitter] }
 ```
+
+Each flow has a `resource` field identifying what object carries the state.
 
 **Direct actions** — no state machine, execute immediately:
 
@@ -58,6 +61,8 @@ direct_actions:
 ## Role-Based Skill Allocation
 
 `deploy.sh` reads `flow.yaml` and **symlinks** only the actions allowed for each role into `.runtime/agents/{name}/.claude/skills/`. Symlinks within the workspace mean changes to `agent/flow/` are instantly visible without re-deploy. Template→workspace isolation is handled by `create-my-socialware` (which copies).
+
+When flows define state machines, deploy also injects a workflow summary (states, transitions) into SOUL.md/AGENTS.md so the agent knows the valid state machine paths.
 
 - `default` role → gets `check_health` skill only
 - `dev` role → gets `check_health` + `setup_claude` + `inspect` skills
@@ -79,6 +84,7 @@ Followed by Markdown: trigger conditions, execution steps, API calls.
 - State machines are enforced by the App (`src/`), not by the agent infrastructure
 - Permissions are checked by the App API
 - flow.yaml is the single source of truth for "what actions exist and who can use them"
-- SKILL.md is "how to execute the action"
+- SKILL.md is "how to execute the action" — should not contain hardcoded URLs (agent discovers endpoints from project config)
 - Skills are **symlinks** in `.runtime/` pointing to `agent/flow/` — changes are instantly visible
 - Template→workspace isolation is handled by `create-my-socialware` (copy), not by deploy
+- `check_structure.py` validates flow graph completeness: all states reachable, terminal states exist, no isolated states
