@@ -86,7 +86,7 @@ Each app has its own `Makefile`, `pyproject.toml`, and `.venv/` (copied from tem
 
 ```
 .socialware/workspace/{room}/{app}/
-├── Makefile                      ← make deploy / make start / make test / make clean
+├── Makefile                      ← make deploy / start / run / test / clean / sync
 ├── agent/                        ← Four primitives + toolchain
 │   └── Makefile.template         ← Template for workspace Makefile
 ├── src/
@@ -222,6 +222,16 @@ make create ROOM=my-team APP=task-manager DESC="Task Manager"
 ```
 
 Copies template → workspace (including `Makefile` from `agent/Makefile.template`), customizes scope.md and role files. Then Make runs deploy. Fails if workspace already exists.
+
+### make sync
+
+```bash
+# From within a workspace — sync scripts from template
+make sync
+make clean && make deploy
+```
+
+Updates adapters, deploy.sh, start.sh, Makefile from the template root. Use when the template has been updated and you want the latest scripts in your workspace. Skills (agent/flow/) are not synced — those are your app's custom content.
 
 ### claude.sh
 

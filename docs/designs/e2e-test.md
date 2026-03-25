@@ -617,7 +617,7 @@ uv run agent/flow/evolve_auto/scripts/run_auto.py \
   --tests-dir agent/flow/evolve_auto/conversation_tests \
   --adapter claude
 # If SDK installed: Conversation Score: x/N
-# If not: "claude-code-sdk not installed"
+# If not: "claude-agent-sdk not installed"
 kill %1
 
 # Verify reports exist
@@ -870,12 +870,12 @@ ls .runtime/agents/default/.claude/hooks/
 uv run uvicorn src.app:app --port 8001 &
 sleep 2
 uv run src/start_agent.py --role default --adapter claude --prompt "check health"
-# Expected (if claude-code-sdk installed):
+# Expected (if claude-agent-sdk installed):
 #   [SDK] Sending prompt to default via claude...
 #   Messages printed
 #   Session saved to .runtime/data/sessions/default_session_*.json
 # Expected (if SDK not installed):
-#   [Claude SDK] claude-code-sdk not installed.
+#   [Claude SDK] claude-agent-sdk not installed.
 
 ls .runtime/data/sessions/
 # Should have session file (if SDK worked)

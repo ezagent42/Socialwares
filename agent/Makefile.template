@@ -16,7 +16,10 @@ ROLE_DIR   := $(AGENT_DIR)/role
 FLOW_DIR   := $(AGENT_DIR)/flow
 SOURCES    := $(ROLES) $(SCOPE) $(CONSTRAINTS) $(FLOW_YAML) $(SKILLS) $(ROLE_DIR) $(FLOW_DIR)
 
-.PHONY: start run test clean help
+# Template root (for sync command)
+TEMPLATE_ROOT := $(shell git rev-parse --show-toplevel 2>/dev/null)
+
+.PHONY: start run test clean sync help
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -39,3 +42,19 @@ test: ## Run tests
 
 clean: ## Remove .runtime/
 	rm -rf $(RUNTIME)
+
+sync: ## Sync scripts from template (adapters, deploy, start, skills, Makefile)
+	@if [ -z "$(TEMPLATE_ROOT)" ]; then echo "Error: not in a git repo, cannot find template root"; exit 1; fi
+	@echo "Syncing from template: $(TEMPLATE_ROOT)"
+	@cp "$(TEMPLATE_ROOT)/agent/adapters/base.py" $(AGENT_DIR)/adapters/base.py
+	@cp "$(TEMPLATE_ROOT)/agent/adapters/claude/sdk.py" $(AGENT_DIR)/adapters/claude/sdk.py
+	@cp "$(TEMPLATE_ROOT)/agent/adapters/claude/shell.sh" $(AGENT_DIR)/adapters/claude/shell.sh
+	@cp "$(TEMPLATE_ROOT)/agent/adapters/codex/sdk.py" $(AGENT_DIR)/adapters/codex/sdk.py
+	@cp "$(TEMPLATE_ROOT)/agent/adapters/codex/shell.sh" $(AGENT_DIR)/adapters/codex/shell.sh
+	@cp "$(TEMPLATE_ROOT)/agent/adapters/kimicode/sdk.py" $(AGENT_DIR)/adapters/kimicode/sdk.py
+	@cp "$(TEMPLATE_ROOT)/agent/adapters/kimicode/shell.sh" $(AGENT_DIR)/adapters/kimicode/shell.sh
+	@cp "$(TEMPLATE_ROOT)/agent/deploy.sh" $(AGENT_DIR)/deploy.sh
+	@cp "$(TEMPLATE_ROOT)/agent/start.sh" $(AGENT_DIR)/start.sh
+	@cp "$(TEMPLATE_ROOT)/agent/Makefile.template" Makefile
+	@cp "$(TEMPLATE_ROOT)/src/start_agent.py" src/start_agent.py
+	@echo "Synced. Run 'make clean && make deploy' to rebuild."
