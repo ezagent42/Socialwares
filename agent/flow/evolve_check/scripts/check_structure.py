@@ -119,6 +119,48 @@ def check_commitment_refs(agent_dir: Path) -> list[str]:
     return issues
 
 
+def check_role_flow(agent_dir: Path) -> list[str]:
+    """Check role ↔ flow consistency."""
+    flow_yaml = agent_dir / "flow" / "flow.yaml"
+    role_dir = agent_dir / "role"
+    if not flow_yaml.exists() or not role_dir.exists():
+        return []
+
+    with open(flow_yaml) as f:
+        data = yaml.safe_load(f) or {}
+
+    # Collect all roles referenced in flow.yaml
+    flow_roles = set()
+    for action in data.get("direct_actions", []):
+        for role in action.get("role", []):
+            flow_roles.add(role)
+    for flow_name, flow in (data.get("flows") or {}).items():
+        if isinstance(flow, dict):
+            for t in flow.get("transitions", []):
+                for role in t.get("role", []):
+                    flow_roles.add(role)
+
+    # Collect existing role files
+    existing_roles = set()
+    for f in role_dir.iterdir():
+        if f.is_file() and f.suffix == ".md" and f.name != "README.md":
+            existing_roles.add(f.stem)
+
+    issues = []
+
+    # flow.yaml references role that doesn't exist?
+    for role in flow_roles:
+        if role not in existing_roles:
+            issues.append(f"MISSING ROLE: flow.yaml references role '{role}' but role/{role}.md not found")
+
+    # role exists but flow.yaml has no actions for it?
+    for role in existing_roles:
+        if role not in flow_roles:
+            issues.append(f"UNUSED ROLE: role/{role}.md exists but flow.yaml assigns no actions to it")
+
+    return issues
+
+
 def check_scope(agent_dir: Path) -> list[str]:
     """List scope capabilities for manual review."""
     scope_file = agent_dir / "scope" / "scope.md"
@@ -175,7 +217,17 @@ def main() -> None:
         print("  ✓ All actions have SKILL.md")
     print()
 
-    # 2. Commitment references
+    # 2. Role ↔ Flow
+    print("## Role ↔ Flow Consistency")
+    role_issues = check_role_flow(agent_dir)
+    if role_issues:
+        for issue in role_issues:
+            print(f"  ✗ {issue}")
+    else:
+        print("  ✓ All roles have actions, all flow roles have role files")
+    print()
+
+    # 3. Commitment references
     print("## Commitment References")
     commit_issues = check_commitment_refs(agent_dir)
     if commit_issues:
@@ -185,7 +237,7 @@ def main() -> None:
         print("  ✓ All commitment references valid (or no commitments defined)")
     print()
 
-    # 3. Scope capabilities
+    # 4. Scope capabilities
     print("## Scope Capabilities (for manual review)")
     scope_info = check_scope(agent_dir)
     for info in scope_info:
@@ -193,7 +245,7 @@ def main() -> None:
     print()
 
     # Summary
-    total_issues = len(flow_issues) + len(commit_issues)
+    total_issues = len(flow_issues) + len(role_issues) + len(commit_issues)
     print("=" * 60)
     if total_issues == 0:
         print(f"PASS: No structural issues found.")
@@ -212,13 +264,16 @@ def main() -> None:
         "timestamp": timestamp.isoformat(),
         "source": str(agent_dir),
         "score": 1.0 if total_issues == 0 else max(0, 1.0 - total_issues * 0.1),
-        "passed": (len(flow_issues) == 0) + (len(commit_issues) == 0),
-        "total": 2,
+        "passed": (len(flow_issues) == 0) + (len(role_issues) == 0) + (len(commit_issues) == 0),
+        "total": 3,
         "summary": "All structure checks passed" if total_issues == 0 else f"{total_issues} issues found",
-        "details": flow_issues + commit_issues,
+        "details": flow_issues + role_issues + commit_issues,
         "suggestions": [
             {"primitive": "flow", "action": f"Create SKILL.md for: {issue.split(chr(39))[1]}", "reason": issue}
             for issue in flow_issues if "MISSING" in issue
+        ] + [
+            {"primitive": "role", "action": f"Create role/{issue.split(chr(39))[1]}.md" if "MISSING" in issue else "Add actions in flow.yaml", "reason": issue}
+            for issue in role_issues
         ] + [
             {"primitive": "commitment" if "commitment" in issue.lower() else "role",
              "action": "Add missing reference", "reason": issue}
