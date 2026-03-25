@@ -328,6 +328,57 @@ Skill 越来越多 → Scope 跟不上 → 需要扩展 Scope
 
 但反过来，**如果低层反复打补丁还是解决不了，那就是高层该变的信号**。Skill 里堆了一堆 workaround → 说明 Scope 或 Flow 的设计有问题。
 
+### 按问题性质分层诊断（autoservice 参考实现）
+
+> 来源：[autoservice-evolve-design.md](../../../autoservice/docs/socialware_0324/autoservice-evolve-design.md)
+
+上述"四层诊断"按**原语层级**排查（Skill→Flow→Scope→Role），适用于需求变化驱动的决策。当问题来自**运行时质量**（Agent 回复不好、流程出错）时，autoservice 提出按**问题性质**分层诊断，成本从低到高：
+
+```
+L1 数据层      最先查，成本最低，最常见
+  KB 缺失/过时、术语库不完整、API 数据错误
+       │ L1 正常则继续
+L2 Prompt 质量  对比 KB 原始数据 vs 最终回复
+  幻觉编造、未引用来源、格式不当、语气不当
+       │ L2 正常则继续
+L3 流程逻辑    检查路径追踪中的决策点
+  Gate 失效、路由错误、歧义误判、升级失败
+       │ L3 正常则继续
+L4 模型行为    排除法确认，需多次重复验证
+  指令遗忘、上下文溢出、格式不稳定
+```
+
+每层问题精确映射到原语 + 文件路径 + 路由（平台 or 租户）：
+
+| 层 | 典型问题 | 映射原语 | 路由 |
+|----|----------|----------|------|
+| L1 | KB 内容缺失 | 数据（`.runtime/data/`） | 租户自行修复 |
+| L1 | KB 引擎 bug | Flow（`agent/flow/kb/`） | 平台修复 |
+| L2 | 幻觉编造 | Scope + Flow | 平台修复 |
+| L2 | 租户语气不当 | 数据覆盖（`.runtime/data/prompts/`） | 租户自行覆盖 |
+| L3 | Gate 逻辑 bug | Flow（`agent/flow/optional/`） | 平台修复 |
+| L3 | Gate 字段配错 | 数据（`.runtime/data/config/`） | 租户自行修正 |
+| L4 | 指令遗忘 | Scope（强化规则）+ Flow（加 few-shot） | 平台修复 |
+| L4 | 上下文溢出 | Role（拆分角色） | 平台修复 |
+
+**两种诊断框架的关系**：
+- **按原语层级**（第四章主框架）：适用于"需求来了，该改什么？"——决策场景
+- **按问题性质**（L1→L4）：适用于"Agent 表现不好，问题在哪？"——诊断场景
+- 两者互补，不冲突。诊断定位到问题后，仍用原语层级判断该改 Skill、Flow、Scope 还是 Role
+
+### Commitment 升级触发条件
+
+> 来源：autoservice-evolve-design.md §5
+
+**同类问题在 3 个不同会话中出现 → 触发 Commitment 升级**（在对应层级增加基线测试用例）。
+
+| 原语 | 什么时候升级 | 典型触发 |
+|------|------------|----------|
+| **Scope** | 规则描述不清导致 Agent 误解 | L2 幻觉、L3 过度澄清、L4 指令遗忘 |
+| **Flow** | 执行逻辑有 bug 或需要强化 | L2 格式问题、L3 Gate/路由 bug、L4 few-shot |
+| **Commitment** | 问题反复出现但未被 Eval 覆盖 | 任何层级的反复问题 → 增加基线测试用例 |
+| **Role** | 上下文溢出需拆分或新增职能 | L4 上下文溢出、L3 新增流程需求 |
+
 ---
 
 ## 五、测试与迭代的关系
@@ -402,6 +453,25 @@ Socialware: 测试失败 → 暴露能力缺口 → 驱动下一轮迭代
 | `test_violations.py` | /violations API 返回违规记录 |
 
 对应 evolver Skill：**evolve_diagnose**
+
+### 两类测试在诊断中的分工
+
+> 来源：[autoservice-evolve-design.md](../../../autoservice/docs/socialware_0324/autoservice-evolve-design.md) §4
+
+| | 题集测试（eval cases） | 规范化脚本测试 |
+|---|---|---|
+| **判断方式** | 跑 Agent 拿回复，对比预期 | 直接检查数据/结构/路径 |
+| **Pass/Fail** | LLM-as-judge 或评分规则 | 程序断言，True/False |
+| **适合场景** | 回复质量（语义判断） | 结构/数据存在性（客观机械） |
+
+按诊断层级的分工：
+
+| 层 | 主要测试类型 | 说明 |
+|----|-------------|------|
+| **L1 数据层** | 脚本为主 | KB 存在性、术语覆盖、API 返回值——查文件即可 |
+| **L2 Prompt 质量** | 题集为主 | 幻觉、引用、语气——必须跑 Agent 看回复 |
+| **L3 流程逻辑** | 脚本为主，题集补充 | 单步决策点用路径分析；完整对话流程需题集 |
+| **L4 模型行为** | 题集为主 | 指令遗忘、格式稳定性——需多次跑 Agent |
 
 ### Dev 驱动迭代的三种方式
 
@@ -726,6 +796,58 @@ evolve-v2 将单一 evolve Skill 拆分为 5 个职责单一的 Skill，分配�
   修改 agent/ worktree 中的源文件 → PR → Dev review → 合并 → 所有租户受益
   例: 分析所有租户 Metrics → SPIN 普遍优于 HEAR → 改 agent/flow/ → PR
 ```
+
+路由判定：文件路径决定路由——`.runtime/data/` 内的修改 = 租户，`agent/` 内的修改 = 平台。
+
+### 9.3.1 evaluator / evolver 双角色分离（autoservice 参考架构）
+
+> 来源：[autoservice-evolve-design.md](../../../autoservice/docs/socialware_0324/autoservice-evolve-design.md) §4
+
+evolve-v2 用单一 evolver 角色承担诊断+改进。autoservice 的设计将其拆为两个角色：
+
+| Role | 定位 | 一句话 |
+|------|------|--------|
+| **evaluator** | 测量者 | 只问"哪里不好、差多少"——不提方案 |
+| **evolver** | 改进者 | 读诊断报告，设计多条修复路径，选最优，负责沉淀 |
+
+evaluator 有两种模式：
+- **diagnose 模式**：四层扫描（L1→L4）→ 输出问题诊断报告（原语 + 文件 + 路由）
+- **batch-eval 模式**：对多个候选分支逐一跑测试集 → 输出各分支得分 + 对比表
+
+### 9.3.2 蒙特卡洛分支验证
+
+> 来源：autoservice-evolve-design.md §4
+
+evolve-v2 的 evolve_improve 直接修改四原语文件。autoservice 设计了更严谨的多方案对比验证：
+
+```
+evolver 读诊断报告
+    │
+evolver map: 映射问题 → 原语 + 目标文件
+    │
+evolver branch: 生成 2-3 个 delta 变体
+    │               保守（最小改动）/ 均衡 / 激进（结构性改动）
+    │               写入 .runtime/data/eval/branches/{a,b,c}/delta/
+    │
+evolver compare: 调用 evaluator（batch-eval 模式）→ 各分支得分
+    │               skill_diff 对比分支间差异 → 排序推荐
+    │
+evolver materialize: 选最优分支 → 产出物路由
+    ├─ .runtime/data/ → 直接合并（租户）
+    └─ agent/         → PR diff（平台）
+```
+
+**升级后验证闭环**：
+
+| 升级类型 | 验证方式 | 通过标准 |
+|----------|----------|----------|
+| 数据修复（.runtime/） | 脚本验证 + 题集回归 | 脚本全通过 + 题集不回归 |
+| Flow 升级/重构 | 题集回归（目标 + 全量） | 目标场景通过 + 全量通过率不降 >5% |
+| Scope 升级 | 违反用例回归 | 违反用例归零 + 全量不回归 |
+| Commitment 升级 | 新旧基线全跑 | 新旧用例全部通过 |
+| Role 升级/拆分 | 全量回归 + 上下文对比 | 全量不回归 + 上下文使用量下降 |
+
+> 通过率下降 >5% 则告警，evolver 重新进入诊断流程。
 
 ### 9.4 自治光谱（L0 → L6）
 
