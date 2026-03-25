@@ -85,6 +85,7 @@ class ClaudeAdapter(BaseAdapter):
                 return
 
         options = ClaudeAgentOptions(
+            cwd=str(self.config.project_dir),  # so SDK finds .claude/skills/
             system_prompt=self.config.soul,
             allowed_tools=["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill"],
             setting_sources=["user", "project"],
