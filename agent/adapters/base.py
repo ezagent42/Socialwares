@@ -13,6 +13,28 @@ from pathlib import Path
 from typing import Any, AsyncIterator
 
 
+def serialize(obj: Any) -> Any:
+    """Recursively serialize SDK message objects to JSON-safe dicts.
+
+    Follows autoservice pattern: preserves structure with _type metadata.
+    All adapters use this for consistent session recording.
+    """
+    if obj is None:
+        return None
+    if isinstance(obj, (str, int, float, bool)):
+        return obj
+    if isinstance(obj, (list, tuple)):
+        return [serialize(item) for item in obj]
+    if isinstance(obj, dict):
+        return {k: serialize(v) for k, v in obj.items()}
+    if hasattr(obj, '__dict__'):
+        return {
+            '_type': obj.__class__.__name__,
+            **{k: serialize(v) for k, v in vars(obj).items()}
+        }
+    return str(obj)
+
+
 @dataclass
 class RoleConfig:
     """Deployed role configuration."""

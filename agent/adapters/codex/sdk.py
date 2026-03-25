@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """OpenAI Codex/Agents SDK adapter.
 
-Launches agent programmatically using OpenAI Agents SDK.
-Requires: pip install openai-agents
+Uses openai-agents SDK for programmatic agent interaction.
+Built-in tracing to OpenAI dashboard.
+Requires: uv pip install 'openai-agents>=0.10.0'
 
 Reference:
 - CLI: https://openai.github.io/codex/cli/reference
@@ -15,7 +16,7 @@ from pathlib import Path
 from typing import Any, AsyncIterator
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from base import BaseAdapter, RoleConfig
+from base import BaseAdapter, RoleConfig, serialize
 
 
 class CodexAdapter(BaseAdapter):
@@ -31,12 +32,16 @@ class CodexAdapter(BaseAdapter):
         ])
 
     async def launch_sdk(self, prompt: str) -> AsyncIterator[Any]:
-        """Launch via OpenAI Agents SDK with built-in tracing."""
+        """Launch via OpenAI Agents SDK.
+
+        Yields serialized message dicts. Uses same serialize() as Claude adapter.
+        Built-in tracing enabled by default (traces go to OpenAI dashboard).
+        """
         try:
             from agents import Agent, Runner
         except ImportError:
             print("[Codex SDK] openai-agents not installed.")
-            print("  Install: pip install openai-agents")
+            print("  Install: uv pip install 'openai-agents>=0.10.0'")
             return
 
         agent = Agent(
@@ -44,16 +49,20 @@ class CodexAdapter(BaseAdapter):
             instructions=self.config.soul,
         )
 
-        # OpenAI Agents SDK has built-in tracing (enabled by default)
-        # Traces go to OpenAI dashboard; local saving via trace processors
+        # Run agent — OpenAI SDK returns a RunResult with full trace
         result = await Runner.run(agent, prompt)
 
-        # Yield the final output as a single message
-        yield {
-            "role": "assistant",
+        # Yield all raw messages from the run for complete trace
+        for item in result.raw_responses:
+            yield serialize(item)
+
+        # Yield final result as structured summary
+        yield serialize({
+            "_type": "ResultMessage",
             "content": result.final_output,
             "trace_id": getattr(result, "trace_id", None),
-        }
+            "is_error": False,
+        })
 
 
 if __name__ == "__main__":
