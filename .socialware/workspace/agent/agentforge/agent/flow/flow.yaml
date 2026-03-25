@@ -46,6 +46,10 @@ direct_actions:
     role: [agentforge, default, dev]
     description: "Check app health status"
 
+  - action: code_review
+    role: [code-reviewer]
+    description: "读取指定文件，检查安全漏洞和代码规范，输出结构化审查报告"
+
   - action: setup_claude
     role: [dev]
     description: "Configure Claude Code environment"
