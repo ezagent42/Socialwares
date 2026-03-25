@@ -80,16 +80,48 @@ async def run_single_test(adapter, case: dict) -> dict:
     description = case.get("description", user_input)
 
     messages = []
+    print(f"    > {user_input}")
     try:
         async for message in adapter.launch_sdk(user_input):
+            # Get message type/subtype
+            msg_type = getattr(message, "type", "") or ""
+            msg_subtype = getattr(message, "subtype", "") or ""
+
+            # Skip system noise: hooks, init, rate limits
+            if any(skip in str(msg_type).lower() + str(msg_subtype).lower()
+                   for skip in ["rate_limit", "hook_started", "hook_response", "init"]):
+                continue
+
+            # Serialize to dict — only keep conversation-relevant fields
             if hasattr(message, "__dict__"):
-                msg_dict = {k: str(v) if not isinstance(v, (str, int, float, bool, list, dict, type(None))) else v
-                            for k, v in message.__dict__.items()}
+                raw = message.__dict__
+                msg_dict = {
+                    "type": str(raw.get("type", "")),
+                    "subtype": str(raw.get("subtype", "")),
+                }
+                # Extract content from various message shapes
+                if "content" in raw:
+                    msg_dict["content"] = str(raw["content"])[:2000]
+                if "data" in raw and isinstance(raw["data"], dict):
+                    d = raw["data"]
+                    if "content" in d:
+                        msg_dict["content"] = str(d["content"])[:2000]
+                    if "tool_name" in d:
+                        msg_dict["tool"] = d["tool_name"]
+                    if "tool_input" in d:
+                        msg_dict["input"] = d["tool_input"]
             elif isinstance(message, dict):
-                msg_dict = message
+                msg_dict = {k: v for k, v in message.items()
+                            if k in ("type", "subtype", "content", "tool", "input")}
             else:
-                msg_dict = {"content": str(message)}
+                msg_dict = {"type": "raw", "content": str(message)[:2000]}
+
             messages.append(msg_dict)
+
+            # Real-time stdout
+            content = msg_dict.get("content", "")
+            if content and isinstance(content, str):
+                print(f"    < {content[:200]}")
     except NotImplementedError:
         return {
             "description": description,
@@ -106,7 +138,7 @@ async def run_single_test(adapter, case: dict) -> dict:
         }
 
     # Check if expected skill was used
-    trace_text = json.dumps(messages)
+    trace_text = json.dumps(messages, default=str)
     skill_found = expected_skill.lower() in trace_text.lower() if expected_skill else True
 
     return {
@@ -119,9 +151,11 @@ async def run_single_test(adapter, case: dict) -> dict:
 
 
 async def run_all_tests(adapter, cases: list[dict]) -> list[dict]:
-    """Run all conversation test cases sequentially."""
+    """Run all conversation test cases sequentially with delay to avoid rate limits."""
     results = []
-    for case in cases:
+    for i, case in enumerate(cases):
+        if i > 0:
+            await asyncio.sleep(3)  # avoid rate limiting
         result = await run_single_test(adapter, case)
         status = "PASS" if result["passed"] else "FAIL"
         print(f"  [{status}] {result['description']}")
