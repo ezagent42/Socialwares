@@ -119,7 +119,7 @@ make deploy
 
 ### Q: How does conversation logging work?
 - Shell mode: UserPromptSubmit hook (log_prompt.sh) + PreToolUse hook (log_tool.sh) auto-capture to .runtime/data/prompts/
-- SDK mode: adapter's log_conversation() function
+- SDK mode: `save_session()` from `base.py` saves full session to `.runtime/data/sessions/` (filtered via `is_noise()`). Hooks also fire in SDK mode, writing to `prompts/`.
 
 ### Q: Where do deploy and start run?
 Always from within an app directory (`cd .socialware/workspace/{room}/{app}`). Each app is self-contained with its own Makefile, pyproject.toml, and .venv. Room is just a grouping folder. The repo root Makefile only has `make create` and `make test` — running `make deploy` or `make start` at the root will display an error.

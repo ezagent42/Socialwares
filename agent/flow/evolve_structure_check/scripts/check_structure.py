@@ -108,7 +108,7 @@ def check_commitment_refs(agent_dir: Path) -> list[str]:
 
         # Check on_violation
         violation = c.get("on_violation")
-        if violation:
+        if violation and isinstance(violation, dict):
             v_role = violation.get("role", "")
             v_action = violation.get("action", "")
             if v_role and v_role not in existing_roles:

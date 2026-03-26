@@ -13,21 +13,25 @@ flow/
 │   └── SKILL.md
 ├── inspect/
 │   └── SKILL.md
-├── evolve_check/
+├── evolve_structure_check/
 │   ├── SKILL.md
 │   └── scripts/check_structure.py
-├── evolve_diagnose/
+├── evolve_session_diagnose/
 │   ├── SKILL.md
 │   └── scripts/diagnose.py
-├── evolve_eval/
+├── evolve_api_check/
 │   ├── SKILL.md
 │   ├── scripts/run_eval.py
 │   └── eval_cases.yaml
 ├── evolve_improve/
-│   └── SKILL.md
+│   ├── SKILL.md
+│   ├── scripts/save_report.py
+│   └── references/
 └── evolve_auto/
     ├── SKILL.md
-    └── scripts/run_auto.py
+    ├── scripts/run_auto.py
+    ├── conversation_tests/
+    └── references/
 ```
 
 ## flow.yaml — Action Registry

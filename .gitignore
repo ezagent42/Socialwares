@@ -3,6 +3,8 @@
 
 # Temp docs
 docs/temp/
+docs/logs/
+docs/discuss/
 
 # Python
 __pycache__/
@@ -39,4 +41,4 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
-agent/flow/evolve_eval/last_eval_results.json
+agent/flow/evolve_api_check/last_eval_results.json

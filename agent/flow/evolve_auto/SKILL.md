@@ -31,16 +31,18 @@ User says "auto-test", "run conversation checks", "automated testing", "test via
 - Loads conversation test cases from `conversation_tests/*.yaml`
 - Sends each test input to the agent via SDK adapter
 - Collects response traces
-- Checks if the expected_skill was used
-- Outputs pass/fail per case + overall score
+- Runs 3 checks per case:
+  1. `expected_skill` — was the correct skill invoked? (checked in trace)
+  2. `expected_contains` — do required keywords appear in agent's reply?
+  3. `expected_not_contains` — are unwanted keywords absent from agent's reply?
+- Outputs pass/fail per case + fail_reason + overall score
 
 ### Evolver (You)
 - Run the script and collect output
-- For each **failure**, perform root cause analysis:
-  1. Read the failed test's expected_skill SKILL.md — is the trigger clear enough?
-  2. Read the test input — does it match the trigger patterns?
-  3. Check: was a different skill used instead? Was no skill used at all?
-  4. Identify the root cause and propose a specific fix
+- For each **failure**, perform root cause analysis based on fail_reason:
+  - **Skill not found**: Read SKILL.md trigger — clear enough? Does test input match?
+  - **Missing keywords**: Agent replied but didn't include expected content — SKILL.md instructions incomplete?
+  - **Unwanted keywords**: Agent reply contains errors/noise — error handling or flow logic issue?
 - Map failures to primitives (usually Flow, sometimes Scope or Role)
 - Suggest concrete improvements
 
@@ -96,7 +98,7 @@ See `references/failure-analysis.md` for failure analysis workflow, good/bad tri
 ## Notes
 
 - Tests run sequentially to avoid overwhelming the SDK
-- Each test case specifies input, expected_skill, and description
+- Each test case specifies input, expected_skill, expected_contains, expected_not_contains, and description
 - Test files are organized per role: `default.yaml`, `reviewer.yaml`, etc.
 - Results are timestamped and saved for trend analysis
 - Does NOT modify agent/ primitives — only tests and reports

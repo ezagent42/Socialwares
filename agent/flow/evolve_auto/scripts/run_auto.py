@@ -75,6 +75,8 @@ def load_adapter(adapter_name: str, project_dir: Path):
 
 async def run_single_test(adapter, case: dict) -> dict:
     """Run a single conversation test case."""
+    from base import is_noise
+
     user_input = case.get("input", "")
     expected_skill = case.get("expected_skill", "")
     description = case.get("description", user_input)
@@ -86,10 +88,8 @@ async def run_single_test(adapter, case: dict) -> dict:
             # SDK adapter now yields pre-serialized dicts (via _serialize)
             msg = message if isinstance(message, dict) else {"_type": "raw", "content": str(message)}
 
-            # Skip system noise
-            msg_type = msg.get("_type", "").lower()
-            subtype = msg.get("subtype", "").lower() if isinstance(msg.get("subtype"), str) else ""
-            if any(skip in msg_type + subtype for skip in ["ratelimit", "hook", "init", "system"]):
+            # Skip system noise (filter shared with start_agent.py)
+            if is_noise(msg):
                 continue
 
             messages.append(msg)
@@ -117,17 +117,49 @@ async def run_single_test(adapter, case: dict) -> dict:
             "messages": [],
         }
 
-    # Check if expected skill was used
+    # Extract result text (agent's final reply) for content checks
     trace_text = json.dumps(messages, default=str)
+    result_text = ""
+    for msg in reversed(messages):
+        if msg.get("_type") == "ResultMessage" and isinstance(msg.get("result"), str):
+            result_text = msg["result"]
+            break
+        elif isinstance(msg.get("content"), str) and msg.get("content"):
+            result_text = msg["content"]
+            break
+    if not result_text:
+        result_text = trace_text  # fallback to full trace
+
+    # Check 1: expected skill used
     skill_found = expected_skill.lower() in trace_text.lower() if expected_skill else True
 
-    return {
+    # Check 2: expected_contains — result must include all keywords
+    expected_contains = case.get("expected_contains", [])
+    contains_failures = [kw for kw in expected_contains if kw.lower() not in result_text.lower()]
+    contains_ok = len(contains_failures) == 0
+
+    # Check 3: expected_not_contains — result must NOT include any keywords
+    expected_not_contains = case.get("expected_not_contains", [])
+    not_contains_failures = [kw for kw in expected_not_contains if kw.lower() in result_text.lower()]
+    not_contains_ok = len(not_contains_failures) == 0
+
+    passed = skill_found and contains_ok and not_contains_ok
+
+    result = {
         "description": description,
         "input": user_input,
         "expected_skill": expected_skill,
-        "passed": skill_found,
+        "passed": passed,
         "messages": messages,
     }
+    if not skill_found:
+        result["fail_reason"] = f"expected skill '{expected_skill}' not found in trace"
+    if not contains_ok:
+        result["fail_reason"] = result.get("fail_reason", "") + f"; missing keywords: {contains_failures}"
+    if not not_contains_ok:
+        result["fail_reason"] = result.get("fail_reason", "") + f"; unwanted keywords found: {not_contains_failures}"
+
+    return result
 
 
 async def run_all_tests(adapter, cases: list[dict]) -> list[dict]:
@@ -139,8 +171,11 @@ async def run_all_tests(adapter, cases: list[dict]) -> list[dict]:
         result = await run_single_test(adapter, case)
         status = "PASS" if result["passed"] else "FAIL"
         print(f"  [{status}] {result['description']}")
-        if not result["passed"] and "error" in result:
-            print(f"         Error: {result['error']}")
+        if not result["passed"]:
+            if "error" in result:
+                print(f"         Error: {result['error']}")
+            if "fail_reason" in result:
+                print(f"         Reason: {result['fail_reason']}")
         results.append(result)
     return results
 

@@ -324,15 +324,13 @@ def main() -> None:
         json.dump(report_data, f, indent=2, ensure_ascii=False, default=str)
     print(f"Report saved to {report_file}")
 
-    # Update cursor
+    # Update cursor (top-level keys — scan_prompts/scan_sessions read these directly)
     new_cursor = {
-        "last_extraction": {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "prompts_line": cursor.get("prompts_line", 0) + len(prompt_entries),
-            "sessions_cursor": sorted(
-                (data_dir / "sessions").glob("*.json")
-            )[-1].name if (data_dir / "sessions").exists() and list((data_dir / "sessions").glob("*.json")) else "",
-        },
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "prompts_line": cursor.get("prompts_line", 0) + len(prompt_entries),
+        "sessions_cursor": sorted(
+            (data_dir / "sessions").glob("*.json")
+        )[-1].name if (data_dir / "sessions").exists() and list((data_dir / "sessions").glob("*.json")) else "",
     }
     save_cursor(data_dir, new_cursor)
 

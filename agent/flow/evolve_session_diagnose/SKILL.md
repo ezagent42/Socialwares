@@ -1,5 +1,5 @@
 ---
-name: evolve_diagnose
+name: evolve_session_diagnose
 description: "Diagnose issues by analyzing conversation data against commitment standards"
 ---
 
@@ -9,7 +9,7 @@ description: "Diagnose issues by analyzing conversation data against commitment 
 
 ```bash
 WORKSPACE_ROOT=$(cat .workspace_root) && cd "$WORKSPACE_ROOT"
-uv run agent/flow/evolve_diagnose/scripts/diagnose.py --data-dir .runtime/data --commitment agent/commitment/commitment.yaml
+uv run agent/flow/evolve_session_diagnose/scripts/diagnose.py --data-dir .runtime/data --commitment agent/commitment/commitment.yaml
 # Then read output + commitment.yaml → judge each condition → report to developer
 ```
 
@@ -63,13 +63,14 @@ cd "$WORKSPACE_ROOT"
 2. Read `agent/commitment/commitment.yaml` to understand each condition
 3. For each commitment, compare extracted events against the condition
 4. Judge: FULFILLED, VIOLATED, or INSUFFICIENT DATA
-5. Write detailed analysis with evidence
-6. Suggest which primitive to improve for each violation
+5. For each VIOLATED commitment, save violation via `scripts/save_violation.py`
+6. Write detailed analysis with evidence
+7. Suggest which primitive to improve for each violation
 
 ## Usage
 
 ```bash
-uv run agent/flow/evolve_diagnose/scripts/diagnose.py \
+uv run agent/flow/evolve_session_diagnose/scripts/diagnose.py \
   --data-dir .runtime/data \
   --commitment agent/commitment/commitment.yaml
 ```
@@ -85,13 +86,14 @@ uv run agent/flow/evolve_diagnose/scripts/diagnose.py \
 
 - `references/judgment-examples.md` — how to judge fulfillment for each condition type
 - `references/violation-mapping.md` — map violations to four-primitive improvements
+- `references/violation-format.md` — how to save violations via `save_violation.py`
 
 ## Output
 
-- Console report with commitment fulfillment rates
+- Console report with extracted commitment events and flow transitions
 - JSON report saved to `.runtime/data/evolve/reports/diagnose_<timestamp>.json`
 - Cursor state saved to `.runtime/data/evolve/state.yaml`
-- Violations written to `.runtime/data/evolve/violations/current.jsonl`
+- Violations saved to `.runtime/data/evolve/violations/current.jsonl` (via `save_violation.py`)
 
 ## Notes
 

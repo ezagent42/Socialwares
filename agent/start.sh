@@ -88,12 +88,40 @@ if [ ${#ROLES[@]} -eq 1 ]; then
         exit 1
     fi
 else
-    SESSION="socialware-$(date +%s)"
+    # Validate all roles exist before launching tmux
+    for role_name in "${ROLES[@]}"; do
+        project_dir="$RUNTIME_DIR/agents/$role_name"
+        if [ ! -d "$project_dir" ]; then
+            echo "Role not found: $role_name"
+            echo "Available roles:"
+            for role_dir in "$RUNTIME_DIR"/agents/*/; do
+                [ -d "$role_dir" ] || continue
+                echo "  - $(basename "$role_dir")"
+            done
+            exit 1
+        fi
+    done
+
+    # Check tmux is available
+    if ! command -v tmux >/dev/null 2>&1; then
+        echo "Error: tmux is required for multi-role mode."
+        echo "Install: sudo apt install tmux"
+        exit 1
+    fi
+
+    SESSION="socialware-$$"
     echo "Starting ${#ROLES[@]} roles in tmux session: $SESSION"
 
     first_role="${ROLES[0]}"
     first_dir="$RUNTIME_DIR/agents/$first_role"
     tmux new-session -d -s "$SESSION" "$ADAPTER_DIR/shell.sh $first_dir"
+    sleep 0.5  # wait for session to initialize
+
+    if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+        echo "Error: Failed to create tmux session. Check if $first_role adapter works:"
+        echo "  $ADAPTER_DIR/shell.sh $first_dir"
+        exit 1
+    fi
 
     for ((i=1; i<${#ROLES[@]}; i++)); do
         role_name="${ROLES[$i]}"

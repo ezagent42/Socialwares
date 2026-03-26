@@ -1,4 +1,4 @@
-"""Tests for the evolve_eval run_eval.py script."""
+"""Tests for the evolve_api_check run_eval.py script."""
 from __future__ import annotations
 
 import subprocess
@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).parent.parent
-EVAL_SCRIPT = REPO_ROOT / "agent" / "flow" / "evolve_eval" / "scripts" / "run_eval.py"
-EVAL_CASES = REPO_ROOT / "agent" / "flow" / "evolve_eval" / "eval_cases.yaml"
+EVAL_SCRIPT = REPO_ROOT / "agent" / "flow" / "evolve_api_check" / "scripts" / "run_eval.py"
+EVAL_CASES = REPO_ROOT / "agent" / "flow" / "evolve_api_check" / "eval_cases.yaml"
 
 
 class TestEvalScript:

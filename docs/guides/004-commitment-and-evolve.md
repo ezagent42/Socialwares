@@ -174,9 +174,10 @@ Maps findings to four-primitive improvements:
 ### Auto Mode
 
 ```
-You: "auto-optimize, run 5 iterations"
-Evolver: → evaluate → diagnose → propose → apply → re-evaluate
-         → reports results, you decide whether to apply
+You: "auto-test with claude adapter"
+Evolver: → runs conversation test cases via SDK → scores results
+         → analyzes failures (expected_skill, expected_contains, expected_not_contains)
+         → proposes improvements to SKILL.md triggers or flow
 ```
 
 ### Data Sources
@@ -185,7 +186,7 @@ Evolver: → evaluate → diagnose → propose → apply → re-evaluate
 |--------|----------|----------------------|
 | Prompt & tool logs | .runtime/data/prompts/*.jsonl | Actions, tool calls, failed actions, missing capabilities |
 | SDK sessions | .runtime/data/sessions/*.json | Full conversation traces |
-| Eval cases | agent/flow/evolve_eval/eval_cases.yaml | Performance score trends |
+| Eval cases | agent/flow/evolve_api_check/eval_cases.yaml | Performance score trends |
 | Commitment standards | agent/commitment/commitment.yaml | Evaluation standards (from/to/condition) |
 
 ### Improvement Cycle

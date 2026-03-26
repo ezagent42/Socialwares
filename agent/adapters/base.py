@@ -77,6 +77,22 @@ class RoleConfig:
         )
 
 
+# Message types to skip when recording sessions — system noise, not conversation content
+_SKIP_TYPES = ("ratelimit", "hook", "init", "system")
+
+
+def is_noise(msg: dict) -> bool:
+    """Check if a serialized SDK message is system noise (not conversation content).
+
+    Filters out rate limit events, hook notifications, init messages, etc.
+    Used by both start_agent.py and run_auto.py for consistent session recording.
+    """
+    msg_type = msg.get("_type", "").lower()
+    subtype = msg.get("subtype", "").lower() if isinstance(msg.get("subtype"), str) else ""
+    combined = msg_type + subtype
+    return any(skip in combined for skip in _SKIP_TYPES)
+
+
 def save_session(workspace_root: Path, role: str, adapter: str, messages: list[dict]) -> Path:
     """Save a complete SDK session to .runtime/data/sessions/.
 

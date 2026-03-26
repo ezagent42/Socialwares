@@ -49,7 +49,7 @@ cd .socialware/workspace/demo/task-review
 uv sync
 
 ls -a          # .  ..  agent  app  Makefile  pyproject.toml  src  .runtime
-ls agent/role/ # default.md  dev.md  evolver.md  README.md
+ls agent/role/ # default.md  dev.md  evolver.md  (README.md excluded during create)
 cat agent/scope/scope.md    # Contains "task-review"
 cat Makefile | head -2       # "Socialware App — Workspace Makefile"
 ```
@@ -97,7 +97,7 @@ cat .runtime/agents/default/SOUL.md | head -5
 ```bash
 ls .runtime/agents/default/.claude/skills/ | wc -l    # 1 (check_health)
 ls .runtime/agents/dev/.claude/skills/ | wc -l         # 3 (check_health, setup_claude, inspect)
-ls .runtime/agents/evolver/.claude/skills/ | wc -l      # 7 (check_health, inspect, evolve_check, evolve_diagnose, evolve_eval, evolve_improve, evolve_auto)
+ls .runtime/agents/evolver/.claude/skills/ | wc -l      # 7 (check_health, inspect, evolve_structure_check, evolve_session_diagnose, evolve_api_check, evolve_improve, evolve_auto)
 ```
 
 ### 1.5 Make idempotency
@@ -334,9 +334,9 @@ direct_actions:
   - { action: submit_task,      role: [default], description: "Submit task for review" }
   - { action: review_task,      role: [reviewer], description: "Review a submitted task" }
   - { action: list_tasks,       role: [default, reviewer], description: "List all tasks" }
-  - { action: evolve_check,     role: [evolver], description: "Check structural consistency" }
-  - { action: evolve_diagnose,  role: [evolver], description: "Diagnose from runtime data" }
-  - { action: evolve_eval,      role: [evolver], description: "Run eval cases" }
+  - { action: evolve_structure_check,     role: [evolver], description: "Check structural consistency" }
+  - { action: evolve_session_diagnose,  role: [evolver], description: "Diagnose from runtime data" }
+  - { action: evolve_api_check,      role: [evolver], description: "Run eval cases" }
   - { action: evolve_improve,   role: [evolver], description: "Apply improvements" }
   - { action: evolve_auto,      role: [evolver], description: "Automated conversation testing" }
 EOF
@@ -376,8 +376,8 @@ EOF
 make deploy
 
 ls .runtime/agents/reviewer/.claude/skills/
-# Expected: check_health  list_tasks  review_task
-# NOT: create_task, submit_task
+# Expected: list_tasks  review_task
+# NOT: create_task, submit_task, check_health (reviewer not in check_health role list)
 ```
 
 ### 2.4 Deploy cleans removed roles
@@ -510,7 +510,7 @@ cat .runtime/agents/evolver/commitment.yaml
 | **Expected** | File created, used by run_eval.py |
 
 ```bash
-cat > agent/flow/evolve_eval/eval_cases.yaml << 'EOF'
+cat > agent/flow/evolve_api_check/eval_cases.yaml << 'EOF'
 api_checks:
   - description: "Health check"
     method: GET
@@ -545,19 +545,39 @@ EOF
 mkdir -p agent/flow/evolve_auto/conversation_tests
 
 cat > agent/flow/evolve_auto/conversation_tests/default.yaml << 'EOF'
+# Fields:
+#   input:                 what to say to the agent
+#   expected_skill:        skill the agent should invoke (checked in trace)
+#   expected_contains:     keywords that MUST appear in agent's reply (list)
+#   expected_not_contains: keywords that must NOT appear in agent's reply (list)
+#   description:           human-readable test name
 role: default
 cases:
   - input: "create a task: write docs"
     expected_skill: create_task
+    expected_contains:
+      - "task"
+      - "write docs"
+    expected_not_contains:
+      - "error"
     description: "Agent uses create_task skill"
   - input: "list tasks"
     expected_skill: list_tasks
+    expected_contains:
+      - "task"
     description: "Agent uses list_tasks skill"
   - input: "check health"
     expected_skill: check_health
-    description: "Agent uses check_health skill"
+    expected_contains:
+      - "ok"
+    expected_not_contains:
+      - "error"
+      - "not found"
+    description: "Agent checks health and reports ok"
   - input: "submit task-001"
     expected_skill: submit_task
+    expected_contains:
+      - "submitted"
     description: "Agent uses submit_task skill"
 EOF
 
@@ -566,9 +586,13 @@ role: reviewer
 cases:
   - input: "review task-001, approved, looks good"
     expected_skill: review_task
+    expected_contains:
+      - "approved"
     description: "Reviewer uses review_task skill"
   - input: "list tasks"
     expected_skill: list_tasks
+    expected_contains:
+      - "task"
     description: "Reviewer can list tasks"
 EOF
 
@@ -593,7 +617,7 @@ Scripts do mechanical work (extract data, run tests). The evolver LLM does reaso
 
 ```bash
 # 4.1a check_structure (no app needed)
-uv run agent/flow/evolve_check/scripts/check_structure.py --agent-dir agent
+uv run agent/flow/evolve_structure_check/scripts/check_structure.py --agent-dir agent
 # Expected: STRUCTURE CHECK REPORT with ✓/✗ per check
 # Includes flow graph validation when flows are defined (reachable states, terminal states, no isolation)
 # Report saved to .runtime/data/evolve/reports/check_*.json
@@ -602,15 +626,15 @@ uv run agent/flow/evolve_check/scripts/check_structure.py --agent-dir agent
 lsof -ti:8001 | xargs kill -9 2>/dev/null
 uv run uvicorn src.app:app --port 8001 &
 sleep 2
-uv run agent/flow/evolve_eval/scripts/run_eval.py \
-  --cases agent/flow/evolve_eval/eval_cases.yaml \
+uv run agent/flow/evolve_api_check/scripts/run_eval.py \
+  --cases agent/flow/evolve_api_check/eval_cases.yaml \
   --base-url http://localhost:8001
 # Expected: API Score: 4/4 (100%)
 # Report saved to .runtime/data/evolve/reports/eval_*.json
 kill %1
 
 # 4.1c diagnose (needs hook data from Phase 2.5)
-uv run agent/flow/evolve_diagnose/scripts/diagnose.py \
+uv run agent/flow/evolve_session_diagnose/scripts/diagnose.py \
   --data-dir .runtime/data \
   --commitment agent/commitment/commitment.yaml
 # Expected: DIAGNOSTIC DATA EXTRACTION
@@ -626,6 +650,8 @@ uv run agent/flow/evolve_auto/scripts/run_auto.py \
   --tests-dir agent/flow/evolve_auto/conversation_tests \
   --adapter claude
 # If SDK installed: Conversation Score: x/N
+#   Per case: checks expected_skill + expected_contains + expected_not_contains
+#   Failures show fail_reason (e.g. "missing keywords: ['ok']")
 # If not: "claude-agent-sdk not installed" (exact message may vary by version)
 kill %1
 
@@ -678,11 +704,14 @@ make start ROLE=evolver
 
 # Step 4: "improve" (based on all above)
 #   → evolver reads evolve/reports/*.json
-#   → proposes specific changes:
+#   → thinks in order: Flow → Commitment → Scope → Role
+#   → proposes specific changes (primitive + backend if needed):
 #     "C1 violated — review_task never happens because no reviewer is using the app.
-#      Suggestion: adjust commitment condition or add reminder skill."
+#      Suggestion: adjust commitment condition or add reminder skill.
+#      Note: adding reminder skill requires implementing reminder endpoint in src/app.py."
 #     "C2 fulfilled — 2 minutes well within 48h. No action needed."
 #   → developer approves → evolver edits files → runs deploy
+#   → evolver saves improve_*.json report to evolve/reports/
 #   → Expected: evolver only modifies workspace files, NOT template
 
 # Exit: Ctrl+C
@@ -697,8 +726,6 @@ cd .socialware/workspace/demo/task-review
 
 ### 4.3 Verify reports after evolver session
 
-diagnose.py also extracts flow transition events (observed vs declared order) when flows are defined in flow.yaml. The report includes a "Flow Transition Events" section showing which transitions actually occurred vs the declared transition order.
-
 | | |
 |---|---|
 | **Action** | Check all reports and evolve directory |
@@ -710,6 +737,7 @@ diagnose.py also extracts flow transition events (observed vs declared order) wh
 ls .runtime/data/evolve/reports/
 # Should have: check_*.json, eval_*.json, diagnose_*.json
 # (auto_test_*.json only if SDK installed)
+# Note: improve_*.json is saved by evolver LLM after applying changes
 
 # Cursor
 cat .runtime/data/evolve/state.yaml
@@ -719,6 +747,20 @@ cat .runtime/data/evolve/state.yaml
 ls .runtime/data/evolve/
 # Expected: auto_sessions  reports  state.yaml  violations
 ```
+
+**Note on report contents:**
+
+Scripts produce mechanical reports (pass/fail counts, event extraction). The evolver LLM adds judgment and analysis **in conversation**, not in the JSON reports. Specifically:
+
+| Report | Script provides | Evolver LLM adds (in conversation) |
+|--------|----------------|-------------------------------------|
+| check_*.json | Structural issues list | Priority ranking, fix suggestions |
+| eval_*.json | API pass/fail per case | Failure-to-primitive mapping |
+| diagnose_*.json | Extracted events + timestamps | Commitment fulfillment judgment |
+| auto_test_*.json | Skill/content check results | Root cause analysis |
+| improve_*.json | (none — evolver saves this) | What changed, why, what to re-test |
+
+Flow transition events in diagnose reports only appear when `flows` are defined in flow.yaml (see Phase 7.12). At this phase, flows are empty (`flows: {}`), so only commitment events appear.
 
 ### 4.4 Violations API
 
@@ -851,8 +893,9 @@ kill %1
 ```bash
 uv run uvicorn src.app:app --port 8001 &
 sleep 2
-make run ROLE=default
-# Same behavior as 6.1 (Makefile calls: uv run src/start_agent.py --role default --adapter claude)
+make run ROLE=default PROMPT="check health"
+# Same behavior as 6.1 (Makefile calls: uv run src/start_agent.py --role default --prompt "check health")
+# Without PROMPT, make run shows error: "PROMPT is required"
 kill %1
 ```
 
@@ -1030,7 +1073,7 @@ cd .socialware/workspace/demo/task-review
 |---|---|
 | **Action** | Test sync from template |
 | **Purpose** | Verify make sync copies latest scripts from template root |
-| **Expected** | Adapters, deploy.sh, start.sh, Makefile updated |
+| **Expected** | Adapters, deploy.sh, start.sh, Makefile, start_agent.py, evolver scripts updated |
 
 ```bash
 make sync
@@ -1061,6 +1104,7 @@ flows:
     transitions:
       - { from: draft, action: submit_task, to: submitted, role: [default] }
       - { from: submitted, action: review_task, to: reviewed, role: [reviewer] }
+      - { from: reviewed, action: close_task, to: closed, role: [default] }
 
 direct_actions:
   - { action: check_health,     role: [default, dev, evolver], description: "Check app health" }
@@ -1069,13 +1113,28 @@ direct_actions:
   - { action: create_task,      role: [default], description: "Create a new task" }
   - { action: submit_task,      role: [default], description: "Submit task for review" }
   - { action: review_task,      role: [reviewer], description: "Review a submitted task" }
+  - { action: close_task,       role: [default], description: "Close a reviewed task" }
   - { action: list_tasks,       role: [default, reviewer], description: "List all tasks" }
-  - { action: evolve_check,     role: [evolver], description: "Check structural consistency" }
-  - { action: evolve_diagnose,  role: [evolver], description: "Diagnose from runtime data" }
-  - { action: evolve_eval,      role: [evolver], description: "Run eval cases" }
+  - { action: evolve_structure_check,     role: [evolver], description: "Check structural consistency" }
+  - { action: evolve_session_diagnose,  role: [evolver], description: "Diagnose from runtime data" }
+  - { action: evolve_api_check,      role: [evolver], description: "Run eval cases" }
   - { action: evolve_improve,   role: [evolver], description: "Apply improvements" }
   - { action: evolve_auto,      role: [evolver], description: "Automated conversation testing" }
 EOF
+
+# Note: close_task needs a SKILL.md for check_structure to pass
+mkdir -p agent/flow/close_task
+cat > agent/flow/close_task/SKILL.md << 'SKILL_EOF'
+---
+name: close_task
+description: "Close a reviewed task"
+---
+# Close Task
+## Trigger
+User says "close task-xxx" etc.
+## Flow
+1. Get ID -> POST /tasks/{id}/close -> confirm
+SKILL_EOF
 
 make deploy
 
@@ -1090,7 +1149,7 @@ grep "draft → submit_task" .runtime/agents/default/SOUL.md
 # Should show transition chain
 
 # Verify check validates the graph
-uv run agent/flow/evolve_check/scripts/check_structure.py --agent-dir agent
+uv run agent/flow/evolve_structure_check/scripts/check_structure.py --agent-dir agent
 # Expected: Flow State Machine Graph: ✓ All state machine graphs valid
 ```
 
@@ -1136,7 +1195,7 @@ cat .runtime/agents/default/SOUL.md | head -15
 # Should contain "Task Review App" and capabilities list
 ```
 
-### 8.2 Verify evolve_check passes after scope update
+### 8.2 Verify evolve_structure_check passes after scope update
 
 | | |
 |---|---|
@@ -1145,7 +1204,7 @@ cat .runtime/agents/default/SOUL.md | head -15
 | **Expected** | PASS with updated scope capabilities listed |
 
 ```bash
-uv run agent/flow/evolve_check/scripts/check_structure.py --agent-dir agent
+uv run agent/flow/evolve_structure_check/scripts/check_structure.py --agent-dir agent
 # Expected: STRUCTURE CHECK REPORT
 #   Flow Actions -> SKILL.md: All actions have SKILL.md
 #   Flow State Machine Graph: All state machine graphs valid (if flows defined)

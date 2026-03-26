@@ -1,6 +1,6 @@
 # API eval cases — direct HTTP checks for backend endpoints.
 # Used by: run_eval.py
-# Run: uv run run_eval.py --cases eval_cases.yaml --base-url http://localhost:8001
+# Run: uv run run_eval.py --cases eval_cases.yaml --base-url <APP_BASE_URL>
 
 api_checks:
   - description: "Health check returns ok"

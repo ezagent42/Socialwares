@@ -40,11 +40,11 @@ socialwares/
 │   │   ├── check_health/SKILL.md
 │   │   ├── setup_claude/SKILL.md
 │   │   ├── inspect/SKILL.md
-│   │   ├── evolve_check/SKILL.md + scripts/check_structure.py
-│   │   ├── evolve_diagnose/SKILL.md + scripts/diagnose.py
-│   │   ├── evolve_eval/SKILL.md + scripts/run_eval.py + eval_cases.yaml
-│   │   ├── evolve_improve/SKILL.md
-│   │   └── evolve_auto/SKILL.md + scripts/run_auto.py
+│   │   ├── evolve_structure_check/SKILL.md + scripts/check_structure.py
+│   │   ├── evolve_session_diagnose/SKILL.md + scripts/diagnose.py
+│   │   ├── evolve_api_check/SKILL.md + scripts/run_eval.py + eval_cases.yaml
+│   │   ├── evolve_improve/SKILL.md + scripts/save_report.py + references/
+│   │   └── evolve_auto/SKILL.md + scripts/run_auto.py + conversation_tests/ + references/
 │   ├── adapters/                 ← Platform adapters (Claude/Codex/Kimi)
 │   │   ├── base.py
 │   │   ├── claude/ (shell.sh + sdk.py)

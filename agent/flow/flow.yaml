@@ -31,9 +31,9 @@ direct_actions:
     role: [dev]
     description: "Configure Claude Code environment (agent-setup plugin, settings, hooks)"
 
-  - { action: evolve_check,    role: [evolver], description: "Check structural consistency of four primitives" }
-  - { action: evolve_diagnose, role: [evolver], description: "Diagnose issues from runtime data" }
-  - { action: evolve_eval,     role: [evolver], description: "Run eval cases and report score" }
+  - { action: evolve_structure_check,    role: [evolver], description: "Check structural consistency of four primitives" }
+  - { action: evolve_session_diagnose, role: [evolver], description: "Diagnose issues from runtime data" }
+  - { action: evolve_api_check,     role: [evolver], description: "Run eval cases and report score" }
   - { action: evolve_improve,  role: [evolver], description: "Propose and apply four-primitive changes" }
   - { action: evolve_auto,     role: [evolver], description: "Run automated evolution loop (EvoSkill)" }
   - { action: inspect, role: [dev, evolver], description: "Show project structure and dev workflow" }

@@ -1,4 +1,4 @@
-"""Tests for the evolve_diagnose script."""
+"""Tests for the evolve_session_diagnose script."""
 from __future__ import annotations
 
 import json
@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).parent.parent
-DIAGNOSE_SCRIPT = REPO_ROOT / "agent" / "flow" / "evolve_diagnose" / "scripts" / "diagnose.py"
+DIAGNOSE_SCRIPT = REPO_ROOT / "agent" / "flow" / "evolve_session_diagnose" / "scripts" / "diagnose.py"
 
 
 class TestDiagnose:

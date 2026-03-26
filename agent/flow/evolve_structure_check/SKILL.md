@@ -1,5 +1,5 @@
 ---
-name: evolve_check
+name: evolve_structure_check
 description: "Check structural consistency of four primitives — no app needed"
 ---
 
@@ -9,7 +9,7 @@ description: "Check structural consistency of four primitives — no app needed"
 
 ```bash
 WORKSPACE_ROOT=$(cat .workspace_root) && cd "$WORKSPACE_ROOT"
-uv run agent/flow/evolve_check/scripts/check_structure.py --agent-dir agent
+uv run agent/flow/evolve_structure_check/scripts/check_structure.py --agent-dir agent
 ```
 
 ## Trigger
@@ -57,15 +57,16 @@ cd "$WORKSPACE_ROOT"
 ## Usage
 
 ```bash
-uv run agent/flow/evolve_check/scripts/check_structure.py --agent-dir agent
+uv run agent/flow/evolve_structure_check/scripts/check_structure.py --agent-dir agent
 ```
 
 ## What It Checks
 
 1. Every action in flow.yaml has a SKILL.md directory
-2. Every commitment's from/to role exists in role/*.md
-3. Every commitment's from/to action exists in flow.yaml
-4. Scope capabilities are listed for manual review
+2. Every role in flow.yaml has a role/*.md file, and vice versa
+3. Flow state machine graph: all states reachable, terminal states exist, no isolated states, all transition from/to states valid
+4. Every commitment's from/to/on_violation role and action exists
+5. Scope capabilities are listed for manual review
 
 ## Output
 

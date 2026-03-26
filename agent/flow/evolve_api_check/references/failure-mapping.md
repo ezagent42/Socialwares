@@ -22,7 +22,7 @@ Your interpretation:
 1. **POST /tasks returns 500** — the backend crashes on task creation. This is a **Flow** issue: check `agent/flow/create_task/SKILL.md` for the correct request format, and verify the app's `/tasks` endpoint handler.
 2. **GET /tasks/1 returns 404** — likely a consequence of failure #1 (no task was created). Fix #1 first, then re-run eval.
 
-Suggest: run `evolve_diagnose` to check if the create_task skill is being invoked correctly, then `evolve_improve` to fix the SKILL.md."
+Suggest: run `evolve_session_diagnose` to check if the create_task skill is being invoked correctly, then `evolve_improve` to fix the SKILL.md."
 
 ## Bad analysis example
 

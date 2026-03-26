@@ -6,9 +6,8 @@ Complementary to agent/start.sh (TUI mode). Use for:
 - Evolver: automated conversation testing
 
 Usage (from within a workspace):
-    uv run src/start_agent.py --role default
-    uv run src/start_agent.py --role default --adapter codex
     uv run src/start_agent.py --role default --prompt "check health"
+    uv run src/start_agent.py --role default --adapter codex --prompt "list tasks"
 """
 from __future__ import annotations
 
@@ -54,7 +53,7 @@ def load_adapter(adapter_name: str, project_dir: Path):
 
 async def run_sdk(adapter, prompt: str, workspace_root: Path, role: str, adapter_name: str) -> None:
     """Run SDK mode: send prompt, collect messages, save session."""
-    from base import save_session
+    from base import save_session, is_noise
 
     messages = []
     print(f"[SDK] Sending prompt to {role} via {adapter_name}...")
@@ -62,20 +61,22 @@ async def run_sdk(adapter, prompt: str, workspace_root: Path, role: str, adapter
 
     try:
         async for message in adapter.launch_sdk(prompt):
-            # Serialize message
-            if hasattr(message, "__dict__"):
-                msg_dict = {"type": type(message).__name__}
-                for k, v in message.__dict__.items():
-                    msg_dict[k] = str(v) if not isinstance(v, (str, int, float, bool, list, dict, type(None))) else v
-            elif isinstance(message, dict):
-                msg_dict = message
-            else:
-                msg_dict = {"type": "raw", "content": str(message)}
+            # SDK adapter yields pre-serialized dicts (via serialize())
+            msg = message if isinstance(message, dict) else {"_type": "raw", "content": str(message)}
 
-            messages.append(msg_dict)
+            # Skip system noise
+            if is_noise(msg):
+                continue
+
+            messages.append(msg)
+
             # Print text content if present
-            content = msg_dict.get("content", "")
-            if content and isinstance(content, str):
+            content = ""
+            if "content" in msg and isinstance(msg["content"], str):
+                content = msg["content"]
+            elif "result" in msg and isinstance(msg["result"], str):
+                content = msg["result"]
+            if content:
                 print(content)
 
     except NotImplementedError as e:
@@ -97,7 +98,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Launch Socialware Agent (SDK mode)")
     parser.add_argument("--role", required=True, help="Role name")
     parser.add_argument("--adapter", default="claude", help="Platform adapter")
-    parser.add_argument("--prompt", default="You are ready. What can I help with?", help="Initial prompt")
+    parser.add_argument("--prompt", required=True, help="Prompt to send to the agent")
     args = parser.parse_args()
 
     # Workspace-local

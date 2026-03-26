@@ -1,5 +1,5 @@
 ---
-name: evolve_eval
+name: evolve_api_check
 description: "Run API eval cases against live app and report performance score"
 ---
 
@@ -9,12 +9,12 @@ description: "Run API eval cases against live app and report performance score"
 
 ```bash
 WORKSPACE_ROOT=$(cat .workspace_root) && cd "$WORKSPACE_ROOT"
-uv run agent/flow/evolve_eval/scripts/run_eval.py \
-  --cases agent/flow/evolve_eval/eval_cases.yaml \
+uv run agent/flow/evolve_api_check/scripts/run_eval.py \
+  --cases agent/flow/evolve_api_check/eval_cases.yaml \
   --base-url <APP_BASE_URL>
 ```
 
-The `--base-url` defaults to `http://localhost:8001` but should match your app's actual configuration.
+The `--base-url` reads `APP_PORT` env var (default 8001). Pass `--base-url` to override.
 
 ## Trigger
 
@@ -66,12 +66,12 @@ cd "$WORKSPACE_ROOT"
 ```bash
 WORKSPACE_ROOT=$(cat .workspace_root)
 cd "$WORKSPACE_ROOT"
-uv run agent/flow/evolve_eval/scripts/run_eval.py \
-  --cases agent/flow/evolve_eval/eval_cases.yaml \
+uv run agent/flow/evolve_api_check/scripts/run_eval.py \
+  --cases agent/flow/evolve_api_check/eval_cases.yaml \
   --base-url <APP_BASE_URL>
 ```
 
-The `--base-url` defaults to `http://localhost:8001` but should match your app's actual configuration.
+The `--base-url` reads `APP_PORT` env var (default 8001). Pass `--base-url` to override.
 
 ## eval_cases.yaml
 

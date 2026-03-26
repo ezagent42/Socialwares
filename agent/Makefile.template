@@ -34,8 +34,9 @@ $(STAMP): $(SOURCES)
 start: deploy ## TUI mode: make start ROLE=default
 	./$(AGENT_DIR)/start.sh --role $(or $(ROLE),default) --adapter $(ADAPTER)
 
-run: deploy ## SDK mode: make run ROLE=default
-	uv run src/start_agent.py --role $(or $(ROLE),default) --adapter $(ADAPTER)
+run: deploy ## SDK mode: make run ROLE=default PROMPT="check health"
+	@if [ -z "$(PROMPT)" ]; then echo "Error: PROMPT is required. Usage: make run ROLE=default PROMPT=\"check health\""; exit 1; fi
+	uv run src/start_agent.py --role $(or $(ROLE),default) --adapter $(ADAPTER) --prompt "$(PROMPT)"
 
 test: ## Run tests
 	uv run pytest -v
@@ -43,7 +44,7 @@ test: ## Run tests
 clean: ## Remove .runtime/
 	rm -rf $(RUNTIME)
 
-sync: ## Sync scripts from template (adapters, deploy, start, Makefile, start_agent.py)
+sync: ## Sync scripts from template (adapters, deploy, start, evolver scripts, Makefile, start_agent.py)
 	@if [ -z "$(TEMPLATE_ROOT)" ]; then echo "Error: not in a git repo, cannot find template root"; exit 1; fi
 	@echo "Syncing from template: $(TEMPLATE_ROOT)"
 	@cp "$(TEMPLATE_ROOT)/agent/adapters/base.py" $(AGENT_DIR)/adapters/base.py
@@ -57,4 +58,11 @@ sync: ## Sync scripts from template (adapters, deploy, start, Makefile, start_ag
 	@cp "$(TEMPLATE_ROOT)/agent/start.sh" $(AGENT_DIR)/start.sh
 	@cp "$(TEMPLATE_ROOT)/agent/Makefile.template" Makefile
 	@cp "$(TEMPLATE_ROOT)/src/start_agent.py" src/start_agent.py
+	@for script_dir in "$(TEMPLATE_ROOT)"/agent/flow/*/scripts; do \
+		[ -d "$$script_dir" ] || continue; \
+		skill_name=$$(basename $$(dirname "$$script_dir")); \
+		target_dir="$(AGENT_DIR)/flow/$$skill_name/scripts"; \
+		mkdir -p "$$target_dir"; \
+		cp "$$script_dir"/*.py "$$target_dir/" 2>/dev/null || true; \
+	done
 	@echo "Synced. Run 'make clean && make deploy' to rebuild."

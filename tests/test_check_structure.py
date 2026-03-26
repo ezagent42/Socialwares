@@ -1,4 +1,4 @@
-"""Tests for the evolve_check structure checking script."""
+"""Tests for the evolve_structure_check structure checking script."""
 from __future__ import annotations
 
 import subprocess
@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).parent.parent
-CHECK_SCRIPT = REPO_ROOT / "agent" / "flow" / "evolve_check" / "scripts" / "check_structure.py"
+CHECK_SCRIPT = REPO_ROOT / "agent" / "flow" / "evolve_structure_check" / "scripts" / "check_structure.py"
 
 
 class TestCheckStructure:

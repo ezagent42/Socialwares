@@ -57,9 +57,9 @@ socialwares/
 │   │   ├── check_health/         ← default + dev + evolver
 │   │   ├── inspect/              ← dev + evolver
 │   │   ├── setup_claude/         ← dev only
-│   │   ├── evolve_check/         ← evolver only (+ scripts/check_structure.py)
-│   │   ├── evolve_diagnose/      ← evolver only (+ scripts/diagnose.py)
-│   │   ├── evolve_eval/          ← evolver only (+ scripts/run_eval.py)
+│   │   ├── evolve_structure_check/         ← evolver only (+ scripts/check_structure.py)
+│   │   ├── evolve_session_diagnose/      ← evolver only (+ scripts/diagnose.py)
+│   │   ├── evolve_api_check/          ← evolver only (+ scripts/run_eval.py)
 │   │   ├── evolve_improve/       ← evolver only
 │   │   └── evolve_auto/          ← evolver only (+ scripts/run_auto.py)
 │   ├── adapters/                 ← Platform adapters (Claude/Codex/Kimi)
@@ -156,9 +156,9 @@ direct_actions:
   - { action: check_health,     role: [default, dev, evolver], description: "Check app health" }
   - { action: setup_claude,     role: [dev],                   description: "Configure Claude Code" }
   - { action: inspect,          role: [dev, evolver],          description: "Show project structure" }
-  - { action: evolve_check,     role: [evolver],               description: "Check structural consistency" }
-  - { action: evolve_diagnose,  role: [evolver],               description: "Diagnose from runtime data" }
-  - { action: evolve_eval,      role: [evolver],               description: "Run eval cases" }
+  - { action: evolve_structure_check,     role: [evolver],               description: "Check structural consistency" }
+  - { action: evolve_session_diagnose,  role: [evolver],               description: "Diagnose from runtime data" }
+  - { action: evolve_api_check,      role: [evolver],               description: "Run eval cases" }
   - { action: evolve_improve,   role: [evolver],               description: "Apply improvements" }
   - { action: evolve_auto,      role: [evolver],               description: "Automated evolution loop" }
 ```
@@ -274,11 +274,11 @@ Built-in role for improving your app based on runtime evidence.
 
 | Skill | Mode | What it does |
 |-------|------|-------------|
-| `evolve_check` | Manual | Check structural consistency of four primitives + flow graph completeness (no app needed) |
-| `evolve_diagnose` | Manual | Scan conversations + commitments → diagnostic report |
-| `evolve_eval` | Manual | Run eval_cases.yaml → score (API checks) |
+| `evolve_structure_check` | Manual | Check structural consistency of four primitives + flow graph completeness (no app needed) |
+| `evolve_session_diagnose` | Manual | Scan conversations + commitments → diagnostic report |
+| `evolve_api_check` | Manual | Run eval_cases.yaml → score (API checks) |
 | `evolve_improve` | Manual | Map problems to primitives → propose + apply changes |
-| `evolve_auto` | Auto | Automated loop: evaluate → diagnose → propose → apply → re-evaluate |
+| `evolve_auto` | Auto | Automated conversation testing — run test cases via SDK, score results |
 
 ```bash
 # From within a workspace:
@@ -287,7 +287,7 @@ make start ROLE=evolver
 # "diagnose"        → analyze runtime data, compute fulfillment rates
 # "evaluate"        → run eval cases, report score
 # "improve"         → fix issues based on evidence
-# "auto-optimize"   → automated improvement loop
+# "auto-test"       → run conversation test cases via SDK
 ```
 
 Fulfillment rate = fulfilled / total per commitment. The evolver reads conversation logs, checks each commitment's condition, and maps low fulfillment to specific four-primitive improvements.
