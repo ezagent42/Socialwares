@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # start.sh — Launch agent from the current workspace
 #
-# Auto-deploys if .runtime/ is missing or agent/ has been modified.
+# Requires .runtime/ to exist (run 'make deploy' or './agent/deploy.sh' first).
 # Works relative to its own location: agent/ in the same directory tree.
 #
 # Usage (from within a workspace):
@@ -13,6 +13,17 @@ set -euo pipefail
 AGENT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_ROOT="$(cd "$AGENT_DIR/.." && pwd)"
 RUNTIME_DIR="$APP_ROOT/.runtime"
+
+# Guard: prevent start at template root
+if [ -f "$APP_ROOT/scripts/create-my-socialware.py" ] && [ ! -f "$APP_ROOT/Makefile" -o "$(head -1 "$APP_ROOT/Makefile" 2>/dev/null)" = "# Socialwares Template — Root Makefile" ]; then
+    echo "Error: start.sh should not run at the template root."
+    echo ""
+    echo "Create a workspace first:"
+    echo "  make create ROOM=my-team APP=my-app"
+    echo "  cd .socialware/workspace/my-team/my-app"
+    echo "  make start ROLE=default"
+    exit 1
+fi
 
 # Default parameters
 ROLE=""
@@ -27,30 +38,10 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# 1. Auto-deploy if .runtime/ missing or agent/ newer than .runtime/
-# Uses python3 for cross-platform compatibility (Windows/WSL/macOS)
-needs_deploy=$(python3 -c "
-import os, sys
-from pathlib import Path
-runtime = Path('$RUNTIME_DIR')
-agent = Path('$AGENT_DIR')
-if not (runtime / 'agents').is_dir():
-    print('true')
-    sys.exit()
-runtime_mtime = runtime.stat().st_mtime
-for p in agent.rglob('*'):
-    if '__pycache__' in str(p):
-        continue
-    if p.stat().st_mtime > runtime_mtime:
-        print('true')
-        sys.exit()
-print('false')
-")
-
-if [ "$needs_deploy" = true ]; then
-    echo "Detected changes. Running deploy.sh..."
-    "$AGENT_DIR/deploy.sh"
-    echo ""
+# 1. Check if .runtime/ exists
+if [ ! -d "$RUNTIME_DIR/agents" ]; then
+    echo "No .runtime/ found. Run 'make deploy' or './agent/deploy.sh' first."
+    exit 1
 fi
 
 # 2. Determine which roles to start
@@ -97,12 +88,40 @@ if [ ${#ROLES[@]} -eq 1 ]; then
         exit 1
     fi
 else
-    SESSION="socialware-$(date +%s)"
+    # Validate all roles exist before launching tmux
+    for role_name in "${ROLES[@]}"; do
+        project_dir="$RUNTIME_DIR/agents/$role_name"
+        if [ ! -d "$project_dir" ]; then
+            echo "Role not found: $role_name"
+            echo "Available roles:"
+            for role_dir in "$RUNTIME_DIR"/agents/*/; do
+                [ -d "$role_dir" ] || continue
+                echo "  - $(basename "$role_dir")"
+            done
+            exit 1
+        fi
+    done
+
+    # Check tmux is available
+    if ! command -v tmux >/dev/null 2>&1; then
+        echo "Error: tmux is required for multi-role mode."
+        echo "Install: sudo apt install tmux"
+        exit 1
+    fi
+
+    SESSION="socialware-$$"
     echo "Starting ${#ROLES[@]} roles in tmux session: $SESSION"
 
     first_role="${ROLES[0]}"
     first_dir="$RUNTIME_DIR/agents/$first_role"
     tmux new-session -d -s "$SESSION" "$ADAPTER_DIR/shell.sh $first_dir"
+    sleep 0.5  # wait for session to initialize
+
+    if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+        echo "Error: Failed to create tmux session. Check if $first_role adapter works:"
+        echo "  $ADAPTER_DIR/shell.sh $first_dir"
+        exit 1
+    fi
 
     for ((i=1; i<${#ROLES[@]}; i++)); do
         role_name="${ROLES[$i]}"

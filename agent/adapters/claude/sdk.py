@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
 """Claude Agent SDK adapter.
 
-Launches agent programmatically using Claude Agent SDK.
-Used by src/start_agent.py for production deployment.
+Uses claude-agent-sdk for programmatic agent interaction.
+Requires: uv pip install 'claude-agent-sdk>=0.1.16'
 
 Reference:
-- CLI: https://docs.anthropic.com/en/docs/claude-code/cli-reference
-- SDK: https://docs.anthropic.com/en/docs/claude-code/sdk-reference
+- SDK: https://github.com/anthropics/claude-agent-sdk-python
 """
 from __future__ import annotations
 
-import os
-import subprocess
 import sys
 from pathlib import Path
+from typing import Any, AsyncIterator
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from base import BaseAdapter, RoleConfig
+from base import BaseAdapter, RoleConfig, serialize
 
 
 class ClaudeAdapter(BaseAdapter):
@@ -24,6 +22,7 @@ class ClaudeAdapter(BaseAdapter):
 
     def launch_shell(self) -> None:
         """Launch Claude Code TUI via CLI."""
+        import subprocess
         cmd = ["claude", "--dangerously-skip-permissions"]
 
         soul_path = self.config.project_dir / "SOUL.md"
@@ -32,44 +31,46 @@ class ClaudeAdapter(BaseAdapter):
 
         subprocess.run(cmd, cwd=str(self.config.project_dir))
 
-    def launch_sdk(self) -> None:
-        """Launch programmatically via Claude Agent SDK."""
-        print(f"[Claude SDK] Launching {self.config.name}")
-        print(f"[Claude SDK] Working dir: {self.config.project_dir}")
-        print(f"[Claude SDK] SOUL.md: {len(self.config.soul)} chars")
+    async def launch_sdk(self, prompt: str) -> AsyncIterator[Any]:
+        """Launch via Claude Agent SDK.
 
-        # Claude Agent SDK uses claude_code_sdk
-        # Reference: https://docs.anthropic.com/en/docs/claude-code/sdk-reference
+        Yields serialized message dicts. Uses ClaudeSDKClient pattern (same as EvoSkill).
+        """
         try:
-            from claude_code_sdk import query
-
-            result = query(
-                prompt="You are ready. Wait for instructions.",
-                options={
-                    "cwd": str(self.config.project_dir),
-                    "system_prompt": self.config.soul,
-                    "permission_mode": "plan",
-                },
-            )
-            print(result)
+            from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
         except ImportError:
-            print("[Claude SDK] claude_code_sdk not installed.")
-            print("  Install: pip install claude-code-sdk")
-            print(f"  Falling back to CLI mode...")
-            self.launch_shell()
+            print("[Claude SDK] claude-agent-sdk not installed.")
+            print("  Install: uv pip install 'claude-agent-sdk>=0.1.16'")
+            return
+
+        project_dir = str(self.config.project_dir)
+        options = ClaudeAgentOptions(
+            cwd=project_dir,
+            system_prompt=self.config.soul,
+            allowed_tools=["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill"],
+            setting_sources=["user", "project", "local"],
+            permission_mode="acceptEdits",
+        )
+
+        async with ClaudeSDKClient(options) as client:
+            await client.query(prompt)
+            async for message in client.receive_response():
+                yield serialize(message)
 
 
 if __name__ == "__main__":
     import argparse
+    import asyncio
     parser = argparse.ArgumentParser()
     parser.add_argument("project_dir", help="Path to .runtime/agents/{role}/")
-    parser.add_argument("--mode", default="sdk", choices=["shell", "sdk"])
+    parser.add_argument("--prompt", default="You are ready.", help="Initial prompt")
     args = parser.parse_args()
 
     config = RoleConfig.from_runtime(args.project_dir)
     adapter = ClaudeAdapter(config)
 
-    if args.mode == "shell":
-        adapter.launch_shell()
-    else:
-        adapter.launch_sdk()
+    async def main():
+        async for msg in adapter.launch_sdk(args.prompt):
+            print(msg)
+
+    asyncio.run(main())

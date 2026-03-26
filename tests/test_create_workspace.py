@@ -47,12 +47,20 @@ class TestCreateWorkspace:
 
             assert result.returncode == 0, f"Failed:\n{result.stderr}\n{result.stdout}"
 
+            # Run deploy (create no longer auto-deploys; Make handles it)
+            deploy_result = subprocess.run(
+                [str(workspace_dir / "agent" / "deploy.sh")],
+                capture_output=True, text=True,
+                cwd=str(workspace_dir),
+            )
+            assert deploy_result.returncode == 0, f"Deploy failed:\n{deploy_result.stderr}"
+
             # Check directory structure
             assert workspace_dir.exists()
             assert (workspace_dir / "src").is_dir()
             assert (workspace_dir / "agent").is_dir()
-            assert (workspace_dir / "agent" / "scope" / "SOUL.md").exists()
-            assert (workspace_dir / "agent" / "role" / "default" / "SOUL.md").exists()
+            assert (workspace_dir / "agent" / "scope" / "scope.md").exists()
+            assert (workspace_dir / "agent" / "role" / "default.md").exists()
             assert (workspace_dir / "agent" / "flow").is_dir()
             assert (workspace_dir / "agent" / "commitment").is_dir()
 
@@ -62,20 +70,31 @@ class TestCreateWorkspace:
             assert (workspace_dir / "agent" / "adapters").is_dir()
 
             # Check customized content
-            scope_soul = (workspace_dir / "agent" / "scope" / "SOUL.md").read_text()
+            scope_soul = (workspace_dir / "agent" / "scope" / "scope.md").read_text()
             assert app in scope_soul
 
-            role_soul = (workspace_dir / "agent" / "role" / "default" / "SOUL.md").read_text()
+            role_soul = (workspace_dir / "agent" / "role" / "default.md").read_text()
             assert app in role_soul
 
-            # Check auto-deploy ran (.runtime/ should exist)
+            # Check Makefile copied
+            assert (workspace_dir / "Makefile").exists(), "Makefile should be copied to workspace"
+            makefile_content = (workspace_dir / "Makefile").read_text()
+            assert "deploy" in makefile_content
+
+            # Check deploy ran (.runtime/ should exist)
             assert (workspace_dir / ".runtime").is_dir(), \
-                ".runtime/ should exist — create runs initial deploy"
+                ".runtime/ should exist after deploy"
             assert (workspace_dir / ".runtime" / "agents" / "default").is_dir()
 
             # Check pyproject.toml copied with app name
             pyproject = (workspace_dir / "pyproject.toml").read_text()
             assert app in pyproject
+
+            # Check skills are symlinks within workspace (agent/flow/ → .runtime/.claude/skills/)
+            default_skills = workspace_dir / ".runtime" / "agents" / "default" / ".claude" / "skills"
+            if default_skills.exists():
+                for skill in default_skills.iterdir():
+                    assert skill.is_symlink(), f"Skill {skill} should be a symlink within workspace"
 
         finally:
             room_dir = REPO_ROOT / ".socialware" / "workspace" / room

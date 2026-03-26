@@ -82,6 +82,13 @@ def create_workspace(room: str, app: str, description: str) -> Path:
         shutil.copytree(adapters_src, adapters_dst, ignore=shutil.ignore_patterns("__pycache__"))
         print(f"  Copied agent/adapters/")
 
+    # Copy Makefile template
+    makefile_src = agent_src / "Makefile.template"
+    makefile_dst = workspace_dir / "Makefile"
+    if makefile_src.exists():
+        shutil.copy2(makefile_src, makefile_dst)
+        print(f"  Copied Makefile")
+
     # Copy pyproject.toml for independent dependency management
     pyproject_src = REPO_ROOT / "pyproject.toml"
     if pyproject_src.exists():
@@ -99,8 +106,8 @@ def create_workspace(room: str, app: str, description: str) -> Path:
 def customize_workspace(workspace_dir: Path, app: str, description: str) -> None:
     """Customize the four primitives in the workspace."""
 
-    scope_soul = workspace_dir / "agent" / "scope" / "SOUL.md"
-    scope_soul.write_text(f"""# {app}
+    scope_file = workspace_dir / "agent" / "scope" / "scope.md"
+    scope_file.write_text(f"""# {app}
 
 {description}
 
@@ -113,11 +120,11 @@ def customize_workspace(workspace_dir: Path, app: str, description: str) -> None
 
 - (Define the Agent's operational boundaries here)
 """)
-    print(f"  Customized agent/scope/SOUL.md")
+    print(f"  Customized agent/scope/scope.md")
 
-    role_soul = workspace_dir / "agent" / "role" / "default" / "SOUL.md"
-    if role_soul.exists():
-        role_soul.write_text(f"""# Default Agent
+    role_file = workspace_dir / "agent" / "role" / "default.md"
+    if role_file.exists():
+        role_file.write_text(f"""# Default Agent
 
 You are the Agent for {app}.
 
@@ -130,29 +137,8 @@ You are the Agent for {app}.
 
 Operate {app} according to user instructions.
 """)
-        print(f"  Customized agent/role/default/SOUL.md")
+        print(f"  Customized agent/role/default.md")
 
-
-def run_deploy(workspace_dir: Path) -> bool:
-    """Run deploy.sh from within the workspace."""
-    deploy_sh = workspace_dir / "agent" / "deploy.sh"
-    if not deploy_sh.exists():
-        print(f"  Warning: deploy.sh not found, skipping initial deploy")
-        return False
-
-    result = subprocess.run(
-        [str(deploy_sh)],
-        capture_output=True,
-        text=True,
-        cwd=str(workspace_dir),
-    )
-
-    if result.returncode == 0:
-        print(f"  Initial deploy complete")
-        return True
-    else:
-        print(f"  Deploy failed: {result.stderr}")
-        return False
 
 
 def main() -> None:
@@ -183,9 +169,6 @@ def main() -> None:
     customize_workspace(workspace_dir, app, description)
     print()
 
-    # 3. Initial deploy
-    run_deploy(workspace_dir)
-
     ws_rel = f".socialware/workspace/{room}/{app}"
     print()
     print("=" * 40)
@@ -195,12 +178,13 @@ def main() -> None:
     print(f"  cd {ws_rel}")
     print()
     print(f"  # Edit four primitives")
-    print(f"  vim agent/scope/SOUL.md")
-    print(f"  vim agent/role/default/SOUL.md")
+    print(f"  vim agent/scope/scope.md")
+    print(f"  vim agent/role/default.md")
     print(f"  vim agent/flow/flow.yaml")
     print()
-    print(f"  # Start agent (auto-deploys if agent/ changed)")
-    print(f"  ./agent/start.sh --role default")
+    print(f"  # Deploy and start")
+    print(f"  make deploy")
+    print(f"  make start ROLE=default")
     print()
 
 

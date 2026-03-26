@@ -1,0 +1,5 @@
+{
+  "enabledPlugins": {
+    "agent-setup@agent-setup": true
+  }
+}
