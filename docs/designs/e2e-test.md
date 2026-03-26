@@ -1016,6 +1016,76 @@ make test
 cd .socialware/workspace/demo/task-review
 ```
 
+### 7.11 make sync
+
+| | |
+|---|---|
+| **Action** | Test sync from template |
+| **Purpose** | Verify make sync copies latest scripts from template root |
+| **Expected** | Adapters, deploy.sh, start.sh, Makefile updated |
+
+```bash
+make sync
+# Expected: "Syncing from template: /home/yaosh/projects/Socialwares"
+#           "Synced. Run 'make clean && make deploy' to rebuild."
+
+# Verify a synced file matches template
+diff agent/adapters/claude/sdk.py $(git rev-parse --show-toplevel)/agent/adapters/claude/sdk.py
+# Should show no differences
+```
+
+### 7.12 Flow state machine with resource
+
+| | |
+|---|---|
+| **Action** | Add a state machine to flow.yaml with resource field |
+| **Purpose** | Verify flows DSL works: resource, states, transitions |
+| **Expected** | Deploy injects workflow into SOUL.md, check validates graph |
+
+```bash
+# Add a state machine to flow.yaml (append before direct_actions)
+cat > agent/flow/flow.yaml << 'EOF'
+flows:
+  task_lifecycle:
+    name: task_lifecycle
+    resource: task
+    states: [draft, submitted, reviewed, closed]
+    transitions:
+      - { from: draft, action: submit_task, to: submitted, role: [default] }
+      - { from: submitted, action: review_task, to: reviewed, role: [reviewer] }
+
+direct_actions:
+  - { action: check_health,     role: [default, dev, evolver], description: "Check app health" }
+  - { action: setup_claude,     role: [dev], description: "Configure Claude Code" }
+  - { action: inspect,          role: [dev, evolver], description: "Show project structure" }
+  - { action: create_task,      role: [default], description: "Create a new task" }
+  - { action: submit_task,      role: [default], description: "Submit task for review" }
+  - { action: review_task,      role: [reviewer], description: "Review a submitted task" }
+  - { action: list_tasks,       role: [default, reviewer], description: "List all tasks" }
+  - { action: evolve_check,     role: [evolver], description: "Check structural consistency" }
+  - { action: evolve_diagnose,  role: [evolver], description: "Diagnose from runtime data" }
+  - { action: evolve_eval,      role: [evolver], description: "Run eval cases" }
+  - { action: evolve_improve,   role: [evolver], description: "Apply improvements" }
+  - { action: evolve_auto,      role: [evolver], description: "Automated conversation testing" }
+EOF
+
+make deploy
+
+# Verify workflow injected into SOUL.md
+grep "Workflows" .runtime/agents/default/SOUL.md
+# Should contain "## Workflows" section
+
+grep "task_lifecycle" .runtime/agents/default/SOUL.md
+# Should contain "### task_lifecycle (resource: task)"
+
+grep "draft → submit_task" .runtime/agents/default/SOUL.md
+# Should show transition chain
+
+# Verify check validates the graph
+uv run agent/flow/evolve_check/scripts/check_structure.py --agent-dir agent
+# Expected: Flow State Machine Graph: ✓ All state machine graphs valid
+```
+
 ---
 
 ## Phase 8: Scope Update
