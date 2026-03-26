@@ -31,7 +31,8 @@ async def health() -> dict[str, str]:
 async def list_violations() -> list[dict]:
     """List unresolved constraint violations."""
     violations = []
-    VIOLATIONS_DIR.mkdir(parents=True, exist_ok=True)
+    if not VIOLATIONS_DIR.exists():
+        return violations
     for f in VIOLATIONS_DIR.glob("*.jsonl"):
         for line in f.read_text().splitlines():
             if line.strip():
@@ -44,7 +45,8 @@ async def list_violations() -> list[dict]:
 @app.post("/violations/{violation_id}/resolve")
 async def resolve_violation(violation_id: str) -> dict:
     """Mark a violation as resolved."""
-    VIOLATIONS_DIR.mkdir(parents=True, exist_ok=True)
+    if not VIOLATIONS_DIR.exists():
+        raise HTTPException(404, f"Violation {violation_id} not found")
     for f in VIOLATIONS_DIR.glob("*.jsonl"):
         lines = f.read_text().splitlines()
         updated = []

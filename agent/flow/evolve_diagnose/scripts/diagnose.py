@@ -302,7 +302,9 @@ def main() -> None:
     report = generate_report(commitments, extracted, len(prompt_entries), len(sessions), flow_transitions)
     print(report)
 
-    # Save structured JSON (for evolver to read and judge)
+    # Save structured JSON (only if .runtime/ exists — means we're in a workspace)
+    if not Path(".runtime").exists():
+        sys.exit(0)
     report_dir = data_dir / "evolve" / "reports"
     report_dir.mkdir(parents=True, exist_ok=True)
     timestamp_str = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')

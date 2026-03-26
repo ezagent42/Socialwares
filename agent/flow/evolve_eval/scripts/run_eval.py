@@ -132,7 +132,9 @@ def main() -> None:
     score = passed / total if total > 0 else 0
     print(f"\nAPI Score: {passed}/{total} ({score:.0%})")
 
-    # Save report
+    # Save report (only if .runtime/ exists — means we're in a workspace)
+    if not Path(".runtime").exists():
+        sys.exit(0)
     report_dir = Path(".runtime/data/evolve/reports")
     report_dir.mkdir(parents=True, exist_ok=True)
     timestamp_str = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')

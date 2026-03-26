@@ -338,8 +338,10 @@ def main() -> None:
         print(f"ISSUES: {total_issues} problem(s) found.")
     print("=" * 60)
 
-    # Save report
+    # Save report (only if .runtime/ exists — means we're in a workspace)
     report_dir = Path(".runtime/data/evolve/reports")
+    if not Path(".runtime").exists():
+        sys.exit(1 if total_issues > 0 else 0)
     report_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc)
     report_file = report_dir / f"check_{timestamp.strftime('%Y%m%d_%H%M%S')}.json"
