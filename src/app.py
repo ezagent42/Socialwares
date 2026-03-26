@@ -1,15 +1,20 @@
 """Socialware App backend — FastAPI entry point.
 
 Minimal template. Users incrementally grow on this foundation (P1->P5).
-Start: uvicorn src.app:app --port 8001
+Start: uv run uvicorn src.app:app --port $APP_PORT
 """
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
+
+# App config — agent reads these to know where the API is
+APP_HOST = os.getenv("APP_HOST", "0.0.0.0")
+APP_PORT = int(os.getenv("APP_PORT", "8001"))
 
 app = FastAPI(
     title="Socialware App",
@@ -67,4 +72,4 @@ async def resolve_violation(violation_id: str) -> dict:
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host=APP_HOST, port=APP_PORT)

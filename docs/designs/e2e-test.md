@@ -10,6 +10,14 @@ cd Socialwares
 uv sync
 ```
 
+## Convention
+
+App port is configured in `src/app.py` (`APP_PORT`, default 8001, overridable via `APP_PORT` env var). All commands below use port 8001. To change:
+
+```bash
+export APP_PORT=8002  # optional — changes default for app + eval scripts
+```
+
 ---
 
 ## Phase 1: Template & Workspace

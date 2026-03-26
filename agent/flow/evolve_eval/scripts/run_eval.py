@@ -13,6 +13,8 @@ Usage:
 """
 from __future__ import annotations
 
+import os
+
 import argparse
 import json
 import sys
@@ -104,7 +106,8 @@ def run_case(case: dict, base_url: str) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run eval cases against Socialware App")
     parser.add_argument("--cases", required=True, help="Path to eval_cases.yaml")
-    parser.add_argument("--base-url", default="http://localhost:8001", help="App base URL")
+    default_port = os.environ.get("APP_PORT", "8001")
+    parser.add_argument("--base-url", default=f"http://localhost:{default_port}", help="App base URL (default reads APP_PORT env var)")
     args = parser.parse_args()
 
     api_checks = load_cases(Path(args.cases))
