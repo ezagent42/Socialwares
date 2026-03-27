@@ -90,7 +90,9 @@ P3 不是 Dev 主动发起，而是用户感知到了不满：
 | deploy.sh 合并策略 | Scope + Role 合并是否需要冲突检测？ |
 | eval.yaml 执行绑定 | 声明式定义如何绑定到 Biz 层（cron? middleware?） |
 
-> **evolve-v2 分支进展**：以上多项已在 `feat/evolve-v2` 中解决——Commitment 从 `eval.yaml`（metric/threshold）重构为 `commitment.yaml`（from/to/condition/on_violation），更贴合 Flow 状态机的边；Role 文件扁平化（`default.md` 替代 `default/SOUL.md`）；deploy.sh 支持多平台适配。
+> **已解决**（evolve v3，已合入 main）：Commitment 从 `eval.yaml`（metric/threshold）重构为 `commitment.yaml`（from/to/condition/on_violation），更贴合 Flow 状态机的边；Role 文件扁平化（`default.md` 替代 `default/SOUL.md`）；deploy.sh 支持多平台适配。
+>
+> **待补充**：`eval.yaml 执行绑定` 改进项——当前 commitment.yaml schema 已定义但内容为空（`commitments: {}`），需要在首个 App 实例的 P3 阶段填充真实 commitment 条目后，才能验证 Hook 日志→诊断→判定的完整闭环。
 
 ---
 
@@ -105,23 +107,24 @@ P3 不是 Dev 主动发起，而是用户感知到了不满：
 4. Role — 最小权限原则     新角色必须有明确边界
 ```
 
-### 自动迭代引擎：Evolver 角色 + 5 个 Evolve Skill
+### 自动迭代引擎：Evolver 角色 + Evolve Skills
 
-> **evolve-v2 已实现**：以下架构已在 `feat/evolve-v2` 分支落地。
+> **已合入 main**（evolve v3，`7745e48`）。
 
 ```
-commitment.yaml 标准 → Hook 采集运行数据 → Evolver 5 Skill 分析 → 改进四原语内容
+commitment.yaml 标准 → Hook 采集运行数据 → Evolver Skills 分析 → 改进四原语内容
 ```
 
-evolve-v2 将原先设想的单一 evolve Skill 拆分为 5 个职责单一的 Skill：
+当前 main 上 evolver 角色拥有 5 个 Evolve Skill + 1 个 inspect Skill：
 
-| Skill | 功能 | 依赖 | 输出 |
-|-------|------|------|------|
-| `evolve_check` | 结构一致性校验（flow.yaml ↔ SKILL.md ↔ commitment） | 无需 App 运行 | check 报告 JSON |
-| `evolve_diagnose` | 运行时数据诊断（Hook 日志 + commitment 判定） | Hook 数据 | 诊断报告 + violations |
-| `evolve_eval` | API 性能测试（eval_cases.yaml 题集） | App 运行中 | eval 报告 JSON |
-| `evolve_improve` | 证据驱动改进提案（读取以上报告） | 以上三步完成 | 四原语修改 |
-| `evolve_auto` | 自动对话测试（conversation_tests/ 题集） | SDK adapter | auto_test 报告 |
+| Skill（main 实际名称） | 功能 | 脚本 | 输出 |
+|------------------------|------|------|------|
+| `evolve_structure_check` | 结构一致性校验（flow.yaml ↔ SKILL.md ↔ commitment） | check_structure.py | check 报告 JSON |
+| `evolve_session_diagnose` | 运行时数据诊断（Hook 日志 + SDK session + commitment 判定） | diagnose.py + save_violation.py | 诊断报告 + violations |
+| `evolve_api_check` | API 性能测试（eval_cases.yaml 题集） | run_eval.py | eval 报告 JSON |
+| `evolve_improve` | 证据驱动改进提案（读取以上报告） | save_report.py | 四原语修改 + improve 报告 |
+| `evolve_auto` | 自动对话测试（conversation_tests/ 题集） | run_auto.py | auto_test 报告 |
+| `inspect` | 项目结构和开发工作流展示 | 无 | 人类可读说明 |
 
 **关键设计**：脚本只做数据提取，evolver（LLM）做判断。例如 diagnose.py 只输出事件计数，fulfillment 判定由 evolver 根据 commitment.yaml 的 condition 做自然语言推理。
 
@@ -394,31 +397,31 @@ Socialware: 测试失败 → 暴露能力缺口 → 驱动下一轮迭代
 
 ### 三层测试模型
 
-> **evolve-v2 已实现**：以下三层在 `feat/evolve-v2` 中均有落地实现。
+> **已合入 main**：以下三层均已在当前 main 分支落地。
 
 #### 第一层：规范化脚本测试（保障四原语管线）
 
 验证编译管线和文件结构正确性，不需要 Agent 运行。
 
-| 测试文件 (main) | 测试文件 (evolve-v2) | 验证内容 |
-|-----------------|---------------------|----------|
-| `test_deploy.py` | `test_deploy.py`（增强） | deploy.sh 产物结构、SOUL.md 合并、Skill symlink、eval.yaml 分发 |
-| `test_app.py` | `test_app.py` | /health API |
-| `test_create_workspace.py` | `test_create_workspace.py` | 脚手架创建 |
-| — | `test_check_structure.py` | flow.yaml ↔ SKILL.md ↔ commitment 一致性 |
-| — | `test_hooks.py` | Hook 脚本生成 + JSONL 日志格式 |
+| 测试文件 | 验证内容 |
+|----------|----------|
+| `test_deploy.py` | deploy.sh 产物结构、SOUL.md 合并、Skill symlink、commitment 分发 |
+| `test_app.py` | /health + /violations API |
+| `test_create_workspace.py` | 脚手架创建 |
+| `test_check_structure.py` | flow.yaml ↔ SKILL.md ↔ commitment 一致性 |
+| `test_hooks.py` | Hook 脚本生成 + JSONL 日志格式 |
 
-对应 evolver Skill：**evolve_check**（check_structure.py）
+对应 evolver Skill：**evolve_structure_check**（check_structure.py）
 
 #### 第二层：题集测试（驱动 P2 迭代）
 
 给 Agent 输入，验证行为——需要 Agent 运行。
 
-**evolve-v2 实现方式**：两种测试分离
+两种测试分离：
 
 | 类型 | 工具 | 输入 | 验证 |
 |------|------|------|------|
-| **API 测试** | evolve_eval / run_eval.py | eval_cases.yaml（HTTP 请求） | 状态码 + 响应体 |
+| **API 测试** | evolve_api_check / run_eval.py | eval_cases.yaml（HTTP 请求） | 状态码 + 响应体 |
 | **对话测试** | evolve_auto / run_auto.py | conversation_tests/*.yaml | 是否触发预期 Skill |
 
 对话测试题集格式（conversation_tests/default.yaml）：
@@ -436,13 +439,14 @@ Socialware: 测试失败 → 暴露能力缺口 → 驱动下一轮迭代
   · 用了错误 Skill？     → 改 Trigger 或 Scope 边界
 ```
 
-对应 evolver Skill：**evolve_eval** + **evolve_auto**
+对应 evolver Skill：**evolve_api_check** + **evolve_auto**
+
+> **待补充**：当前 eval_cases.yaml 仅 1 条 health check 测试、conversation_tests/default.yaml 仅 1 条 check_health 测试。需要在首个 App 的 P2 阶段逐步扩充题集（每加一个 Skill → 同步加一条题集用例）。
 
 #### 第三层：Commitment 测试（P3+ 运行时诊断）
 
 基于运行时数据判定 commitment 是否被满足。
 
-**evolve-v2 实现方式**：
 - Hook（log_prompt.sh / log_tool.sh）采集运行数据到 `.runtime/data/prompts/`
 - diagnose.py 增量扫描日志，提取 commitment 相关事件
 - evolver 根据 commitment.yaml 的 condition 做自然语言判定（FULFILLED / VIOLATED / INSUFFICIENT DATA）
@@ -452,7 +456,9 @@ Socialware: 测试失败 → 暴露能力缺口 → 驱动下一轮迭代
 | `test_diagnose.py` | 诊断脚本运行 + 日志读取 + fulfillment 计算 |
 | `test_violations.py` | /violations API 返回违规记录 |
 
-对应 evolver Skill：**evolve_diagnose**
+对应 evolver Skill：**evolve_session_diagnose**
+
+> **待补充**：Commitment 测试的完整闭环依赖 commitment.yaml 中有真实条目。当前 `commitments: {}` 为空——需要在 P3 阶段填充后才能验证 diagnose → judge → violation 链路。
 
 ### 两类测试在诊断中的分工
 
@@ -475,11 +481,11 @@ Socialware: 测试失败 → 暴露能力缺口 → 驱动下一轮迭代
 
 ### Dev 驱动迭代的三种方式
 
-| 方式 | 流程 | evolve-v2 对应工具 |
-|------|------|-------------------|
+| 方式 | 流程 | 对应工具 |
+|------|------|---------|
 | **对话驱动** | 开 Agent Chat → 发现"不会" → 写 Skill | evolver TUI：`make start ROLE=evolver` |
-| **测试驱动** | 写题集 → 运行 → 红 → 改 Skill → 绿 | evolve_eval（API）+ evolve_auto（对话） |
-| **指标驱动** | Commitment 违规 → 诊断原因 → 改进 | evolve_diagnose → evolve_improve |
+| **测试驱动** | 写题集 → 运行 → 红 → 改 Skill → 绿 | evolve_api_check（API）+ evolve_auto（对话） |
+| **指标驱动** | Commitment 违规 → 诊断原因 → 改进 | evolve_session_diagnose → evolve_improve |
 
 ---
 
@@ -489,7 +495,9 @@ Socialware: 测试失败 → 暴露能力缺口 → 驱动下一轮迭代
 
 ### 对用户可见：Agent 能力清单
 
-内置 `list_capabilities` Skill，读取当前角色的 `.claude/skills/` 目录，列出所有可用 Skill 的 name + description。
+建议内置 `list_capabilities` Skill，读取当前角色的 `.claude/skills/` 目录，列出所有可用 Skill 的 name + description。
+
+> **待实现**：当前 main 上无此 Skill。可在 P2 阶段加入，或由 `inspect` Skill 部分覆盖此功能。
 
 ```
 用户: "你能做什么？"
@@ -498,6 +506,8 @@ Socialware: 测试失败 → 暴露能力缺口 → 驱动下一轮迭代
 ```
 
 ### 对 Dev 可见：deploy 输出变更摘要
+
+> **待实现**：当前 deploy.sh 输出简洁但无变更对比。以下为建议格式：
 
 ```
 [deploy] ── Changes ──────────────────────────
@@ -542,7 +552,7 @@ P5: add reviewer role, approval flow
 □ 写 src/app.py 对应 API endpoint
 □ 注册 agent/flow/flow.yaml（action + role 权限）
 □ deploy + 验证（start.sh → 用户再试一次 → 成功）
-□ 更新 Scope 文件 Capabilities 列表（main: scope/SOUL.md, evolve-v2: scope/scope.md）
+□ 更新 scope/scope.md Capabilities 列表
 □ Git commit 标注 Phase: "P2: add {action}"
 ```
 
@@ -563,13 +573,32 @@ P5: add reviewer role, approval flow
 
 > 参照 autoservice 已验证的完整链路，设计跨平台通用 Agent Web 接入层
 
-### 通用接入层设计
-
-当前 `BaseAdapter` 只覆盖 **启动** 层（launch_shell / launch_sdk），缺少 **Web 交互** 层。
-需要把 adapter 从"启动器"升级为"会话管理器"：
+### 当前 Adapter 接口（main 实际状态）
 
 ```python
-# agent/adapters/base.py 扩展
+# agent/adapters/base.py — 当前 main 上的实际接口
+
+class BaseAdapter(abc.ABC):
+    def launch_shell(self) -> None: ...                           # TUI 模式
+    async def launch_sdk(self, prompt: str) -> AsyncIterator[Any]: ...  # SDK 模式（异步生成器）
+
+# 配套工具函数（已实现）：
+serialize(obj) -> Any                # SDK 对象 → JSON-safe dict（带 _type 元数据）
+is_noise(msg) -> bool                # 过滤系统噪音（ratelimit/hook/init）
+save_session(workspace_root, role, adapter, messages) -> Path  # 保存完整会话
+
+# RoleConfig 5 字段：name, project_dir, soul, skills_dir, workspace_root
+# Claude SDK 使用 claude_agent_sdk（ClaudeSDKClient），不是 claude_code_sdk
+```
+
+> **与早期设计的差异**：launch_sdk 已从 `() -> None` 升级为 `(prompt) -> AsyncIterator`，本质上已支持会话式交互。但当前是**单次 prompt-response**模式，不是**多轮会话管理**模式。
+
+### 通用 Web 接入层设计（待实现）
+
+当前 adapter 已覆盖**启动层**（TUI）和**单次调用层**（SDK），缺少**多轮 Web 交互层**。需要在现有 adapter 基础上扩展：
+
+```python
+# 待实现：agent/adapters/base.py 扩展
 
 @dataclass
 class AgentEvent:
@@ -584,18 +613,20 @@ class AgentEvent:
         "error",         # 出错
     ]
     content: str = ""
-    metadata: dict = field(default_factory=dict)  # model, session_id, token_usage 等
+    metadata: dict = field(default_factory=dict)
 
 class BaseAdapter(abc.ABC):
-    # --- 已有：启动 ---
+    # --- 已有（main 当前） ---
     def launch_shell(self) -> None: ...
-    def launch_sdk(self) -> None: ...
+    async def launch_sdk(self, prompt: str) -> AsyncIterator[Any]: ...
 
-    # --- 新增：Web 会话管理 ---
+    # --- 待实现：多轮 Web 会话管理 ---
     async def create_session(self, session_id: str) -> None: ...
     async def send_message(self, session_id: str, content: str) -> AsyncIterator[AgentEvent]: ...
     async def close_session(self, session_id: str) -> None: ...
 ```
+
+> **需要解决的冲突**：当前 `launch_sdk` 返回 SDK 原生对象（通过 serialize 转为 dict），而 `send_message` 应返回统一的 `AgentEvent`。两种接口需要共存：launch_sdk 供 evolver 内部使用（需要原始 trace），send_message 供 Web 层使用（需要统一事件流）。一种方案是 send_message 内部调用 launch_sdk + 将 dict 转为 AgentEvent。
 
 ### 跨平台 adapter 映射
 
@@ -608,7 +639,7 @@ class BaseAdapter(abc.ABC):
 
 > **关键发现**：通义千问、智谱 GLM、Moonshot Kimi、DeepSeek 基本都兼容 OpenAI API 格式。
 > 实际只需三个 Web adapter：
-> 1. `ClaudeWebAdapter` — claude_code_sdk（Agent 模式，tool use + session）
+> 1. `ClaudeWebAdapter` — claude_agent_sdk（Agent 模式，tool use + session）
 > 2. `OpenAIWebAdapter` — openai.chat.completions（通义/智谱/Moonshot/DeepSeek 复用，换 base_url + api_key）
 > 3. `GeminiWebAdapter` — google.generativeai
 
@@ -676,7 +707,7 @@ async def ws_chat(ws: WebSocket):
 
 ┌─ Agent Layer（通过 BaseAdapter 抽象）────────────────────────┐
 │  adapter.send_message() 内部调用各平台 SDK:                    │
-│  ├─ Claude:  claude_code_sdk.query()                          │
+│  ├─ Claude:  claude_agent_sdk.ClaudeSDKClient                  │
 │  ├─ OpenAI:  openai.chat.completions.create() (streaming)     │
 │  ├─ Gemini:  generativeai.GenerativeModel.generate_content()  │
 │  ├─ 中国LLM: openai 兼容接口 (换 base_url + api_key)          │
@@ -709,7 +740,7 @@ curl -X POST http://localhost:8001/tasks \
 
 | 决策 | 做法 | 效果 |
 |------|------|------|
-| **Tool 极简** | 只暴露 Bash | Agent 不会误用其他工具，行为可控 |
+| **Tool 极简** | autoservice 只暴露 Bash；Socialwares 当前暴露 Bash+Read+Write+Edit+Glob+Grep+Skill（evolver 需要文件操作） | Agent 行为可控，evolver 需要更多工具来修改四原语 |
 | **curl 调本地 API** | Skill 里写 curl 命令 | Agent 和 App 通过 HTTP 接口解耦 |
 | **in-process 拦截** | 识别 curl 命令 → 直接调 Python 函数 | 0ms 延迟，无需真的起 subprocess |
 | **WebSocket streaming** | token-level delta 推送 | 用户实时看到 Agent 思考/输出 |
@@ -720,7 +751,7 @@ curl -X POST http://localhost:8001/tasks \
 
 **Phase 1 最小可用**：
 1. `src/app.py` 加 WebSocket endpoint (`/ws/chat`)
-2. 接入 `claude_agent_sdk`（参照 autoservice 的 `autoservice/claude.py`）
+2. 复用现有 `claude_agent_sdk` adapter（已在 `agent/adapters/claude/sdk.py` 中实现）
 3. `app/` 写最简 Chat UI（WebSocket + streaming 渲染）
 4. Agent system prompt = 部署后的 `.runtime/agents/{role}/SOUL.md`
 
@@ -740,50 +771,48 @@ curl -X POST http://localhost:8001/tasks \
 
 ### 9.1 自迭代前提
 
-> **evolve-v2 已实现**：以下三个前提在 `feat/evolve-v2` 分支中均已落地。
+> **已合入 main**（evolve v3）。
 
 ```
 1. Agent 能读取自己的表现数据   → Hook 日志 + evolve 报告（.runtime/data/evolve/）
 2. Agent 能修改四原语文件       → evolver 角色有 Write/Edit 权限
-3. Agent 能验证修改效果         → deploy + evolve_eval + evolve_auto 对比
+3. Agent 能验证修改效果         → deploy + evolve_api_check + evolve_auto 对比
 ```
 
-### 9.2 Evolver 角色 + 5 个 Evolve Skill
+### 9.2 Evolver 角色 + Evolve Skills
 
-evolve-v2 将单一 evolve Skill 拆分为 5 个职责单一的 Skill，分配给专属 `evolver` 角色：
+当前 main 上 evolver 角色有 5 个 Evolve Skill + 1 个 inspect Skill：
 
 ```
-                     Evolver 工作流
-                     ─────────────
-  ┌──────────┐   ┌──────────────┐   ┌──────────┐
-  │  check   │──→│  diagnose    │──→│   eval   │
-  │ 结构校验  │   │ 运行时诊断    │   │ API 测试  │
-  └──────────┘   └──────────────┘   └──────────┘
-                         │                 │
-                         ▼                 ▼
-                  ┌──────────────┐   ┌──────────┐
-                  │   improve    │   │   auto   │
-                  │ 证据驱动改进  │   │ 对话测试  │
-                  └──────────────┘   └──────────┘
+                         Evolver 工作流
+                         ─────────────
+  ┌────────────────┐   ┌─────────────────────┐   ┌────────────────┐
+  │ structure_check│──→│ session_diagnose     │──→│  api_check     │
+  │ 结构校验        │   │ 运行时诊断            │   │ API 测试        │
+  └────────────────┘   └─────────────────────┘   └────────────────┘
+                                │                        │
+                                ▼                        ▼
+                        ┌──────────────┐         ┌──────────┐
+                        │   improve    │         │   auto   │
+                        │ 证据驱动改进  │         │ 对话测试  │
+                        └──────────────┘         └──────────┘
 ```
 
-| Skill | 脚本 | 数据源 | 输出位置 |
-|-------|------|--------|---------|
-| `evolve_check` | check_structure.py | 四原语源文件 | `.runtime/data/evolve/reports/check_*.json` |
-| `evolve_diagnose` | diagnose.py | Hook 日志 + commitment.yaml | `.runtime/data/evolve/reports/` + violations |
-| `evolve_eval` | run_eval.py | eval_cases.yaml（HTTP 题集） | `.runtime/data/evolve/reports/eval_*.json` |
-| `evolve_improve` | 无（纯 LLM） | 以上三步的报告 | 直接修改四原语文件 |
+| Skill（main 实际） | 脚本 | 数据源 | 输出位置 |
+|--------------------|------|--------|---------|
+| `evolve_structure_check` | check_structure.py | 四原语源文件 | `.runtime/data/evolve/reports/check_*.json` |
+| `evolve_session_diagnose` | diagnose.py + save_violation.py | Hook 日志 + SDK sessions + commitment.yaml | `.runtime/data/evolve/reports/` + violations |
+| `evolve_api_check` | run_eval.py | eval_cases.yaml（HTTP 题集） | `.runtime/data/evolve/reports/eval_*.json` |
+| `evolve_improve` | save_report.py（记录改进） | 以上三步的报告 | 直接修改四原语文件 + improve 报告 |
 | `evolve_auto` | run_auto.py | conversation_tests/*.yaml | `.runtime/data/evolve/reports/auto_test_*.json` |
+| `inspect` | 无 | — | 人类可读项目结构说明 |
 
 **关键设计——脚本 vs evolver 分离**：
 - **脚本**只做数据提取/计算（确定性操作）
 - **evolver（LLM）**做判断和改进决策（非确定性推理）
 - 例：diagnose.py 输出事件计数 → evolver 根据 commitment.yaml 的 `condition` 做自然语言推理判定 FULFILLED/VIOLATED
 
-**每个 Skill 都有 `references/` 子目录**，包含判断指南：
-- `failure-mapping.md` — 失败→原语映射
-- `violation-mapping.md` — 违规→改进路径
-- `judgment-examples.md` — 时间/顺序/质量判定示例
+> **待补充**：当前各 Skill 下的 `references/` 子目录（判断指南、失败映射等）内容尚为模板级别，需要在实际 App 迭代中积累案例后充实。
 
 ### 9.3 两种自迭代模式
 
@@ -799,11 +828,46 @@ evolve-v2 将单一 evolve Skill 拆分为 5 个职责单一的 Skill，分配�
 
 路由判定：文件路径决定路由——`.runtime/data/` 内的修改 = 租户，`agent/` 内的修改 = 平台。
 
-### 9.3.1 evaluator / evolver 双角色分离（autoservice 参考架构）
+### 9.3.1 两条操作路径：Path A / Path B
+
+> 来源：[to-design.md](../../../autoservice/docs/socialware_0324/to-design.md) §2
+
+路由判定的下游是**谁来执行修改**：
+
+| Path | 适用场景 | 操作范围 | 操作者 |
+|------|----------|----------|--------|
+| **Path A：声明式配置（自助）** | 租户调整 Agent 行为，无需代码变更 | 仅 `.runtime/data/`（config/*.yaml、prompts/*.md、references/*.json） | 租户 |
+| **Path B：技术支持（研发介入）** | 问题超出声明式配置能力 | `agent/`、`deploy.sh`、`src/` | Dev |
+
+**与 Evolve 的关系**：evolver 自动执行的修复仅限 `.runtime/data/`（Path A）；如果诊断结果指向 `agent/`，则标记为"平台问题"转入 Path B。
+
+**Path A → Path B 升级条件**：
+1. 诊断报告标记为"平台问题"
+2. 需要的行为无法通过 config/prompts/references 覆盖实现
+3. 需要新增 Flow 模块或修改现有 Flow 核心逻辑
+
+#### Prompt 覆盖冲突问题（待解决）
+
+> 来源：[to-design.md](../../../autoservice/docs/socialware_0324/to-design.md) §3
+
+当平台升级 `agent/flow/` 中的默认行为，而租户的 `.runtime/data/prompts/` 覆盖文件基于旧版本编写时，可能产生语义冲突。autoservice 提出四种方案：
+
+| 方案 | 机制 | 适用阶段 |
+|------|------|----------|
+| **A：版本标记** | 覆盖文件头部记录 `base_version`，deploy 检测不一致时告警 | 阶段一（成本低） |
+| **B：语义 diff** | skill_diff.py 对比新旧版本 + 租户覆盖 → 影响报告 | 大版本升级 |
+| **C：分层覆盖** | section 级别覆盖，未覆盖段落自动使用最新版本 | 阶段二成熟期 |
+| **D：强制 re-eval** | 升级后自动跑 evaluator 对比前后 Eval 结果 | 兜底防线 |
+
+推荐组合：阶段一 A+D → 阶段二早期 A+B+D → 阶段二成熟期 A+C+D。
+
+> **待补充**：Socialwares 当前无 Prompt 覆盖机制（无 `.runtime/data/prompts/` 目录）。此设计在多租户场景（P0+ 阶段）时才需要落地。
+
+### 9.3.2 evaluator / evolver 双角色分离（autoservice 参考架构）
 
 > 来源：[autoservice-evolve-design.md](../../../autoservice/docs/socialware_0324/autoservice-evolve-design.md) §4
 
-evolve-v2 用单一 evolver 角色承担诊断+改进。autoservice 的设计将其拆为两个角色：
+当前 main 用单一 evolver 角色承担诊断+改进。autoservice 的设计将其拆为两个角色：
 
 | Role | 定位 | 一句话 |
 |------|------|--------|
@@ -814,11 +878,11 @@ evaluator 有两种模式：
 - **diagnose 模式**：四层扫描（L1→L4）→ 输出问题诊断报告（原语 + 文件 + 路由）
 - **batch-eval 模式**：对多个候选分支逐一跑测试集 → 输出各分支得分 + 对比表
 
-### 9.3.2 蒙特卡洛分支验证
+### 9.3.3 蒙特卡洛分支验证
 
 > 来源：autoservice-evolve-design.md §4
 
-evolve-v2 的 evolve_improve 直接修改四原语文件。autoservice 设计了更严谨的多方案对比验证：
+当前 main 的 evolve_improve 直接修改四原语文件。autoservice 设计了更严谨的多方案对比验证：
 
 ```
 evolver 读诊断报告
@@ -878,13 +942,14 @@ Dev 做:   写 API、定义原语、review Agent 的修改
 信任门槛: evolve 报告改善 + 测试通过
 
 解锁条件:
-  ✅ commitment.yaml 有明确标准（evolve-v2 已实现）
-  ✅ Hook 日志采集运行数据（evolve-v2 已实现）
-  ✅ evolve_eval / evolve_auto 能跑端到端测试（evolve-v2 已实现）
+  ✅ commitment.yaml schema 已定义（已合入 main）
+  ✅ Hook 日志采集运行数据（已合入 main）
+  ✅ evolve_api_check / evolve_auto 能跑端到端测试（已合入 main）
   ✅ git diff 可 review（Agent 的修改留在 PR 里）
+  ⚠️ commitment.yaml 内容为空——需填充真实条目后才能完整验证
 ```
 
-> **合并 evolve-v2 后即可解锁此级别**。详见 9.8 节。
+> **基础设施已就绪，L1 解锁的实际障碍是缺少真实 commitment 条目和充足的题集**。详见 9.8 节。
 
 #### L2: 创建新 Skill
 
@@ -996,26 +1061,52 @@ Agent 自治   0%            20%          60%           90%
 
 这与 Commitment 的理念一致——**用可度量的标准来决定自治边界的扩展**。
 
-### 9.8 当前最优先的一步：合并 evolve-v2 → 解锁 L1
+### 9.8 当前状态：L1 解锁路径
 
-`feat/evolve-v2` 分支已实现 L0→L1 跳跃所需的全部基础设施：
-
-```
-evolve-v2 已实现                          对应 L1 解锁条件
-─────────────                            ──────────────
-✅ commitment.yaml (4 字段 schema)        有明确评估标准
-✅ Hook 日志采集 + 增量扫描               有运行时数据采集
-✅ 5 个 Evolve Skill + evolver 角色       自我改善入口
-✅ evolve_eval + evolve_auto 题集测试     pytest 端到端验证
-✅ evolve_diagnose → improve 闭环         指标驱动改进
-```
-
-**合并后即可启动 L1 自迭代**。后续每一级（L2→L6）都是在这个闭环上叠加更强的验证机制。
-
-**合并后的待建工作**（iteration-guide 独有、evolve-v2 未覆盖的）：
+Evolve v3 已合入 main（`7745e48`），基础设施就绪：
 
 ```
-1. Agent SDK Web 接入（第八章）           → BaseAdapter 升级为会话管理器
-2. 渐进自治的显式标注                     → L0→L6 等级在 evolver 中体现
-3. deploy 变更摘要输出                    → [deploy] + Skill added 等
+已就绪（main 当前）                       L1 解锁条件    状态
+──────────────                           ──────────    ────
+✅ commitment.yaml (4 字段 schema)        有评估标准     schema 就绪，内容为空
+✅ Hook 日志采集 + 增量扫描               有运行数据     机制就绪，待产生真实数据
+✅ 5 个 Evolve Skill + evolver 角色       自我改善入口   就绪
+✅ evolve_api_check + evolve_auto 题集    端到端验证     各 1 条用例，待扩充
+✅ evolve_session_diagnose → improve      指标驱动改进   就绪，待真实 commitment
+```
+
+**L1 实际解锁需要的下一步**：
+
+```
+1. 在首个 App 实例上走完 P1→P2          → 产生真实 Skill 和 API
+2. P2 迭代中扩充 eval_cases.yaml        → API 测试覆盖新增 endpoint
+3. P2 迭代中扩充 conversation_tests/    → 对话测试覆盖新增 Skill
+4. P3 阶段填充 commitment.yaml          → 真实的质量/时间 commitment
+5. 以上完成后 → diagnose→improve 闭环可运行 → L1 解锁
+```
+
+**待建工作**：
+
+```
+1. Agent SDK Web 接入（第八章）
+   · 现有 adapter 已支持 launch_sdk(prompt) → AsyncIterator
+   · 待实现：多轮会话管理（create_session / send_message / close_session）
+   · 需解决：launch_sdk 返回原始 dict vs send_message 返回统一 AgentEvent 的共存问题
+
+2. 渐进自治的显式标注
+   · evolver Skill 中标注当前自治等级（L0/L1）
+   · 随验证通过率上升，逐步放开等级
+
+3. deploy 变更摘要输出
+   · [deploy] + Skill added / ~ Scope updated 等
+   · 当前 deploy.sh 输出简洁但无变更对比
+
+4. 两条操作路径落地（9.3.1 节）
+   · Path A 的声明式配置机制（.runtime/data/config + prompts 覆盖）
+   · 在多租户场景（P0+）时需要
+
+5. Workspace 迁移方案
+   · 参考 autoservice to-design.md §1
+   · 从文件系统目录 → git branch + worktree 的数据迁移
+   · 当前仅有 default workspace，实际迁移需求不紧迫
 ```
