@@ -36,15 +36,19 @@
 ### 创建的文件
 
 ```
-新增:
+新增（template 根目录，设计文档）:
   docs/respool/README.md                    — ResPool 概览
   docs/respool/implementation-log.md        — 实施记录（本文件）
+
+新增（workspace 实例 .socialware/workspace/h2os/respool/）:
   agent/flow/list_pools/SKILL.md            — 查看资源池 Skill
 
-修改:
+修改（workspace 实例）:
   agent/scope/scope.md                      — 填入 ResPool 定位
   agent/role/default.md                     — 明确资源消费者角色
   agent/flow/flow.yaml                      — 注册 list_pools
+
+template 根目录的 agent/ 保持通用空壳不变。
 ```
 
 ### 设计决策

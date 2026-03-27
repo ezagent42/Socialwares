@@ -27,6 +27,10 @@ direct_actions:
     role: [default, dev, evolver]
     description: "Check app health status"
 
+  - action: list_pools
+    role: [default, dev, evolver]
+    description: "List available resource pools and capacity status"
+
   - action: setup_claude
     role: [dev]
     description: "Configure Claude Code environment (agent-setup plugin, settings, hooks)"
