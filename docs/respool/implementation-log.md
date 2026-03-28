@@ -8,8 +8,8 @@
 
 | Phase | 目标 | 新增 Skill | 状态 |
 |-------|------|-----------|------|
-| **P1** | 最小可用：能查资源池 | list_pools | 进行中 |
-| **P2** | 核心分配功能 | search_resources, request_allocation, list_allocations, get_allocation, release_allocation, estimate_cost | 待开始 |
+| **P1** | 最小可用：能查资源池 | list_pools | ✅ 完成 |
+| **P2** | 核心分配功能 | search_resources, request_allocation, list_allocations, get_allocation, release_allocation, estimate_cost | ✅ 完成 |
 | **P3** | Commitment + 监控 | capacity_alert, lease_reminder | 待开始 |
 | **P4** | 扩大能力 | batch_allocate, cost_report, recommend_resource | 待开始 |
 | **P5** | 加 admin 角色 | approve_allocation, settle_allocation, dispute_allocation, manage_quota | 待开始 |
@@ -74,11 +74,38 @@ make deploy && make start ROLE=default
 
 ---
 
-## P2: 核心分配功能（待开始）
+## P2: 核心分配功能（2026-03-28）
 
-### 预规划
+### 目标
 
-新增 6 个 Skill：
+从"只能看"到"能用"——用户可以搜索资源、创建分配、查看分配、释放分配、估算费用。启用 Allocation 状态机。
+
+### 创建的文件
+
+```
+新增（workspace 实例 .socialware/workspace/h2os/respool/）:
+  agent/flow/search_resources/SKILL.md      — 按类型/标签/容量/价格搜索资源
+  agent/flow/request_allocation/SKILL.md    — 创建资源分配
+  agent/flow/list_allocations/SKILL.md      — 列出分配（支持 phase/consumer 过滤）
+  agent/flow/get_allocation/SKILL.md        — 查看分配详情
+  agent/flow/release_allocation/SKILL.md    — 释放分配（触发计费）
+  agent/flow/estimate_cost/SKILL.md         — 费用估算（不创建分配）
+
+修改（workspace 实例）:
+  agent/flow/flow.yaml                      — 注册 6 个新 action + 启用 F1 状态机
+```
+
+### 设计决策
+
+| 决策 | 选择 | 理由 |
+|------|------|------|
+| 状态机执行层 | OneSystem 服务端 | 状态转换由 OneSystem API 强制执行（违反返回 400），flow.yaml 中的 F1 是声明性的 |
+| request 前确认 | Agent 先展示估价再创建 | 避免误操作，分配创建后即扣减容量 |
+| release 前确认 | Agent 确认当前用量和费用 | 释放不可逆，且触发最终计费 |
+| estimate 独立 Skill | 不合并到 request 中 | 用户可能只想看价格，不一定要分配 |
+| 状态机 transitions 含 admin 操作 | 声明但 P2 不实现 admin Skill | 声明完整路径，admin Skill 在 P5 实现 |
+
+### 新增 6 个 Skill：
 
 | Skill | 触发词 | OneSystem 命令 |
 |-------|--------|---------------|

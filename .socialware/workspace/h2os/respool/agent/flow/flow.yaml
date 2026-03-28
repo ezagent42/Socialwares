@@ -1,28 +1,24 @@
 # Flow definitions — action registry and state machines.
 #
-# Each named flow (F1, F2, ...) defines a state machine.
-# Direct actions have no state machine — they execute immediately.
-#
-# Structure follows SwSim §2 Flows pattern:
-#   flows:     named state machines with transitions
-#   direct_actions:  actions without state machine
+# ResPool resource pool management flows.
+# Allocation lifecycle is declared here for Agent/evolver reference.
+# State transitions are enforced server-side by OneSystem (violation returns 400).
 
-flows: {}
-  # Example (uncomment and customize for your app):
-  #
-  # F1:
-  #   name: task_lifecycle
-  #   resource: task              # what object has this state (task, order, user, etc.)
-  #   description: "Task from creation to closure"
-  #   states: [draft, submitted, under_review, approved, rejected, closed]
-  #   transitions:
-  #     - { from: draft,         action: submit,      to: submitted,    role: [default] }
-  #     - { from: submitted,     action: review,      to: under_review, role: [reviewer] }
-  #     - { from: under_review,  action: approve,     to: approved,     role: [reviewer] }
-  #     - { from: under_review,  action: reject,      to: rejected,     role: [reviewer] }
-  #     - { from: approved,      action: close,       to: closed,       role: [default] }
+flows:
+  F1:
+    name: allocation_lifecycle
+    resource: allocation
+    description: "Resource allocation from request to settlement"
+    states: [pending, active, released, settled, disputed]
+    transitions:
+      - { from: pending,  action: approve_allocation,  to: active,   role: [admin] }
+      - { from: active,   action: release_allocation,  to: released, role: [default] }
+      - { from: released, action: settle_allocation,   to: settled,  role: [admin] }
+      - { from: settled,  action: dispute_allocation,  to: disputed, role: [default] }
+      - { from: disputed, action: settle_allocation,   to: settled,  role: [admin] }
 
 direct_actions:
+  # --- P1: basic ---
   - action: check_health
     role: [default, dev, evolver]
     description: "Check app health status"
@@ -31,13 +27,39 @@ direct_actions:
     role: [default, dev, evolver]
     description: "List available resource pools and capacity status"
 
+  # --- P2: core allocation ---
+  - action: search_resources
+    role: [default, dev, evolver]
+    description: "Search resources by type, labels, capacity, or pricing"
+
+  - action: request_allocation
+    role: [default]
+    description: "Create a resource allocation (amount, duration, purpose)"
+
+  - action: list_allocations
+    role: [default, dev, evolver]
+    description: "List allocations with optional phase/consumer filter"
+
+  - action: get_allocation
+    role: [default, dev, evolver]
+    description: "Get allocation details by name"
+
+  - action: release_allocation
+    role: [default]
+    description: "Release an active allocation (triggers billing)"
+
+  - action: estimate_cost
+    role: [default, dev, evolver]
+    description: "Estimate cost for a potential allocation"
+
+  # --- infra ---
   - action: setup_claude
     role: [dev]
     description: "Configure Claude Code environment (agent-setup plugin, settings, hooks)"
 
-  - { action: evolve_structure_check,    role: [evolver], description: "Check structural consistency of four primitives" }
+  - { action: evolve_structure_check,  role: [evolver], description: "Check structural consistency of four primitives" }
   - { action: evolve_session_diagnose, role: [evolver], description: "Diagnose issues from runtime data" }
-  - { action: evolve_api_check,     role: [evolver], description: "Run eval cases and report score" }
-  - { action: evolve_improve,  role: [evolver], description: "Propose and apply four-primitive changes" }
-  - { action: evolve_auto,     role: [evolver], description: "Run automated evolution loop (EvoSkill)" }
-  - { action: inspect, role: [dev, evolver], description: "Show project structure and dev workflow" }
+  - { action: evolve_api_check,        role: [evolver], description: "Run eval cases and report score" }
+  - { action: evolve_improve,          role: [evolver], description: "Propose and apply four-primitive changes" }
+  - { action: evolve_auto,             role: [evolver], description: "Run automated evolution loop (EvoSkill)" }
+  - { action: inspect,                 role: [dev, evolver], description: "Show project structure and dev workflow" }
