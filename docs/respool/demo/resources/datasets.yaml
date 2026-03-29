@@ -1,0 +1,62 @@
+# 数据集 — ResPool Demo 测试数据
+# 2 个数据集，不同定价和访问限制
+
+---
+apiVersion: v1
+kind: Dataset
+metadata:
+  name: imagenet-2024
+  namespace: demo-pool
+  labels:
+    domain: cv
+    respool.provider: data-team
+spec:
+  title: "ImageNet 2024 Training Set"
+  format: tar.gz
+  size_bytes: 157286400000
+  record_count: 14000000
+  tags: ["cv", "training", "classification"]
+  storage_ref:
+    backend: s3
+    bucket: datasets-demo
+    key: "cv/imagenet-2024.tar.gz"
+    checksum: "sha256:demo-checksum-imagenet"
+  pricing:
+    model: fixed
+    unit_price: 500
+    currency: USDT
+    unit: quarter
+  capacity:
+    total: 5
+    available: 5
+    unit: access-license
+
+---
+apiVersion: v1
+kind: Dataset
+metadata:
+  name: llm-finetune-v3
+  namespace: demo-pool
+  labels:
+    domain: nlp
+    respool.provider: data-team
+spec:
+  title: "LLM Fine-tune Dataset v3 (Multi-language)"
+  format: jsonl
+  size_bytes: 52428800000
+  record_count: 5000000
+  tags: ["nlp", "fine-tune", "multilingual"]
+  storage_ref:
+    backend: s3
+    bucket: datasets-demo
+    key: "nlp/llm-finetune-v3.jsonl.gz"
+    checksum: "sha256:demo-checksum-llm"
+  pricing:
+    model: per_unit
+    unit_price: 200
+    currency: USDT
+    unit: month
+  capacity:
+    total: 10
+    available: 10
+    unit: access-license

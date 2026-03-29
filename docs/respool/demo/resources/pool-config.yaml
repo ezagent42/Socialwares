@@ -1,0 +1,20 @@
+# 资源池配置 — ResPool Demo 测试数据
+# 将 demo-pool namespace 注册为资源池
+
+---
+apiVersion: v1
+kind: Config
+metadata:
+  name: demo-pool-config
+  namespace: demo-pool
+  labels:
+    respool.type: pool-config
+spec:
+  pool_name: "Demo Resource Pool"
+  description: "GPU compute, datasets, and software licenses for demo testing"
+  auto_discovery: true
+  resource_types:
+    - BareMetalServer
+    - Dataset
+    - License
+  contact: "admin@h2os.cloud"

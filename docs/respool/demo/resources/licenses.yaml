@@ -1,0 +1,58 @@
+# 软件许可证 — ResPool Demo 测试数据
+# 2 个许可证，席位管理
+
+---
+apiVersion: v1
+kind: License
+metadata:
+  name: jetbrains-team-2026
+  namespace: demo-pool
+  labels:
+    vendor: jetbrains
+    respool.provider: it-team
+spec:
+  vendor: "JetBrains"
+  product: "IntelliJ IDEA Ultimate"
+  license_type: team
+  license_key_ref:
+    secret: demo-jetbrains-key
+  valid_from: "2026-01-01T00:00:00Z"
+  valid_until: "2026-12-31T23:59:59Z"
+  max_seats: 10
+  pricing:
+    model: fixed
+    unit_price: 649
+    currency: USD
+    unit: seat-year
+  capacity:
+    total: 10
+    available: 10
+    unit: seat
+
+---
+apiVersion: v1
+kind: License
+metadata:
+  name: cursor-team-2026
+  namespace: demo-pool
+  labels:
+    vendor: cursor
+    respool.provider: it-team
+spec:
+  vendor: "Cursor"
+  product: "Cursor Pro"
+  license_type: team
+  license_key_ref:
+    secret: demo-cursor-key
+  valid_from: "2026-01-01T00:00:00Z"
+  valid_until: "2026-12-31T23:59:59Z"
+  max_seats: 20
+  pricing:
+    model: fixed
+    unit_price: 192
+    currency: USD
+    unit: seat-year
+  capacity:
+    total: 20
+    available: 20
+    unit: seat

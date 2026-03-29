@@ -1,0 +1,26 @@
+# 配额配置 — ResPool Demo 测试数据
+# 为测试用户设置分配配额
+
+---
+apiVersion: v1
+kind: Config
+metadata:
+  name: respool-quota-alice
+  namespace: demo-pool
+  labels:
+    respool.type: quota
+    respool.entity: alice
+spec:
+  max_active_allocations: 3
+
+---
+apiVersion: v1
+kind: Config
+metadata:
+  name: respool-quota-bob
+  namespace: demo-pool
+  labels:
+    respool.type: quota
+    respool.entity: bob
+spec:
+  max_active_allocations: 5

@@ -1,0 +1,94 @@
+# GPU 服务器 — ResPool Demo 测试数据
+# 3 台 GPU 服务器，不同配置和定价模型
+
+---
+apiVersion: v1
+kind: BareMetalServer
+metadata:
+  name: gpu-farm-01
+  namespace: demo-pool
+  labels:
+    env: demo
+    role: gpu-compute
+    respool.provider: infra-team
+spec:
+  hostname: 10.0.1.101
+  sshPort: 22
+  user: root
+  auth:
+    secretRef: demo-ssh-key
+  pricing:
+    model: per_unit
+    unit_price: 8
+    currency: USDT
+    unit: A100-hour
+    negotiable: false
+  capacity:
+    total: 8
+    available: 8
+    unit: A100
+  availability:
+    schedule: "24/7"
+    lead_time: "0"
+
+---
+apiVersion: v1
+kind: BareMetalServer
+metadata:
+  name: gpu-farm-02
+  namespace: demo-pool
+  labels:
+    env: demo
+    role: gpu-compute
+    respool.provider: infra-team
+spec:
+  hostname: 10.0.1.102
+  sshPort: 22
+  user: root
+  auth:
+    secretRef: demo-ssh-key
+  pricing:
+    model: tiered
+    currency: USDT
+    unit: A100-hour
+    tiers:
+      - { up_to: 10, unit_price: 10 }
+      - { up_to: 50, unit_price: 7 }
+      - { up_to: 0, unit_price: 5 }
+  capacity:
+    total: 16
+    available: 16
+    unit: A100
+  availability:
+    schedule: "24/7"
+    lead_time: "0"
+
+---
+apiVersion: v1
+kind: BareMetalServer
+metadata:
+  name: gpu-farm-03
+  namespace: demo-pool
+  labels:
+    env: demo
+    role: gpu-compute
+    respool.provider: infra-team
+    respool.require_manual_confirm: "true"
+spec:
+  hostname: 10.0.1.103
+  sshPort: 22
+  user: root
+  auth:
+    secretRef: demo-ssh-key
+  pricing:
+    model: fixed
+    unit_price: 500
+    currency: USDT
+    unit: day
+  capacity:
+    total: 4
+    available: 4
+    unit: A100
+  availability:
+    schedule: "weekdays 09:00-18:00"
+    lead_time: "1h"
