@@ -20,16 +20,16 @@ flows:
 direct_actions:
   # --- P1: basic ---
   - action: check_health
-    role: [default, dev, evolver]
+    role: [default, admin, dev, evolver]
     description: "Check app health status"
 
   - action: list_pools
-    role: [default, dev, evolver]
+    role: [default, admin, dev, evolver]
     description: "List available resource pools and capacity status"
 
   # --- P2: core allocation ---
   - action: search_resources
-    role: [default, dev, evolver]
+    role: [default, admin, dev, evolver]
     description: "Search resources by type, labels, capacity, or pricing"
 
   - action: request_allocation
@@ -37,11 +37,11 @@ direct_actions:
     description: "Create a resource allocation (amount, duration, purpose)"
 
   - action: list_allocations
-    role: [default, dev, evolver]
+    role: [default, admin, dev, evolver]
     description: "List allocations with optional phase/consumer filter"
 
   - action: get_allocation
-    role: [default, dev, evolver]
+    role: [default, admin, dev, evolver]
     description: "Get allocation details by name"
 
   - action: release_allocation
@@ -49,8 +49,47 @@ direct_actions:
     description: "Release an active allocation (triggers billing)"
 
   - action: estimate_cost
-    role: [default, dev, evolver]
+    role: [default, admin, dev, evolver]
     description: "Estimate cost for a potential allocation"
+
+  # --- P3: monitoring ---
+  - action: capacity_alert
+    role: [default, admin, evolver]
+    description: "Check resource pool capacity and alert on low availability"
+
+  - action: lease_reminder
+    role: [default, admin, evolver]
+    description: "Check for expiring allocations and overdue pending approvals"
+
+  # --- P4: extended ---
+  - action: batch_allocate
+    role: [default]
+    description: "Allocate multiple resources in one request"
+
+  - action: cost_report
+    role: [default, admin, evolver]
+    description: "Generate cost report for allocations"
+
+  - action: recommend_resource
+    role: [default, admin, evolver]
+    description: "Recommend optimal resources based on requirements"
+
+  # --- P5: admin management ---
+  - action: approve_allocation
+    role: [admin]
+    description: "Approve a pending resource allocation"
+
+  - action: settle_allocation
+    role: [admin]
+    description: "Mark a released allocation as settled (billing complete)"
+
+  - action: dispute_allocation
+    role: [default]
+    description: "Dispute a settled allocation's billing"
+
+  - action: manage_quota
+    role: [admin]
+    description: "View and manage resource allocation quotas"
 
   # --- infra ---
   - action: setup_claude

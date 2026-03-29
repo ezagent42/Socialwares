@@ -10,9 +10,9 @@
 |-------|------|-----------|------|
 | **P1** | 最小可用：能查资源池 | list_pools | ✅ 完成 |
 | **P2** | 核心分配功能 | search_resources, request_allocation, list_allocations, get_allocation, release_allocation, estimate_cost | ✅ 完成 |
-| **P3** | Commitment + 监控 | capacity_alert, lease_reminder | 待开始 |
-| **P4** | 扩大能力 | batch_allocate, cost_report, recommend_resource | 待开始 |
-| **P5** | 加 admin 角色 | approve_allocation, settle_allocation, dispute_allocation, manage_quota | 待开始 |
+| **P3** | Commitment + 监控 | capacity_alert, lease_reminder | ✅ 完成 |
+| **P4** | 扩大能力 | batch_allocate, cost_report, recommend_resource | ✅ 完成 |
+| **P5** | Admin 角色 + 管理 | approve_allocation, settle_allocation, dispute_allocation, manage_quota | ✅ 完成 |
 
 ---
 
@@ -143,30 +143,82 @@ flows:
 
 ---
 
-## P3: Commitment + 监控（待开始）
+## P3: Commitment + 监控（2026-03-28）
 
-### 预规划
+### 目标
 
-commitment.yaml 填入：
-```yaml
-commitments:
-  C1:
-    from: { role: default, action: request_allocation }
-    to:   { role: default, action: allocation_confirmed }
-    condition: "allocation creation response within 5 seconds"
-  C2:
-    from: { role: default, action: release_allocation }
-    to:   { role: default, action: release_confirmed }
-    condition: "release + invoice calculation within 10 seconds"
+从"能用"到"有保障"——填充 commitment 评估标准，新增容量预警和租约提醒。
+
+### 创建的文件
+
+```
+新增:
+  agent/flow/capacity_alert/SKILL.md        — 资源池容量预警
+  agent/flow/lease_reminder/SKILL.md        — 租约到期 + pending 审批超时提醒
+
+修改:
+  agent/commitment/commitment.yaml          — 填入 C1-C5 真实 commitment
+  agent/flow/flow.yaml                      — 注册 capacity_alert, lease_reminder
 ```
 
-新增 Skill：
-- `capacity_alert`：资源池余量低于阈值时提醒
-- `lease_reminder`：分配即将到期时提醒
+### Commitment 定义
+
+| ID | 条件 | 触发违规 |
+|----|------|----------|
+| C1 | 新建分配 5s 内出现在列表中 | evolver diagnose |
+| C2 | 释放后 10s 内 invoice 计算完成 | evolver diagnose |
+| C3 | 分配创建前展示费用估算 | — |
+| C4 | pending 分配 24h 内审批 | lease_reminder |
+| C5 | 有 lease.end 的分配到期前释放 | lease_reminder |
 
 ---
 
-## P4/P5: 扩展（待开始）
+## P4: 扩大能力（2026-03-28）
 
-P4：批量分配、费用报表、资源推荐
-P5：admin 角色 + 审批/结算/争议/配额管理
+### 目标
+
+从"基础分配"到"完整工作流"——批量分配、费用报表、智能推荐。
+
+### 创建的文件
+
+```
+新增:
+  agent/flow/batch_allocate/SKILL.md        — 一次分配多个资源
+  agent/flow/cost_report/SKILL.md           — 费用报表（按 phase/类型/时间分组）
+  agent/flow/recommend_resource/SKILL.md    — 基于需求和预算推荐资源
+
+修改:
+  agent/flow/flow.yaml                      — 注册 batch_allocate, cost_report, recommend_resource
+  agent/scope/scope.md                      — 新增推荐、批量、报表能力
+```
+
+---
+
+## P5: Admin 角色 + 管理（2026-03-28）
+
+### 目标
+
+从"消费者视角"到"完整管理"——新增 admin 角色，实现审批/结算/争议/配额管理。
+
+### 创建的文件
+
+```
+新增:
+  agent/role/admin.md                       — 资源池管理员角色
+  agent/flow/approve_allocation/SKILL.md    — 审批 pending 分配
+  agent/flow/settle_allocation/SKILL.md     — 标记 released 为 settled
+  agent/flow/dispute_allocation/SKILL.md    — 发起账单争议
+  agent/flow/manage_quota/SKILL.md          — 查看/设置/删除配额
+
+修改:
+  agent/flow/flow.yaml                      — 注册 4 个 admin Skill + admin 角色权限
+```
+
+### 设计决策
+
+| 决策 | 选择 | 理由 |
+|------|------|------|
+| admin 角色权限 | 只管理分配生命周期和配额 | 底层资源（BMS/VM 创建删除）仍由 OneSystem admin 完成 |
+| dispute 发起者 | default 角色 | 消费者对自己的账单提出争议 |
+| dispute 解决者 | admin 重新 settle | F1 状态机：disputed → settled |
+| 配额存储 | Config 资源 + label respool.type:quota | 复用 OneSystem 原生资源模型 |

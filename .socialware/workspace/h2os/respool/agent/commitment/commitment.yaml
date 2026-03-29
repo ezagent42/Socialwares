@@ -1,33 +1,38 @@
-# Commitment — evaluation standards for flow edges
+# Commitment — ResPool evaluation standards
 #
 # Each commitment defines what "good" looks like between two role-actions.
-# Commitment is an evaluation standard, NOT an enforcement mechanism.
-# Agents are not forced to comply; only the evolver sees these for assessment.
-#
-# Unified schema: from/to/condition/on_violation
-#   from       — edge start: who did what (trigger)
-#   to         — edge end: who must do what (responsible party)
-#   condition  — natural language evaluation standard
-#   on_violation — suggested escalation path (optional)
+# Evaluated by evolver (diagnose.py + LLM judgment), NOT enforced at runtime.
 #
 # Data flow:
-#   UserPromptSubmit (log_prompt.sh) + PreToolUse (log_tool.sh) hooks
-#   capture prompts and tool calls to .runtime/data/prompts/.
-#   Evolver's diagnose.py reads these logs + commitment.yaml,
-#   compares events against conditions, and computes fulfillment rates.
-#   Violations are written to .runtime/data/evolve/violations/.
+#   Hook logs (.runtime/data/prompts/) → diagnose.py → evolver judges → violations
 
-commitments: {}
-  # Example (uncomment and customize for your app):
-  #
-  # C1:
-  #   from: { role: coder, action: submit_code }
-  #   to:   { role: pm, action: review_code }
-  #   condition: "within 24h"
-  #   on_violation: { role: tech_lead, action: escalate }
-  #
-  # C2:
-  #   from: { role: coder, action: submit_code }
-  #   to:   { role: coder, action: merge_code }
-  #   condition: "review_code completed with result approved"
-  #   on_violation: null
+commitments:
+  C1:
+    from: { role: default, action: request_allocation }
+    to:   { role: default, action: list_allocations }
+    condition: "newly created allocation appears in list_allocations within 5 seconds"
+    on_violation: { role: evolver, action: evolve_session_diagnose }
+
+  C2:
+    from: { role: default, action: release_allocation }
+    to:   { role: default, action: get_allocation }
+    condition: "released allocation shows phase=released and invoice_amount calculated within 10 seconds"
+    on_violation: { role: evolver, action: evolve_session_diagnose }
+
+  C3:
+    from: { role: default, action: request_allocation }
+    to:   { role: default, action: estimate_cost }
+    condition: "cost estimate presented to user before allocation is created"
+    on_violation: null
+
+  C4:
+    from: { role: admin, action: approve_allocation }
+    to:   { role: default, action: list_allocations }
+    condition: "pending allocation approved within 24 hours of creation"
+    on_violation: { role: admin, action: lease_reminder }
+
+  C5:
+    from: { role: default, action: request_allocation }
+    to:   { role: default, action: release_allocation }
+    condition: "active allocation with lease.end is released before or at expiration"
+    on_violation: { role: default, action: lease_reminder }
