@@ -9,8 +9,16 @@ Agent identities. Each role is a flat `.md` file in `agent/role/`.
 ```
 agent/role/
 ├── default.md     ← App user
-├── dev.md         ← Developer
-└── evolver.md     ← Evolver
+├── reviewer.md    ← Reviewer (example)
+└── evolver.md     ← Evolver (ordinary role, same structure)
+```
+
+Roles are registered in `socialware.py`:
+
+```python
+app.role("default", file="agent/role/default.md")
+app.role("reviewer", file="agent/role/reviewer.md")
+app.role("evolver", file="agent/role/evolver.md")
 ```
 
 ### Format
@@ -30,9 +38,9 @@ agent/role/
 1. {responsibility}
 ```
 
-### deploy.sh Processing
+### Compile Processing
 
-For each `role/*.md`, deploy.sh merges `scope/scope.md` + `role/{name}.md` → `.runtime/agents/{name}/SOUL.md`
+`socialwares deploy` merges `scope/scope.md` + `role/{name}.md` → `.runtime/agents/{name}/SOUL.md` for each role registered in `socialware.py`.
 
 ---
 
@@ -43,6 +51,12 @@ App capability boundary via `agent/scope/scope.md`.
 - **Internal (boundary)**: What the Agent can and cannot do
 - **External (declaration)**: Public description for other Agents
 - **Participation**: Who can join, minimum members
+
+Registered in `socialware.py`:
+
+```python
+app.scope(file="agent/scope/scope.md")
+```
 
 ### Format
 
@@ -65,7 +79,7 @@ App capability boundary via `agent/scope/scope.md`.
 
 ## Commitment — What (Evaluation Standards)
 
-Evaluation standards for flow edges defined in `agent/commitment/commitment.yaml`.
+Evaluation standards for flow edges, defined in `socialware.py` using `app.commitment(...)`.
 
 Commitment is an evaluation standard for the edges of the flow graph — it defines what "good" looks like between two role-actions. It is NOT an enforcement mechanism; agents are not forced to comply.
 
@@ -82,16 +96,20 @@ It IS:
 
 **Important**: Commitment is NOT included in non-evolver roles' SOUL.md. Only the evolver sees commitment standards for evaluation. Other roles operate based on their skills and role definitions.
 
-### Deploy Processing
+### Declaration in socialware.py
 
-Deploy processes commitment.yaml:
-1. Copies `commitment.yaml` to each role's `.runtime/agents/{name}/`
-2. `log_prompt.sh` (UserPromptSubmit) + `log_tool.sh` (PreToolUse) hooks capture all prompts and tool calls to `.runtime/data/prompts/`
-3. Evolver's `diagnose.py` later reads these logs + `commitment.yaml` and compares events against conditions
+```python
+app.commitment("C1",
+    from_=("coder", "submit_code"),
+    to=("pm", "review_code"),
+    condition="within 24h",
+    on_violation=("tech_lead", "escalate"),
+)
+```
 
-### Unified Schema
+### Compiled Schema
 
-Every commitment has the same four fields:
+`socialwares deploy` generates `.runtime/commitment.yaml` from `socialware.py`:
 
 ```yaml
 commitments:
@@ -115,62 +133,87 @@ commitments:
 
 ### Condition Examples
 
-```yaml
+```python
 # Time standard
-condition: "within 24h"
+app.commitment("C1",
+    from_=("coder", "submit_code"),
+    to=("pm", "review_code"),
+    condition="within 24h",
+)
 
 # Precondition standard
-condition: "review_code completed with result approved"
+app.commitment("C2",
+    from_=("coder", "submit_code"),
+    to=("coder", "merge_code"),
+    condition="review_code completed with result approved",
+)
 
 # Quality standard (natural language — evolver interprets)
-condition: "customer rates 4+ stars"
-
-# Span standard (from/to can be non-adjacent)
-condition: "within 48h"
+app.commitment("C3",
+    from_=("support", "resolve_ticket"),
+    to=("support", "close_ticket"),
+    condition="customer rates 4+ stars",
+)
 ```
 
 ## Flow — How
 
-Actions and state machines in `agent/flow/`.
+Actions and state machines. Action content lives in `agent/flow/`, relationships are defined in `socialware.py`.
 
-### flow.yaml — Action Registry
+### Action Registration in socialware.py
+
+```python
+# Direct actions
+app.action("check_health", role=["default", "reviewer"])
+app.action("create_task", role=["default"])
+
+# State machine
+flow = app.flow("task_lifecycle", resource="task")
+flow.states("draft", "submitted", "approved", "closed")
+flow.transition("draft", "submit", "submitted", role=["default"])
+flow.transition("submitted", "review_task", "approved", role=["reviewer"])
+```
+
+### Compiled flow.yaml
+
+`socialwares deploy` generates `.runtime/flow.yaml` from `socialware.py`:
 
 ```yaml
-# State machine transitions
 flows:
   F1:
     name: task_lifecycle
-    resource: task              # what object has this state (task, order, user, etc.)
+    resource: task
     states: [draft, submitted, approved, closed]
     transitions:
       - { from: draft, action: submit, to: submitted, role: [default] }
 
-# Direct actions (no state machine)
 direct_actions:
-  - { action: check_health, role: [default, dev, evolver], description: "Check health" }
+  - { action: check_health, role: [default, reviewer], description: "Check health" }
 ```
 
-Each flow has a `resource` field identifying what object carries the state (e.g., task, order, user).
+**Note**: `flow.yaml` is a compile product. Do not edit it directly — edit `socialware.py` instead.
 
-### SKILL.md — Action Definition
+### SKILL.md — Action Content
 
-Each action has a directory with `SKILL.md` (+ optional `scripts/`):
+Each action has a directory with `SKILL.md` (+ optional `scripts/`) in `agent/flow/`:
 
 ```
 agent/flow/
-├── flow.yaml
 ├── check_health/SKILL.md
-├── setup_claude/SKILL.md
-├── inspect/SKILL.md
+├── create_task/SKILL.md
+├── review_task/SKILL.md
 ├── evolve_structure_check/
 │   ├── SKILL.md
-│   └── scripts/check_structure.py
+│   ├── scripts/check_structure.py
+│   └── references/
 ├── evolve_session_diagnose/
 │   ├── SKILL.md
-│   └── scripts/diagnose.py
+│   ├── scripts/diagnose.py
+│   └── references/
 ├── evolve_api_check/
 │   ├── SKILL.md
 │   ├── scripts/run_eval.py
+│   ├── references/
 │   └── eval_cases.yaml
 ├── evolve_improve/
 │   ├── SKILL.md
@@ -179,24 +222,28 @@ agent/flow/
 └── evolve_auto/
     ├── SKILL.md
     ├── scripts/run_auto.py
-    ├── conversation_tests/
-    └── references/
+    ├── references/
+    └── conversation_tests/
 ```
 
-### deploy.sh Processing
+Convention: action name in `socialware.py` = directory name under `agent/flow/`. The compiler automatically locates `agent/flow/{action}/SKILL.md` and reports an error if not found.
 
-Reads flow.yaml → **symlinks** only the actions allowed for each role into `.runtime/agents/{name}/.claude/skills/`. Symlinks within workspace mean changes to `agent/flow/` are instantly visible. Template→workspace isolation is handled by `create-my-socialware` (copy).
+### Compile Processing
 
-When flows define state machines, deploy also injects a workflow summary (states, transitions) into SOUL.md/AGENTS.md so the agent knows the valid state machine paths.
+`socialwares deploy` reads `socialware.py` and symlinks only the actions allowed for each role into `.runtime/agents/{name}/.claude/skills/`.
+
+When flows define state machines, the compiler also injects a workflow summary (states, transitions) into SOUL.md so the agent knows the valid state machine paths.
 
 ### DSL Principle
 
-SKILL.md files should not contain hardcoded URLs. The agent discovers endpoints from project configuration (e.g., `src/app.py`). This keeps skills portable across environments.
+SKILL.md files should not contain hardcoded URLs. The agent discovers endpoints from project configuration (e.g., `src/api.py`). This keeps skills portable across environments.
 
 ### Role-Based Skill Allocation
 
-`deploy.sh` reads `flow.yaml` and only symlinks the actions allowed for each role:
+The compiler reads `socialware.py` and only symlinks the actions allowed for each role:
 
-- `default` role → gets `check_health` skill only
-- `dev` role → gets `check_health` + `setup_claude` + `inspect` skills
-- `evolver` role → gets `check_health` + `inspect` + all `evolve_*` skills (check, diagnose, eval, improve, auto)
+- `default` role → gets `check_health`, `create_task` (as registered)
+- `reviewer` role → gets `check_health`, `review_task` (as registered)
+- `evolver` role → gets all `evolve_*` skills (as registered)
+
+Evolver uses the exact same skill structure as business roles — there is no special treatment.
