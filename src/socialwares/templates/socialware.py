@@ -44,7 +44,9 @@ app.action("check_health", role=["default"])
 app.action("inspect", role=["dev", "evolver"])
 app.action("setup_claude", role=["dev"])
 app.action("dev_init", role=["dev"])
+app.action("dev_build", role=["dev"])
 app.action("dev_iterate", role=["dev"])
+app.action("dev_release", role=["dev"])
 
 # 添加更多操作：
 # app.action("create_task", role=["default"])

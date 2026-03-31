@@ -31,15 +31,20 @@ class Runner:
                 f".runtime/ 不存在。先运行 'socialwares deploy'。"
             )
 
-    def _get_adapter_shell(self) -> Path:
-        """找到适配器的 shell.sh 脚本。"""
+    def _get_adapter_launcher(self) -> Path:
+        """找到适配器的 launcher 脚本（优先 .py，兼容 .sh）。"""
         import socialwares.adapters
         adapters_pkg = Path(socialwares.adapters.__file__).parent
         adapter_name = "kimicode" if self.adapter == "kimi" else self.adapter
+        # 优先 Python launcher
+        launcher = adapters_pkg / adapter_name / "launch.py"
+        if launcher.is_file():
+            return launcher
+        # 兼容旧的 shell.sh
         shell = adapters_pkg / adapter_name / "shell.sh"
-        if not shell.is_file():
-            raise FileNotFoundError(f"适配器 shell 脚本不存在: {shell}")
-        return shell
+        if shell.is_file():
+            return shell
+        raise FileNotFoundError(f"适配器 launcher 不存在: {adapters_pkg / adapter_name}")
 
     def _role_dir(self, role: str) -> Path:
         """获取 role 的 runtime 目录。"""
@@ -54,13 +59,16 @@ class Runner:
     def start(self, role: str) -> None:
         """启动单个 role 的 agent（TUI 模式，exec 替换当前进程）。"""
         role_dir = self._role_dir(role)
-        shell = self._get_adapter_shell()
+        launcher = self._get_adapter_launcher()
 
         print(f"Starting {role} via {self.adapter} adapter...")
         print(f"  PROJECT_DIR: {role_dir}")
         print()
 
-        os.execv(str(shell), [str(shell), str(role_dir)])
+        if launcher.suffix == ".py":
+            os.execvp(sys.executable, [sys.executable, str(launcher), str(role_dir)])
+        else:
+            os.execv(str(launcher), [str(launcher), str(role_dir)])
 
     def start_multi(self, roles: list[str]) -> None:
         """多角色启动（tmux 多窗格）。"""
@@ -73,21 +81,26 @@ class Runner:
         for role in roles:
             self._role_dir(role)
 
-        shell = self._get_adapter_shell()
+        launcher = self._get_adapter_launcher()
         session = f"socialware-{os.getpid()}"
 
         print(f"Starting {len(roles)} roles in tmux session: {session}")
 
+        def _launch_cmd(role_dir: Path) -> str:
+            if launcher.suffix == ".py":
+                return f"{sys.executable} {launcher} {role_dir}"
+            return f"{launcher} {role_dir}"
+
         first_dir = self._role_dir(roles[0])
         subprocess.run(
-            ["tmux", "new-session", "-d", "-s", session, f"{shell} {first_dir}"],
+            ["tmux", "new-session", "-d", "-s", session, _launch_cmd(first_dir)],
             check=True,
         )
 
         for role in roles[1:]:
             role_dir = self._role_dir(role)
             subprocess.run(
-                ["tmux", "split-window", "-t", session, "-h", f"{shell} {role_dir}"],
+                ["tmux", "split-window", "-t", session, "-h", _launch_cmd(role_dir)],
                 check=True,
             )
             subprocess.run(["tmux", "select-layout", "-t", session, "tiled"], check=True)

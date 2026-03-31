@@ -225,8 +225,8 @@ class TestHooks:
         _add_submit_task(project)
         Compiler(app, project_dir=project, adapter="claude").compile()
         role_dir = project / ".runtime" / "agents" / "default"
-        assert (role_dir / ".claude" / "hooks" / "log_prompt.sh").is_file()
-        assert (role_dir / ".claude" / "hooks" / "log_tool.sh").is_file()
+        assert (role_dir / ".claude" / "hooks" / "log_prompt.py").is_file()
+        assert (role_dir / ".claude" / "hooks" / "log_tool.py").is_file()
         settings = json.loads(
             (role_dir / ".claude" / "settings.local.json").read_text()
         )

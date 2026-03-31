@@ -383,13 +383,13 @@ class Compiler:
         hooks_dir = role_dir / cfg.hooks_dir
         hooks_dir.mkdir(parents=True, exist_ok=True)
 
-        # log_prompt.sh
-        log_prompt = hooks_dir / "log_prompt.sh"
+        # log_prompt.py
+        log_prompt = hooks_dir / "log_prompt.py"
         log_prompt.write_text(self._hook_script("user_prompt"), encoding="utf-8")
         log_prompt.chmod(log_prompt.stat().st_mode | stat.S_IEXEC)
 
-        # log_tool.sh
-        log_tool = hooks_dir / "log_tool.sh"
+        # log_tool.py
+        log_tool = hooks_dir / "log_tool.py"
         log_tool.write_text(self._hook_script("tool_call"), encoding="utf-8")
         log_tool.chmod(log_tool.stat().st_mode | stat.S_IEXEC)
 
@@ -400,10 +400,10 @@ class Compiler:
             settings = {
                 "hooks": {
                     "UserPromptSubmit": [
-                        {"hooks": [{"type": "command", "command": str(log_prompt), "timeout": 5}]}
+                        {"hooks": [{"type": "command", "command": f"python {log_prompt}", "timeout": 5}]}
                     ],
                     "PreToolUse": [
-                        {"hooks": [{"type": "command", "command": str(log_tool), "timeout": 5}]}
+                        {"hooks": [{"type": "command", "command": f"python {log_tool}", "timeout": 5}]}
                     ],
                 }
             }
@@ -417,10 +417,10 @@ class Compiler:
             hooks = {
                 "hooks": {
                     "UserPromptSubmit": [
-                        {"hooks": [{"type": "command", "command": str(log_prompt), "timeout": 5}]}
+                        {"hooks": [{"type": "command", "command": f"python {log_prompt}", "timeout": 5}]}
                     ],
                     "PreToolUse": [
-                        {"hooks": [{"type": "command", "command": str(log_tool), "timeout": 5}]}
+                        {"hooks": [{"type": "command", "command": f"python {log_tool}", "timeout": 5}]}
                     ],
                 }
             }
@@ -432,52 +432,54 @@ class Compiler:
             )
 
     def _hook_script(self, event_type: str) -> str:
-        """生成 hook bash 脚本内容。"""
+        """生成 hook Python 脚本内容（跨平台）。"""
         if event_type == "user_prompt":
-            extract = """
-entry = {
-    'timestamp': datetime.now(timezone.utc).isoformat(),
-    'type': 'user_prompt',
-    'role': role,
-    'content': data.get('prompt', ''),
-    'session_id': data.get('session_id', ''),
-}"""
+            extract = """\
+    entry = {
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'type': 'user_prompt',
+        'role': role,
+        'content': data.get('prompt', ''),
+        'session_id': data.get('session_id', ''),
+    }"""
         else:
-            extract = """
-entry = {
-    'timestamp': datetime.now(timezone.utc).isoformat(),
-    'type': 'tool_call',
-    'role': role,
-    'tool': data.get('tool_name', ''),
-    'input': data.get('tool_input', {}),
-    'session_id': data.get('session_id', ''),
-}"""
+            extract = """\
+    entry = {
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'type': 'tool_call',
+        'role': role,
+        'tool': data.get('tool_name', ''),
+        'input': data.get('tool_input', {}),
+        'session_id': data.get('session_id', ''),
+    }"""
 
-        return f'''#!/usr/bin/env bash
-# Hook — record {event_type} for commitment analysis
-set -euo pipefail
-INPUT=$(cat)
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PY="python3"; command -v python3 >/dev/null 2>&1 || PY="python"
-
-if [ -f "$(cd "$SCRIPT_DIR" && pwd)/../../.workspace_root" ]; then
-    WORKSPACE_ROOT=$(cat "$(cd "$SCRIPT_DIR" && pwd)/../../.workspace_root")
-else
-    WORKSPACE_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-fi
-DATA_DIR="$WORKSPACE_ROOT/.runtime/data/prompts"
-mkdir -p "$DATA_DIR"
-
-$PY -c "
-import json, sys, os
+        return f'''#!/usr/bin/env python3
+"""Hook — record {event_type} for commitment analysis (cross-platform)."""
+import json, os, sys
 from datetime import datetime, timezone
-data = json.loads(sys.stdin.read())
-role = os.path.basename(os.path.dirname(os.path.dirname('$SCRIPT_DIR')))
+from pathlib import Path
+
+try:
+    data = json.loads(sys.stdin.read())
+except Exception:
+    sys.exit(0)
+
+script_dir = Path(__file__).resolve().parent
+workspace_root_file = script_dir.parent.parent / ".workspace_root"
+if workspace_root_file.is_file():
+    workspace_root = Path(workspace_root_file.read_text().strip())
+else:
+    workspace_root = script_dir.parent.parent.parent
+
+role = script_dir.parent.parent.name
+data_dir = workspace_root / ".runtime" / "data" / "prompts"
+data_dir.mkdir(parents=True, exist_ok=True)
+
 {extract}
-log_file = os.path.join('$DATA_DIR', 'current.jsonl')
-with open(log_file, 'a') as f:
-    f.write(json.dumps(entry, ensure_ascii=False) + '\\n')
-" <<< "$INPUT" 2>/dev/null || true
+
+log_file = data_dir / "current.jsonl"
+with open(log_file, "a", encoding="utf-8") as f:
+    f.write(json.dumps(entry, ensure_ascii=False) + "\\n")
 '''
 
     # ── Manifest ──

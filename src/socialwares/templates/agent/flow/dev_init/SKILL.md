@@ -29,6 +29,7 @@ Guide the user through building four primitives step by step:
 
 1. Ask user: "每个角色能执行哪些操作？"
 2. For each action:
+   - Create directory: `agent/flow/{action}/` with `scripts/` and `references/` subdirs
    - Create `agent/flow/{action}/SKILL.md` with trigger + flow
    - Register in `socialware.py`: `app.action("name", role=[...])`
 3. Ask: "这些操作之间有没有固定的流转顺序？"

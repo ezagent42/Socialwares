@@ -38,7 +38,8 @@ ls                          # socialware.py  agent  src  app  pyproject.toml
 ls agent/role/              # default.md  dev.md  evolver.md
 ls agent/scope/             # scope.md
 ls agent/commitment/        # README.md
-ls agent/flow/              # check_health  dev_init  dev_iterate  inspect  setup_claude
+ls agent/flow/              # check_health  dev_init  dev_build  dev_iterate  dev_release
+                            # inspect  setup_claude
                             # evolve_structure_check  evolve_api_check  evolve_session_diagnose
                             # evolve_improve  evolve_auto
 # 每个 skill 目录都有 SKILL.md + scripts/ + references/
@@ -58,7 +59,9 @@ ls agent/flow/dev_init/                # SKILL.md  scripts/  references/
 grep 'App("task-review")' socialware.py         # 应该匹配
 grep '{{APP_NAME}}' socialware.py                # 不应匹配
 grep 'name = "task-review"' pyproject.toml       # 应该匹配
-grep 'dev_init' socialware.py                    # 应该匹配（dev skill 已注册）
+grep 'dev_init' socialware.py                    # 应该匹配
+grep 'dev_build' socialware.py                   # 应该匹配
+grep 'dev_release' socialware.py                 # 应该匹配
 ```
 
 ### 1.3 重复创建阻止
@@ -112,7 +115,9 @@ app.action("review_task", role=["reviewer"])
 app.action("inspect", role=["dev", "evolver"])
 app.action("setup_claude", role=["dev"])
 app.action("dev_init", role=["dev"])
+app.action("dev_build", role=["dev"])
 app.action("dev_iterate", role=["dev"])
+app.action("dev_release", role=["dev"])
 
 # Evolve 操作
 app.action("evolve_structure_check", role=["evolver"])
@@ -218,7 +223,7 @@ ls .runtime/agents/default/.claude/skills/
 # check_health  close_task  create_task  list_tasks  submit_task
 
 ls .runtime/agents/dev/.claude/skills/
-# dev_init  dev_iterate  inspect  setup_claude
+# dev_build  dev_init  dev_iterate  dev_release  inspect  setup_claude
 
 ls .runtime/agents/reviewer/.claude/skills/
 # check_health  list_tasks  review_task
@@ -401,13 +406,32 @@ cat .runtime/data/evolve/reports/eval_*.json | grep "suggestions"
 | | |
 |---|---|
 | **操作** | 启动 dev 角色 |
-| **目的** | 验证 dev skills（inspect, setup_claude, dev_init, dev_iterate） |
+| **目的** | 验证 dev skills（inspect, setup_claude, dev_init, dev_build, dev_iterate, dev_release） |
 
 ```bash
 socialwares start --role dev
 # "inspect"     → 展示项目结构
 # "init"        → 引导四原语构建
+# "build"       → TDD 引导（写测试→实现→验证）
+# "release"     → 定版发布引导（deploy→检查→commit→push）
 # Ctrl+C 退出
+```
+
+### 4.5 SDK 模式
+
+| | |
+|---|---|
+| **操作** | `socialwares start --role default --prompt "check health"` |
+| **目的** | 验证 SDK 模式（非交互式，发送单条 prompt） |
+| **预期** | 执行后输出结果，session 保存到 .runtime/data/sessions/ |
+
+```bash
+socialwares start --role default --prompt "check health"
+# 应输出 health check 结果
+
+# 验证 session 记录
+ls .runtime/data/sessions/
+# 应有 session_*.json 文件
 ```
 
 ---
@@ -568,7 +592,39 @@ socialwares start --role evolver
 # 如："create_task 没有 eval case，建议添加"
 ```
 
-### 6.5 自定义 evolve skill
+### 6.5 evolve_auto（自动对话测试）
+
+| | |
+|---|---|
+| **操作** | evolver 运行自动对话测试 |
+| **前置** | conversation_tests 目录有测试 YAML |
+
+```bash
+socialwares start --role evolver
+# "auto test"
+# 运行 agent/flow/evolve_auto/conversation_tests/ 下的测试
+```
+
+### 6.6 Evolver 完整数据链路验证
+
+| | |
+|---|---|
+| **操作** | 验证 hooks → prompts → diagnose → improve 完整链路 |
+| **目的** | 端到端数据流 |
+
+```bash
+# 1. hooks 产生数据
+ls .runtime/data/prompts/current.jsonl           # 应有内容
+wc -l .runtime/data/prompts/current.jsonl        # 应有多行记录
+
+# 2. diagnose 读取数据
+ls .runtime/data/evolve/reports/diagnose_*.json  # 应有报告
+
+# 3. improve 基于所有报告
+ls .runtime/data/evolve/reports/                 # check + eval + diagnose 报告都在
+```
+
+### 6.7 自定义 evolve skill
 
 | | |
 |---|---|
@@ -705,25 +761,29 @@ socialwares deploy
 
 ## 测试完成检查清单
 
-- [ ] Phase 1: `socialwares new` 生成完整项目（含 dev 角色、dev_init/dev_iterate skill）
-- [ ] Phase 1: socialware.py 模板渲染正确
+- [ ] Phase 1: `socialwares new` 生成完整项目（含 dev 角色、6 个 dev skill）
+- [ ] Phase 1: socialware.py 模板渲染正确（dev_build, dev_release 已注册）
 - [ ] Phase 2: socialware.py 声明式 API 可用（4 原语 + inline role）
 - [ ] Phase 2: 业务 skill 按规范创建（SKILL.md + scripts/ + references/）
 - [ ] Phase 3: `socialwares deploy` 正确编译（SOUL.md、skills symlink、flow.yaml、commitment.yaml、hooks、manifest）
+- [ ] Phase 3: hooks 为 Python 脚本（.py，跨平台）
 - [ ] Phase 3: inline role 自动生成 .md 文件
 - [ ] Phase 3: Backend 端口注入到 SOUL.md
 - [ ] Phase 3: commitment.yaml 为 dict 格式，flow.yaml 含 states
 - [ ] Phase 3: 适配器切换幂等（旧文件/目录不残留）
 - [ ] Phase 3: 缺失 SKILL.md 报错
-- [ ] Phase 4: 单角色 / 多角色本地启动
+- [ ] Phase 4: 单角色 / 多角色本地启动（Python launcher，跨平台）
 - [ ] Phase 4: Evolver 交互 + 报告输出到 .runtime/data/evolve/reports/
-- [ ] Phase 4: Dev 角色可用（inspect, dev_init, dev_iterate）
+- [ ] Phase 4: Dev 角色可用（inspect, dev_init, dev_build, dev_iterate, dev_release）
+- [ ] Phase 4: SDK 模式可用 + session 保存
 - [ ] Phase 5: `socialwares install` 到 .socialware/workspace/{channel}/apps/
 - [ ] Phase 5: `socialwares assign` 注入文件（JSON merge 正确，skills 逐个 symlink）
 - [ ] Phase 5: `socialwares uninstall` 清理
 - [ ] Phase 6: structure_check 读取 .runtime/ 中的 flow.yaml + commitment.yaml
 - [ ] Phase 6: api_check 含覆盖率 suggestion
 - [ ] Phase 6: session_diagnose 读取 hooks 日志
+- [ ] Phase 6: evolve_auto 可用
+- [ ] Phase 6: 完整数据链路验证（hooks → prompts → diagnose → improve）
 - [ ] Phase 6: 自定义 evolve skill 可注册可编译
 - [ ] Phase 7: `uv build` 构建成功
 - [ ] Phase 7: wheel 安装后 CLI 可用
