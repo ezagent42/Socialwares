@@ -197,6 +197,31 @@ grep -c -- "---" .runtime/agents/default/SOUL.md
 
 **注意**：Agent 可能已经在 task-review 目录下自行修改了脚本（他改了本地的而不是模板的）。需要把修复同步到 `src/socialwares/templates/` 中的模板。
 
+**已修复**：编译器统一为 dict 格式 commitment + 显式 states 列表。
+
+## 问题 27：evolver 运行 check structure / diagnose / evaluate 没有产生报告
+
+**现象**：在 evolver 角色中执行 "check structure"、"diagnose"、"evaluate"，`.runtime/data/evolve/reports/` 下没有报告文件。
+
+**可能原因**：
+1. Agent 执行脚本时的工作目录不对——脚本在 `.runtime/agents/evolver/` 下运行（`--project-dir`），但报告写到相对路径 `.runtime/data/evolve/reports/`，这个路径是相对于项目根的。需要检查 `.workspace_root` 是否正确被读取。
+2. 脚本跑成功了但 Agent 没有调用脚本——Agent 可能直接回答而不是执行 SKILL.md 中的 bash 命令。
+3. `uv run` 失败（git 依赖问题），Agent fallback 到手动回答。
+
+**更新**：报告有生成。但 eval 报告的 suggestions 字段为空。
+
+## 问题 28：eval 报告 suggestions 为空
+
+**现象**：`evolve_api_check` 的 eval 报告产生了，但 suggestions 字段为空。
+
+**可能原因**：
+1. 所有 eval cases 都 PASS 了（health check 通过），没有失败项，所以没有 suggestion
+2. E2E 测试的 socialware.py 中定义了更多 action（create_task 等），但 eval_cases.yaml 只有默认的 health check 一条。用户没有为新增的 action 写 eval cases。
+
+**实际问题**：eval 只检查"已有 case 是否通过"，没有检查"是否所有 action 都有 eval case 覆盖"。socialware.py 注册了 create_task、list_tasks、review_task 等 action，但 eval_cases.yaml 只覆盖了 health check，覆盖率不足应该产生 suggestion。
+
+**需要修复**：`run_eval.py` 应该读取 flow.yaml，对比注册的 action 和 eval_cases 中覆盖的 action，对未覆盖的 action 生成 suggestion（如 "action 'create_task' has no eval case"）。
+
 **现象 2（python 直接运行）**：`check_structure.py` 报 `flow.yaml not found`——因为现在 flow.yaml 是编译产物在 `.runtime/` 中，不在 `agent/` 下。脚本还在找旧路径。
 
 **根本问题**：evolve scripts 是从旧架构搬过来的，内部硬编码了旧的文件路径（`agent/flow/flow.yaml`、`agent/commitment/commitment.yaml`）。重构后这些文件位置变了：

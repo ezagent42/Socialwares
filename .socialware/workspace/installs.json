@@ -1,0 +1,13 @@
+[
+  {
+    "app_name": "task-review",
+    "app_dir": "/home/yaosh/projects/Socialwares/.socialware/workspace/test/apps/task-review",
+    "channel": "#test",
+    "roles": [
+      "default",
+      "dev",
+      "reviewer",
+      "evolver"
+    ]
+  }
+]
