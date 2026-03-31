@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Claude Agent SDK adapter.
+"""Claude Code SDK adapter.
 
-Uses claude-agent-sdk for programmatic agent interaction.
-Requires: uv pip install 'claude-agent-sdk>=0.1.16'
+Uses claude-code-sdk for programmatic agent interaction.
+Requires: uv pip install claude-code-sdk
 
 Reference:
-- SDK: https://github.com/anthropics/claude-agent-sdk-python
+- SDK: https://docs.anthropic.com/en/docs/claude-code/sdk-reference
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from base import BaseAdapter, RoleConfig, serialize
 
 
 class ClaudeAdapter(BaseAdapter):
-    """Claude Agent SDK adapter."""
+    """Claude Code SDK adapter."""
 
     def launch_shell(self) -> None:
         """Launch Claude Code TUI via CLI."""
@@ -32,30 +32,32 @@ class ClaudeAdapter(BaseAdapter):
         subprocess.run(cmd, cwd=str(self.config.project_dir))
 
     async def launch_sdk(self, prompt: str) -> AsyncIterator[Any]:
-        """Launch via Claude Agent SDK.
+        """Launch via Claude Code SDK.
 
-        Yields serialized message dicts. Uses ClaudeSDKClient pattern (same as EvoSkill).
+        Yields serialized message dicts from the streaming query.
         """
         try:
-            from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
+            from claude_code_sdk import query, ClaudeCodeOptions
         except ImportError:
-            print("[Claude SDK] claude-agent-sdk not installed.")
-            print("  Install: uv pip install 'claude-agent-sdk>=0.1.16'")
+            yield serialize({
+                "_type": "ErrorMessage",
+                "content": "claude-code-sdk not installed. Run: uv pip install claude-code-sdk",
+            })
             return
 
         project_dir = str(self.config.project_dir)
-        options = ClaudeAgentOptions(
+        options = ClaudeCodeOptions(
             cwd=project_dir,
             system_prompt=self.config.soul,
-            allowed_tools=["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill"],
-            setting_sources=["user", "project", "local"],
-            permission_mode="acceptEdits",
+            allowed_tools=["Bash", "Read", "Write", "Edit", "Glob", "Grep"],
+            permission_mode="bypassPermissions",
         )
 
-        async with ClaudeSDKClient(options) as client:
-            await client.query(prompt)
-            async for message in client.receive_response():
-                yield serialize(message)
+        async for message in query(
+            prompt=prompt,
+            options=options,
+        ):
+            yield serialize(message)
 
 
 if __name__ == "__main__":

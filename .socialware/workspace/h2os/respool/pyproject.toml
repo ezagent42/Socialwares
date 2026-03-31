@@ -13,7 +13,7 @@ dependencies = [
 testpaths = ["tests"]
 
 [project.optional-dependencies]
-claude = ["claude-agent-sdk>=0.1.16"]
+claude = ["claude-code-sdk"]
 codex = ["openai-agents>=0.10.0"]
 
 [dependency-groups]
