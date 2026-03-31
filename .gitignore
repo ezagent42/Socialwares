@@ -45,3 +45,4 @@ Thumbs.db
 # Legacy
 agent/flow/evolve_api_check/last_eval_results.json
 task-review
+.socialware/workspace/
