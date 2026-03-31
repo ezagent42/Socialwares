@@ -3,14 +3,12 @@ name = "{{APP_NAME}}"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+    "socialwares @ git+https://github.com/ezagent42/Socialwares.git",
     "fastapi>=0.115.0",
     "uvicorn>=0.32.0",
     "pyyaml>=6.0",
 ]
-
-# socialwares 框架通过 editable install 或 pip install git+... 安装
-# 不在此处声明依赖（PyPI 发布前无法解析）
-# pip install -e /path/to/Socialwares  或  pip install git+https://github.com/ezagent42/Socialwares.git
+# 发布到 PyPI 后可改为: "socialwares>=0.2.0"
 
 [tool.socialwares]
 agent_dir = "agent"
