@@ -144,12 +144,8 @@ async def index():
 
 # --- WebSocket Chat ---
 
-def _load_soul(role: str) -> str:
-    """Load merged SOUL.md for a role."""
-    soul_path = RUNTIME_DIR / "agents" / role / "SOUL.md"
-    if soul_path.exists():
-        return soul_path.read_text(encoding="utf-8")
-    return ""
+def _get_role_dir(role: str) -> Path:
+    return RUNTIME_DIR / "agents" / role
 
 
 @app.websocket("/ws/chat")
@@ -166,7 +162,12 @@ async def ws_chat(ws: WebSocket):
             await ws.close()
             return
 
-        soul = _load_soul(role)
+        role_dir = _get_role_dir(role)
+        if not role_dir.exists():
+            await ws.send_json({"type": "error", "content": f"Role '{role}' not deployed."})
+            await ws.close()
+            return
+
         await ws.send_json({"type": "system", "content": f"Connected as {role}. Agent adapter: {ADAPTER_NAME}"})
 
         while True:
@@ -181,54 +182,66 @@ async def ws_chat(ws: WebSocket):
             await ws.send_json({"type": "status", "content": "thinking"})
 
             try:
-                from claude_code_sdk import query, ClaudeCodeOptions
+                import subprocess, shutil
 
-                options = ClaudeCodeOptions(
-                    cwd=str(APP_ROOT),
-                    system_prompt=soul,
-                    allowed_tools=["Bash", "Read", "Write", "Edit", "Glob", "Grep"],
-                    permission_mode="bypassPermissions",
+                claude_path = shutil.which("claude") or shutil.which("claude.CMD")
+                if not claude_path:
+                    raise RuntimeError("claude CLI not found in PATH")
+
+                soul_path = role_dir / "SOUL.md"
+                cmd = [
+                    claude_path,
+                    "--output-format", "stream-json",
+                    "--verbose",
+                    "--permission-mode", "bypassPermissions",
+                    "--allowedTools", "Bash,Read,Write,Edit,Glob,Grep",
+                    "--print",
+                ]
+                if soul_path.exists():
+                    cmd.extend(["--append-system-prompt-file", str(soul_path)])
+                cmd.extend(["--", prompt])
+
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    cwd=str(role_dir),
+                    env={**os.environ, "PYTHONUTF8": "1"},
                 )
 
-                async for message in query(prompt=prompt, options=options):
-                    msg_type = type(message).__name__
-                    content = ""
+                # Stream stdout line by line
 
-                    # Extract text from different message types
-                    if hasattr(message, "result") and isinstance(message.result, str):
-                        content = message.result
-                    elif hasattr(message, "content"):
-                        if isinstance(message.content, str):
-                            content = message.content
-                        elif isinstance(message.content, list):
-                            # AssistantMessage has content=[TextBlock(...), ...]
-                            parts = []
-                            for block in message.content:
-                                if hasattr(block, "text"):
-                                    parts.append(block.text)
-                            content = "\n".join(parts)
-
-                    # Skip system/init messages
-                    if msg_type == "SystemMessage":
+                async for raw_line in proc.stdout:
+                    line = raw_line.decode("utf-8", errors="replace").strip()
+                    if not line:
+                        continue
+                    try:
+                        data = json.loads(line)
+                    except json.JSONDecodeError:
                         continue
 
-                    if content:
-                        await ws.send_json({
-                            "type": "agent",
-                            "content": content,
-                            "msg_type": msg_type,
-                        })
+                    dtype = data.get("type", "")
 
+                    # Extract result text
+                    if dtype == "result":
+                        result_text = data.get("result", "")
+                        if result_text:
+                            await ws.send_json({"type": "agent", "content": result_text, "msg_type": "result"})
+
+                    # Extract assistant message text
+                    elif dtype == "assistant":
+                        message = data.get("message", {})
+                        content_blocks = message.get("content", [])
+                        for block in content_blocks:
+                            if block.get("type") == "text":
+                                await ws.send_json({"type": "agent", "content": block["text"], "msg_type": "assistant"})
+
+                    # Skip system, rate_limit_event, etc.
+
+                await proc.wait()
                 await ws.send_json({"type": "done"})
 
             except Exception as e:
-                err_str = str(e)
-
-                # Ignore SDK parse errors for unknown message types
-                if "Unknown message type" in err_str:
-                    await ws.send_json({"type": "done"})
-                    continue
-
                 error_msg = f"{type(e).__name__}: {e}"
 
                 # Record error → violation
