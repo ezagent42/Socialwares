@@ -26,6 +26,6 @@
 
 ## Connections
 
-- OneSystem API (`https://api.h2os.cloud/api/v1`) — 资源 CRUD + 分配操作
+- OneSystem API (`https://one-system.h2os.cloud/api/v1`) — 资源 CRUD + 分配操作
 - OneSystem CLI (`one`) — Agent 通过 Bash 调用 `one` 命令操作资源
 - OneAuth — 用户认证（`one login` 预先完成）

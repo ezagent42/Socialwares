@@ -21,6 +21,6 @@ ResPool 是 OneSystem 资源分配能力的 **Agent 交互可视化层**。OneSy
 
 ## 底层依赖
 
-- OneSystem API：`https://api.h2os.cloud/api/v1`
+- OneSystem API：`https://one-system.h2os.cloud/api/v1`
 - OneSystem CLI：`one`（需预先 `one login` 完成认证）
 - 参考规范：`.claude/skills/one-system/`

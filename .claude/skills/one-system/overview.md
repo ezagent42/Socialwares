@@ -71,7 +71,7 @@ data: { ... }              # 仅 Secret 使用，SOPS 加密
 
 ## HTTP API 参考
 
-**Base URL**: `https://api.h2os.cloud/api/v1` (或自定义 `SERVER_HOST:SERVER_PORT`)
+**Base URL**: `https://one-system.h2os.cloud/api/v1` (或自定义 `SERVER_HOST:SERVER_PORT`)
 
 ### 认证
 
@@ -113,7 +113,7 @@ Token 通过 OneAuth OAuth2 流程获取（详见 `oneauth-integration.md`）。
 #### 创建资源示例
 
 ```bash
-curl -X POST https://api.h2os.cloud/api/v1/secrets \
+curl -X POST https://one-system.h2os.cloud/api/v1/secrets \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -127,7 +127,7 @@ curl -X POST https://api.h2os.cloud/api/v1/secrets \
 #### OneQL 搜索语法
 
 ```bash
-curl -X POST https://api.h2os.cloud/api/v1/resources/search \
+curl -X POST https://one-system.h2os.cloud/api/v1/resources/search \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
     "kind": "BareMetalServer",
@@ -180,7 +180,7 @@ OneQL 支持的操作符：`:` (等于), `!=`, `>`, `>=`, `<`, `<=`, `~` (包含
 ### 健康检查（公开）
 
 ```bash
-curl https://api.h2os.cloud/health
+curl https://one-system.h2os.cloud/health
 # {"status":"healthy","version":"v1.0.0"}
 ```
 

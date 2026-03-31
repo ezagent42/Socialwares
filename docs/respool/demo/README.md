@@ -35,7 +35,7 @@
 ```bash
 # 配置上下文（如果首次使用）
 one config set-context demo \
-  --server https://api.h2os.cloud \
+  --server https://one-system.h2os.cloud \
   --oneauth-url https://one-auth.h2os.cloud \
   --user <your-username>
 
