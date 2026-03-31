@@ -28,7 +28,13 @@
 | uv | 最新版 | `uv --version` |
 | OneSystem CLI | `one` 已安装 | `one --version` |
 | OneSystem 服务端 | 可访问（本地或远程） | `one login` 后 `one whoami` |
-| Claude Code | 已安装（TUI 模式需要） | `claude --version` |
+| Claude Agent SDK | Web Chat 模式需要 | `uv pip install 'claude-agent-sdk>=0.1.16'` |
+| Claude Code | TUI 模式需要（可选） | `claude --version` |
+
+### 已知 Windows 问题
+
+- **python3 占位符**：Windows App Store 的 `python3` 别名会导致 `deploy.sh` 失败。已修复——deploy.sh 通过 `python3 --version` 实测检测，自动 fallback 到 `python`。
+- **WebSocket 依赖**：`uvicorn` 默认不含 WebSocket 支持。`pyproject.toml` 已配置 `uvicorn[standard]`，`uv sync` 会自动安装 `websockets` 库。
 
 ### OneSystem 认证
 
@@ -135,8 +141,11 @@ one get cfg -q "label.respool.type:quota" -n demo-pool
 # 进入 ResPool workspace
 cd .socialware/workspace/h2os/respool
 
-# 安装依赖
+# 安装依赖（含 WebSocket 支持）
 uv sync
+
+# 安装 Claude Agent SDK（Web Chat 必需）
+uv pip install 'claude-agent-sdk>=0.1.16'
 
 # 部署四原语 → .runtime/
 make deploy
@@ -149,11 +158,42 @@ ls .runtime/agents/
 uv run uvicorn src.app:app --port 8001
 ```
 
-打开浏览器访问 **http://localhost:8001**，即可看到 Chat 界面。
+打开浏览器访问 **http://localhost:8001**，看到 ResPool Chat 界面：
 
-- 右上角切换角色（default / admin / dev / evolver）
-- 输入框发消息，Agent 通过 WebSocket 流式返回
-- 需要 `claude-agent-sdk` 已安装（`uv pip install 'claude-agent-sdk>=0.1.16'`）
+```
+┌─────────────────────────────────────────────────┐
+│ ResPool  connected (default)        [default ▼] │
+├─────────────────────────────────────────────────┤
+│                                                 │
+│  Connected as default. Agent adapter: claude     │
+│                                                 │
+│                        show me available pools  │
+│                                                 │
+│  Agent: 正在查询资源池...                        │
+│  one pool list -o json                          │
+│  ...                                            │
+│                                                 │
+├─────────────────────────────────────────────────┤
+│ Ask ResPool...                          [Send]  │
+└─────────────────────────────────────────────────┘
+```
+
+**Web Chat 功能**：
+- 右上角下拉框切换角色（default / admin / dev / evolver），切换时自动重连
+- 输入框输入消息，Enter 发送，Shift+Enter 换行
+- Agent 响应通过 WebSocket 流式返回
+- 暗色主题，消息气泡区分 user / agent / system / error
+
+**架构**：
+```
+浏览器 (app/index.html)
+    ↕ WebSocket /ws/chat
+FastAPI (src/app.py)
+    ↕ SDK adapter (agent/adapters/claude/sdk.py)
+Claude Agent (SOUL.md + Skills)
+    ↕ Bash: one pool list / one alloc create / ...
+OneSystem API (one-system.h2os.cloud)
+```
 
 ### 方式 B: TUI 模式（Dev 调试）
 
@@ -161,9 +201,11 @@ uv run uvicorn src.app:app --port 8001
 cd .socialware/workspace/h2os/respool
 uv sync && make deploy
 
-# 启动 Claude Code TUI
+# 启动 Claude Code TUI（需要 claude CLI 已安装）
 make start ROLE=default
 ```
+
+TUI 模式直接在终端内与 Agent 对话，适合开发调试。
 
 ---
 
