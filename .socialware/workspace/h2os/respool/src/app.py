@@ -100,7 +100,7 @@ async def _trigger_evolve_diagnose(violation: dict) -> None:
         return
 
     try:
-        adapter = _load_adapter("evolver")
+        from claude_code_sdk import query, ClaudeCodeOptions
         prompt = (
             f"A runtime error just occurred. Please diagnose and suggest a fix.\n\n"
             f"Error ID: {violation['id']}\n"
@@ -112,8 +112,15 @@ async def _trigger_evolve_diagnose(violation: dict) -> None:
             f"Violation log: .runtime/data/evolve/violations/runtime_errors.jsonl\n\n"
             f"Run evolve_session_diagnose then evolve_improve if you can identify the root cause."
         )
-        async for _ in adapter.launch_sdk(prompt):
-            pass  # consume stream, we don't need the output here
+        soul = _load_soul("evolver")
+        options = ClaudeCodeOptions(
+            cwd=str(APP_ROOT),
+            system_prompt=soul,
+            allowed_tools=["Bash", "Read", "Write", "Edit", "Glob", "Grep"],
+            permission_mode="bypassPermissions",
+        )
+        async for _ in query(prompt=prompt, options=options):
+            pass  # consume stream
     except Exception:
         pass  # best-effort, don't let evolve failure break the app
 
@@ -137,31 +144,17 @@ async def index():
 
 # --- WebSocket Chat ---
 
-def _load_adapter(role: str):
-    adapter_path = APP_ROOT / "agent" / "adapters"
-    sys.path.insert(0, str(adapter_path))
-    sys.path.insert(0, str(adapter_path / ADAPTER_NAME))
-
-    from base import RoleConfig
-
-    project_dir = RUNTIME_DIR / "agents" / role
-    if not project_dir.exists():
-        raise FileNotFoundError(f"Role '{role}' not deployed at {project_dir}")
-
-    config = RoleConfig.from_runtime(project_dir)
-    mod = importlib.import_module(f"{ADAPTER_NAME}.sdk")
-
-    for attr_name in dir(mod):
-        attr = getattr(mod, attr_name)
-        if isinstance(attr, type) and hasattr(attr, "launch_sdk") and attr_name != "BaseAdapter":
-            return attr(config)
-
-    raise RuntimeError(f"No adapter found in {ADAPTER_NAME}/sdk.py")
+def _load_soul(role: str) -> str:
+    """Load merged SOUL.md for a role."""
+    soul_path = RUNTIME_DIR / "agents" / role / "SOUL.md"
+    if soul_path.exists():
+        return soul_path.read_text(encoding="utf-8")
+    return ""
 
 
 @app.websocket("/ws/chat")
 async def ws_chat(ws: WebSocket):
-    """WebSocket chat — streams Agent responses, errors auto-recorded as violations."""
+    """WebSocket chat — streams Agent responses via claude-code-sdk."""
     await ws.accept()
 
     try:
@@ -173,6 +166,7 @@ async def ws_chat(ws: WebSocket):
             await ws.close()
             return
 
+        soul = _load_soul(role)
         await ws.send_json({"type": "system", "content": f"Connected as {role}. Agent adapter: {ADAPTER_NAME}"})
 
         while True:
@@ -187,31 +181,54 @@ async def ws_chat(ws: WebSocket):
             await ws.send_json({"type": "status", "content": "thinking"})
 
             try:
-                adapter = _load_adapter(role)
-                from base import is_noise
+                from claude_code_sdk import query, ClaudeCodeOptions
 
-                async for message in adapter.launch_sdk(prompt):
-                    m = message if isinstance(message, dict) else {"_type": "raw", "content": str(message)}
+                options = ClaudeCodeOptions(
+                    cwd=str(APP_ROOT),
+                    system_prompt=soul,
+                    allowed_tools=["Bash", "Read", "Write", "Edit", "Glob", "Grep"],
+                    permission_mode="bypassPermissions",
+                )
 
-                    if is_noise(m):
+                async for message in query(prompt=prompt, options=options):
+                    msg_type = type(message).__name__
+                    content = ""
+
+                    # Extract text from different message types
+                    if hasattr(message, "result") and isinstance(message.result, str):
+                        content = message.result
+                    elif hasattr(message, "content"):
+                        if isinstance(message.content, str):
+                            content = message.content
+                        elif isinstance(message.content, list):
+                            # AssistantMessage has content=[TextBlock(...), ...]
+                            parts = []
+                            for block in message.content:
+                                if hasattr(block, "text"):
+                                    parts.append(block.text)
+                            content = "\n".join(parts)
+
+                    # Skip system/init messages
+                    if msg_type == "SystemMessage":
                         continue
 
-                    content = ""
-                    if "content" in m and isinstance(m["content"], str):
-                        content = m["content"]
-                    elif "result" in m and isinstance(m["result"], str):
-                        content = m["result"]
-
-                    await ws.send_json({
-                        "type": "agent",
-                        "content": content,
-                        "msg_type": m.get("_type", "unknown"),
-                        "raw": m,
-                    })
+                    if content:
+                        await ws.send_json({
+                            "type": "agent",
+                            "content": content,
+                            "msg_type": msg_type,
+                        })
 
                 await ws.send_json({"type": "done"})
 
             except Exception as e:
+                err_str = str(e)
+
+                # Ignore SDK parse errors for unknown message types
+                if "Unknown message type" in err_str:
+                    await ws.send_json({"type": "done"})
+                    continue
+
                 error_msg = f"{type(e).__name__}: {e}"
 
                 # Record error → violation
