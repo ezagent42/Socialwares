@@ -54,14 +54,14 @@ class RoleConfig:
         for prompt_file in ["SOUL.md", "AGENTS.md"]:
             path = role_dir / prompt_file
             if path.exists():
-                soul = path.read_text()
+                soul = path.read_text(encoding="utf-8")
                 break
 
         # Read workspace root
         workspace_root = role_dir.parent.parent.parent  # default fallback
         ws_file = role_dir / ".workspace_root"
         if ws_file.exists():
-            workspace_root = Path(ws_file.read_text().strip())
+            workspace_root = Path(ws_file.read_text(encoding="utf-8").strip())
 
         # Find skills dir (adapter-specific)
         skills_dir = role_dir / ".claude" / "skills"
@@ -114,7 +114,7 @@ def save_session(workspace_root: Path, role: str, adapter: str, messages: list[d
         "messages": messages,
     }
 
-    with open(session_file, "w") as f:
+    with open(session_file, "w", encoding="utf-8") as f:
         json.dump(session_data, f, indent=2, ensure_ascii=False, default=str)
 
     return session_file
