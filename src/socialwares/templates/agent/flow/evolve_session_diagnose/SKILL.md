@@ -9,7 +9,7 @@ description: "Diagnose issues by analyzing conversation data against commitment 
 
 ```bash
 WORKSPACE_ROOT=$(cat .workspace_root) && cd "$WORKSPACE_ROOT"
-uv run agent/flow/evolve_session_diagnose/scripts/diagnose.py --data-dir .runtime/data --commitment agent/commitment/commitment.yaml
+python agent/flow/evolve_session_diagnose/scripts/diagnose.py --data-dir .runtime/data --commitment .runtime/commitment.yaml
 # Then read output + commitment.yaml → judge each condition → report to developer
 ```
 
@@ -23,8 +23,8 @@ User says "diagnose", "what's wrong", "analyze problems", "check issues" etc.
 |-----------|----------|----------------|
 | Role | agent/role/*.md | Agent identities + permissions |
 | Scope | agent/scope/scope.md | App capability boundaries |
-| Commitment | agent/commitment/commitment.yaml | Evaluation standards on flow edges (from/to/condition) |
-| Flow | agent/flow/flow.yaml + {action}/SKILL.md | Actions + how to execute |
+| Commitment | .runtime/commitment.yaml | Evaluation standards on flow edges (from/to/condition) |
+| Flow | .runtime/flow.yaml + {action}/SKILL.md | Actions + how to execute |
 
 ## What SCRIPT Does vs What EVOLVER (You) Does
 
@@ -60,7 +60,7 @@ cd "$WORKSPACE_ROOT"
 ## Flow
 
 1. Run `scripts/diagnose.py` to extract events from hook logs and SDK sessions
-2. Read `agent/commitment/commitment.yaml` to understand each condition
+2. Read `.runtime/commitment.yaml` to understand each condition
 3. For each commitment, compare extracted events against the condition
 4. Judge: FULFILLED, VIOLATED, or INSUFFICIENT DATA
 5. For each VIOLATED commitment, save violation via `scripts/save_violation.py`
@@ -70,9 +70,9 @@ cd "$WORKSPACE_ROOT"
 ## Usage
 
 ```bash
-uv run agent/flow/evolve_session_diagnose/scripts/diagnose.py \
+python agent/flow/evolve_session_diagnose/scripts/diagnose.py \
   --data-dir .runtime/data \
-  --commitment agent/commitment/commitment.yaml
+  --commitment .runtime/commitment.yaml
 ```
 
 ## Data Sources Analyzed

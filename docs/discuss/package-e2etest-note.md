@@ -162,6 +162,10 @@ grep -c -- "---" .runtime/agents/default/SOUL.md
 
 **解决方向**：用户项目不应依赖从 PyPI 安装 socialwares——开发阶段应该用 editable install 或者 path 依赖。模板的 pyproject.toml 需要调整。
 
+**持续存在**：问题 23 轮测试中仍然出现。agent 在 task-review 目录下用 `uv run` 执行脚本时，uv 读取 task-review/pyproject.toml，发现依赖 `socialwares>=0.2.0`，尝试从 PyPI 安装但找不到。
+
+**根本修复**：evolve SKILL.md 中的脚本调用方式不应该用 `uv run`（会触发依赖解析），应该直接用 `python`。或者模板 pyproject.toml 中把 socialwares 依赖改为可选/去掉（脚本本身不 import socialwares）。
+
 **现象 2（python 直接运行）**：`check_structure.py` 报 `flow.yaml not found`——因为现在 flow.yaml 是编译产物在 `.runtime/` 中，不在 `agent/` 下。脚本还在找旧路径。
 
 **根本问题**：evolve scripts 是从旧架构搬过来的，内部硬编码了旧的文件路径（`agent/flow/flow.yaml`、`agent/commitment/commitment.yaml`）。重构后这些文件位置变了：
@@ -318,7 +322,7 @@ agent-workspace/          ← 这是 assign --path 指定的路径
 
 **现象**：`socialwares deploy --adapter codex` 后每个 role 目录下有 `.agents/` 和 `.codex/` 两个目录。
 
-**结论：这是正确行为，不是 bug。**
+**结论：这是正确行为，不是 bug。**（已确认来自 evolve-v3-plan.md 的三平台调研结果）
 
 Codex CLI 的约定：
 - `.agents/skills/` — skills 目录（Codex 读 skills 的位置）

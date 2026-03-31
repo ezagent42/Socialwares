@@ -9,7 +9,7 @@ description: "Check structural consistency of four primitives — no app needed"
 
 ```bash
 WORKSPACE_ROOT=$(cat .workspace_root) && cd "$WORKSPACE_ROOT"
-uv run agent/flow/evolve_structure_check/scripts/check_structure.py --agent-dir agent
+python agent/flow/evolve_structure_check/scripts/check_structure.py --agent-dir agent
 ```
 
 ## Trigger
@@ -22,8 +22,8 @@ User says "check structure", "verify primitives", "consistency check" etc.
 |-----------|----------|----------------|
 | Role | agent/role/*.md | Agent identities + permissions |
 | Scope | agent/scope/scope.md | App capability boundaries |
-| Commitment | agent/commitment/commitment.yaml | Evaluation standards on flow edges (from/to/condition) |
-| Flow | agent/flow/flow.yaml + {action}/SKILL.md | Actions + how to execute |
+| Commitment | .runtime/commitment.yaml | Evaluation standards on flow edges (from/to/condition) |
+| Flow | .runtime/flow.yaml + {action}/SKILL.md | Actions + how to execute |
 
 ## What SCRIPT Does vs What EVOLVER (You) Does
 
@@ -57,7 +57,7 @@ cd "$WORKSPACE_ROOT"
 ## Usage
 
 ```bash
-uv run agent/flow/evolve_structure_check/scripts/check_structure.py --agent-dir agent
+python agent/flow/evolve_structure_check/scripts/check_structure.py --agent-dir agent
 ```
 
 ## What It Checks

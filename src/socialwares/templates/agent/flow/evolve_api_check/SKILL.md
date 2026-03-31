@@ -9,7 +9,7 @@ description: "Run API eval cases against live app and report performance score"
 
 ```bash
 WORKSPACE_ROOT=$(cat .workspace_root) && cd "$WORKSPACE_ROOT"
-uv run agent/flow/evolve_api_check/scripts/run_eval.py \
+python agent/flow/evolve_api_check/scripts/run_eval.py \
   --cases agent/flow/evolve_api_check/eval_cases.yaml \
   --base-url <APP_BASE_URL>
 ```
@@ -26,8 +26,8 @@ User says "evaluate", "run eval", "check performance", "test the app" etc.
 |-----------|----------|----------------|
 | Role | agent/role/*.md | Agent identities + permissions |
 | Scope | agent/scope/scope.md | App capability boundaries |
-| Commitment | agent/commitment/commitment.yaml | Evaluation standards on flow edges (from/to/condition) |
-| Flow | agent/flow/flow.yaml + {action}/SKILL.md | Actions + how to execute |
+| Commitment | .runtime/commitment.yaml | Evaluation standards on flow edges (from/to/condition) |
+| Flow | .runtime/flow.yaml + {action}/SKILL.md | Actions + how to execute |
 
 ## What SCRIPT Does vs What EVOLVER (You) Does
 
@@ -66,7 +66,7 @@ cd "$WORKSPACE_ROOT"
 ```bash
 WORKSPACE_ROOT=$(cat .workspace_root)
 cd "$WORKSPACE_ROOT"
-uv run agent/flow/evolve_api_check/scripts/run_eval.py \
+python agent/flow/evolve_api_check/scripts/run_eval.py \
   --cases agent/flow/evolve_api_check/eval_cases.yaml \
   --base-url <APP_BASE_URL>
 ```

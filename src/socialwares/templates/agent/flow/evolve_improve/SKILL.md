@@ -23,8 +23,8 @@ User says "improve", "fix this", "make it better", "apply changes" etc.
 |-----------|----------|----------------|
 | Role | agent/role/*.md | Agent identities + permissions |
 | Scope | agent/scope/scope.md | App capability boundaries |
-| Commitment | agent/commitment/commitment.yaml | Evaluation standards on flow edges (from/to/condition) |
-| Flow | agent/flow/flow.yaml + {action}/SKILL.md | Actions + how to execute |
+| Commitment | .runtime/commitment.yaml | Evaluation standards on flow edges (from/to/condition) |
+| Flow | .runtime/flow.yaml + {action}/SKILL.md | Actions + how to execute |
 
 ## What SCRIPT Does vs What EVOLVER (You) Does
 
@@ -95,7 +95,7 @@ After applying changes, **always** run the save_report script:
 
 ```bash
 WORKSPACE_ROOT=$(cat .workspace_root) && cd "$WORKSPACE_ROOT"
-uv run agent/flow/evolve_improve/scripts/save_report.py \
+python agent/flow/evolve_improve/scripts/save_report.py \
   --change '{"primitive":"flow","file":"agent/flow/create_task/SKILL.md","action":"Updated trigger","reason":"40% error rate"}' \
   --based-on diagnose_20250326_120000.json \
   --next-step "Run 'evaluate' to check if score improved"

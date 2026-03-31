@@ -9,7 +9,7 @@ description: "Automated conversation testing — run agent on test cases via SDK
 
 ```bash
 WORKSPACE_ROOT=$(cat .workspace_root) && cd "$WORKSPACE_ROOT"
-uv run agent/flow/evolve_auto/scripts/run_auto.py --tests-dir agent/flow/evolve_auto/conversation_tests --adapter claude
+python agent/flow/evolve_auto/scripts/run_auto.py --tests-dir agent/flow/evolve_auto/conversation_tests --adapter claude
 ```
 
 ## Trigger
@@ -22,8 +22,8 @@ User says "auto-test", "run conversation checks", "automated testing", "test via
 |-----------|----------|----------------|
 | Role | agent/role/*.md | Agent identities + permissions |
 | Scope | agent/scope/scope.md | App capability boundaries |
-| Commitment | agent/commitment/commitment.yaml | Evaluation standards on flow edges (from/to/condition) |
-| Flow | agent/flow/flow.yaml + {action}/SKILL.md | Actions + how to execute |
+| Commitment | .runtime/commitment.yaml | Evaluation standards on flow edges (from/to/condition) |
+| Flow | .runtime/flow.yaml + {action}/SKILL.md | Actions + how to execute |
 
 ## What SCRIPT Does vs What EVOLVER (You) Does
 
@@ -72,7 +72,7 @@ cd "$WORKSPACE_ROOT"
 ```bash
 WORKSPACE_ROOT=$(cat .workspace_root)
 cd "$WORKSPACE_ROOT"
-uv run agent/flow/evolve_auto/scripts/run_auto.py \
+python agent/flow/evolve_auto/scripts/run_auto.py \
   --tests-dir agent/flow/evolve_auto/conversation_tests \
   --adapter claude
 ```

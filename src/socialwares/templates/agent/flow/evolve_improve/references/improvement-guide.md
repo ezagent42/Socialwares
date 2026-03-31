@@ -23,8 +23,8 @@ Changing a primitive often requires corresponding backend changes. Always propos
 
 1. **Backend**: implement the API endpoint in `src/app.py`
 2. **Primitive**: create `agent/flow/{action}/SKILL.md` with clear trigger + flow
-3. Register in `agent/flow/flow.yaml` with correct roles
-4. Run `./agent/deploy.sh`
+3. Register in `socialware.py` with `app.action("name", role=[...])`
+4. Run `socialwares deploy`
 
 Example good SKILL.md structure:
 ```markdown
@@ -87,14 +87,15 @@ Remember: commitment changes may need backend support. If adding a time-based co
 
 - Add new capabilities to `agent/scope/scope.md` that match what the app can actually do
 - Don't declare capabilities that don't have corresponding flow actions
-- Every capability in scope should have at least one action in flow.yaml that implements it
+- Every capability in scope should have at least one action in socialware.py that implements it
 
 ## Adding a role
 
 1. Create `agent/role/{name}.md` with identity + responsibilities
-2. Add role to relevant actions in `agent/flow/flow.yaml`
-3. If the role has commitments, add them to `agent/commitment/commitment.yaml`
-4. Run `./agent/deploy.sh`
+2. In `socialware.py`: `app.role("name", file="agent/role/name.md")`
+3. Add role to relevant actions in `socialware.py`
+4. If the role has commitments, add `app.commitment(...)` in `socialware.py`
+5. Run `socialwares deploy`
 
 ## Example Conversation
 
