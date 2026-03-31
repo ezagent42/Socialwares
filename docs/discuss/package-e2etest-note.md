@@ -277,6 +277,76 @@ grep -c -- "---" .runtime/agents/default/SOUL.md
 
 **优先级**：中。先完成当前 E2E 测试和 bug 修复，再做。
 
+## 问题 33（TODO）：socialwares new 支持从 git 拉模板
+
+**需求**：`socialwares new my-app --from git@xxx/task-review.git`，clone 一个已有 socialware 作为新项目起点。
+
+与 `install` 的区别：install 原封安装到频道；`new --from` 是 clone 后改名作为新项目继续开发。
+
+## 问题 34（TODO）：基础 socialware 的仓库组织
+
+**结论**：推荐 GitHub org 方式，每个 app 独立 repo：
+
+```
+github.com/socialwares/taskarena
+github.com/socialwares/agentforge
+github.com/socialwares/respool
+```
+
+独立版本、独立 issue、独立贡献者。社区 app 同样方式。未来 SocialwareHub 是这些仓库的索引。
+
+---
+
+## 第四轮综合审查（2026-03-31）
+
+### 开发者完整工作流
+
+```
+pip install socialwares
+socialwares new my-app
+cd my-app
+socialwares start --role dev      ← 进入 dev 角色
+  "init"                          ← dev_init 引导四原语定义
+  （交互式写 scope → role → flow → commitment）
+  socialwares deploy              ← 编译
+  开发前后端代码（API + SKILL.md）
+  手动调试对话
+socialwares start --role evolver  ← 切换到 evolver
+  "check structure"               ← 结构一致性
+  "evaluate"                      ← API 测试 + 覆盖率
+  "diagnose"                      ← 对话数据诊断
+socialwares start --role dev      ← 切回 dev
+  "iterate"                       ← dev_iterate 读报告，引导修复
+  修改 → deploy → 再测试
+  定版 → git commit + push
+```
+
+### 工作流缺失项
+
+| 缺失 | 说明 | 优先级 |
+|------|------|--------|
+| **dev_build skill** | TDD 引导：写测试 → 写代码 → 跑测试 → 验证。当前 dev 角色没有开发辅助 skill | 中 |
+| **dev_release skill** | 定版收尾：git commit + tag + push + changelog。dev_iterate 改完后没有引导提交 | 中 |
+| **SDK 模式测试** | `socialwares start --role default --prompt "check health"` 未在 E2E 中验证 | 高 |
+| **evolve_auto 测试** | 注册了但 E2E 未验证 | 低 |
+| **evolver 完整链路** | hooks → prompts → diagnose → violations → improve 数据流未端到端验证 | 高 |
+| **`socialwares list` 独立测试** | 只在 install 输出中提到，没有独立验证 | 低 |
+
+### 已实现 vs 缺失对照
+
+| 步骤 | 当前状态 |
+|------|---------|
+| install + new | ✓ 完整 |
+| start --role dev | ✓ 完整 |
+| dev_init 引导四原语 | ✓ SKILL.md + references 已有 |
+| dev 辅助开发（TDD） | ✗ 缺 dev_build skill |
+| dev 辅助调试 | △ inspect 可看结构，但没有专门的调试 skill |
+| 切换 evolver 测试 | ✓ 5 个 evolve skill |
+| eval 覆盖率 suggestion | ✓ 已实现 |
+| dev_iterate 读报告改进 | ✓ SKILL.md + references 已有 |
+| 定版发布 | ✗ 缺 dev_release skill |
+| new --from git 模板 | ✗ CLI 未实现 |
+
 **现象 2（python 直接运行）**：`check_structure.py` 报 `flow.yaml not found`——因为现在 flow.yaml 是编译产物在 `.runtime/` 中，不在 `agent/` 下。脚本还在找旧路径。
 
 **根本问题**：evolve scripts 是从旧架构搬过来的，内部硬编码了旧的文件路径（`agent/flow/flow.yaml`、`agent/commitment/commitment.yaml`）。重构后这些文件位置变了：
