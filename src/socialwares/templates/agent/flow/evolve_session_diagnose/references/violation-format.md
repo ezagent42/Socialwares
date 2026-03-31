@@ -6,7 +6,7 @@ After running `diagnose.py` and judging commitment conditions, save violations u
 
 ```bash
 WORKSPACE_ROOT=$(cat .workspace_root) && cd "$WORKSPACE_ROOT"
-python agent/flow/evolve_session_diagnose/scripts/save_violation.py \
+uv run agent/flow/evolve_session_diagnose/scripts/save_violation.py \
   --commitment C1 \
   --description "review not completed within 24h of submission" \
   --role reviewer \

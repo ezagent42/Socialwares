@@ -9,7 +9,7 @@ description: "Diagnose issues by analyzing conversation data against commitment 
 
 ```bash
 WORKSPACE_ROOT=$(cat .workspace_root) && cd "$WORKSPACE_ROOT"
-python agent/flow/evolve_session_diagnose/scripts/diagnose.py --data-dir .runtime/data --commitment .runtime/commitment.yaml
+uv run agent/flow/evolve_session_diagnose/scripts/diagnose.py --data-dir .runtime/data --commitment .runtime/commitment.yaml
 # Then read output + commitment.yaml → judge each condition → report to developer
 ```
 
@@ -70,7 +70,7 @@ cd "$WORKSPACE_ROOT"
 ## Usage
 
 ```bash
-python agent/flow/evolve_session_diagnose/scripts/diagnose.py \
+uv run agent/flow/evolve_session_diagnose/scripts/diagnose.py \
   --data-dir .runtime/data \
   --commitment .runtime/commitment.yaml
 ```
