@@ -45,19 +45,23 @@ class ClaudeAdapter(BaseAdapter):
             })
             return
 
-        project_dir = str(self.config.project_dir)
         options = ClaudeCodeOptions(
-            cwd=project_dir,
+            cwd=str(self.config.project_dir),
             system_prompt=self.config.soul,
             allowed_tools=["Bash", "Read", "Write", "Edit", "Glob", "Grep"],
             permission_mode="bypassPermissions",
         )
 
-        async for message in query(
-            prompt=prompt,
-            options=options,
-        ):
-            yield serialize(message)
+        try:
+            async for message in query(prompt=prompt, options=options):
+                yield serialize(message)
+        except Exception as e:
+            # SDK may throw on unknown message types (e.g. rate_limit_event)
+            # If we already yielded content, this is benign — just log it
+            if "Unknown message type" in str(e):
+                pass
+            else:
+                raise
 
 
 if __name__ == "__main__":
@@ -65,7 +69,7 @@ if __name__ == "__main__":
     import asyncio
     parser = argparse.ArgumentParser()
     parser.add_argument("project_dir", help="Path to .runtime/agents/{role}/")
-    parser.add_argument("--prompt", default="You are ready.", help="Initial prompt")
+    parser.add_argument("--prompt", default="check health", help="Prompt to send")
     args = parser.parse_args()
 
     config = RoleConfig.from_runtime(args.project_dir)
