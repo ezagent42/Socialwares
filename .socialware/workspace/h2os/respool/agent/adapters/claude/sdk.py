@@ -45,22 +45,30 @@ class ClaudeAdapter(BaseAdapter):
             })
             return
 
+        # Use workspace root as cwd (not .runtime/agents/role/ which is too deep)
+        cwd = str(self.config.workspace_root) if self.config.workspace_root else str(self.config.project_dir)
+
         options = ClaudeCodeOptions(
-            cwd=str(self.config.project_dir),
+            cwd=cwd,
             system_prompt=self.config.soul,
             allowed_tools=["Bash", "Read", "Write", "Edit", "Glob", "Grep"],
             permission_mode="bypassPermissions",
         )
 
+        import logging
+        logger = logging.getLogger("claude_adapter")
+
         try:
             async for message in query(prompt=prompt, options=options):
+                logger.info("SDK message: %s", type(message).__name__)
                 yield serialize(message)
         except Exception as e:
+            err_str = str(e)
             # SDK may throw on unknown message types (e.g. rate_limit_event)
-            # If we already yielded content, this is benign — just log it
-            if "Unknown message type" in str(e):
-                pass
+            if "Unknown message type" in err_str:
+                logger.warning("Ignored SDK parse error: %s", err_str)
             else:
+                logger.error("SDK error: %s", err_str)
                 raise
 
 
