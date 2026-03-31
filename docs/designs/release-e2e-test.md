@@ -38,13 +38,13 @@ ls                          # socialware.py  agent  src  app  pyproject.toml
 ls agent/role/              # default.md  dev.md  evolver.md
 ls agent/scope/             # scope.md
 ls agent/commitment/        # README.md
-ls agent/flow/              # check_health  dev_init  dev_build  dev_iterate  dev_release
+ls agent/flow/              # check_health  dev_define  dev_build  dev_iterate  dev_release
                             # inspect  setup_claude
                             # evolve_structure_check  evolve_api_check  evolve_session_diagnose
                             # evolve_improve  evolve_auto
 # 每个 skill 目录都有 SKILL.md + scripts/ + references/
 ls agent/flow/evolve_structure_check/  # SKILL.md  scripts/  references/
-ls agent/flow/dev_init/                # SKILL.md  scripts/  references/
+ls agent/flow/dev_define/                # SKILL.md  scripts/  references/
 ```
 
 ### 1.2 App 声明文件渲染
@@ -59,7 +59,7 @@ ls agent/flow/dev_init/                # SKILL.md  scripts/  references/
 grep 'App("task-review")' socialware.py         # 应该匹配
 grep '{{APP_NAME}}' socialware.py                # 不应匹配
 grep 'name = "task-review"' pyproject.toml       # 应该匹配
-grep 'dev_init' socialware.py                    # 应该匹配
+grep 'dev_define' socialware.py                    # 应该匹配
 grep 'dev_build' socialware.py                   # 应该匹配
 grep 'dev_release' socialware.py                 # 应该匹配
 ```
@@ -87,7 +87,7 @@ cd task-review
 | | |
 |---|---|
 | **操作** | `socialwares start --role dev`，然后说 "init" |
-| **目的** | 验证 dev_init skill 能交互式引导四原语定义 |
+| **目的** | 验证 dev_define skill 能交互式引导四原语定义 |
 | **预期** | Agent 逐步引导完成 scope → role → flow → commitment |
 
 ```bash
@@ -127,7 +127,7 @@ Ctrl+C 退出 dev agent。
 
 | | |
 |---|---|
-| **操作** | 检查 dev_init 生成的文件 |
+| **操作** | 检查 dev_define 生成的文件 |
 | **目的** | 确认四原语文件和 socialware.py 注册都正确 |
 
 ```bash
@@ -152,7 +152,7 @@ cat agent/scope/scope.md      # 应包含 "任务审核" 相关描述
 
 | | |
 |---|---|
-| **操作** | 检查并补齐 dev_init 可能没覆盖的细节 |
+| **操作** | 检查并补齐 dev_define 可能没覆盖的细节 |
 | **说明** | Agent 可能不会自动创建所有 transition action 的 SKILL.md |
 
 ```bash
@@ -191,7 +191,7 @@ ls .runtime/agents/default/.claude/skills/
 # check_health  close_task  create_task  list_tasks  submit_task
 
 ls .runtime/agents/dev/.claude/skills/
-# dev_build  dev_init  dev_iterate  dev_release  inspect  setup_claude
+# dev_build  dev_define  dev_iterate  dev_release  inspect  setup_claude
 
 ls .runtime/agents/reviewer/.claude/skills/
 # check_health  list_tasks  review_task
@@ -374,7 +374,7 @@ cat .runtime/data/evolve/reports/eval_*.json | grep "suggestions"
 | | |
 |---|---|
 | **操作** | 启动 dev 角色 |
-| **目的** | 验证 dev skills（inspect, setup_claude, dev_init, dev_build, dev_iterate, dev_release） |
+| **目的** | 验证 dev skills（inspect, setup_claude, dev_define, dev_build, dev_iterate, dev_release） |
 
 ```bash
 socialwares start --role dev
@@ -742,7 +742,7 @@ socialwares deploy
 - [ ] Phase 3: 缺失 SKILL.md 报错
 - [ ] Phase 4: 单角色 / 多角色本地启动（Python launcher，跨平台）
 - [ ] Phase 4: Evolver 交互 + 报告输出到 .runtime/data/evolve/reports/
-- [ ] Phase 4: Dev 角色可用（inspect, dev_init, dev_build, dev_iterate, dev_release）
+- [ ] Phase 4: Dev 角色可用（inspect, dev_define, dev_build, dev_iterate, dev_release）
 - [ ] Phase 4: SDK 模式可用 + session 保存
 - [ ] Phase 5: `socialwares install` 到 .socialware/workspace/{channel}/apps/
 - [ ] Phase 5: `socialwares assign` 注入文件（JSON merge 正确，skills 逐个 symlink）

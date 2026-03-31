@@ -264,7 +264,7 @@ grep -c -- "---" .runtime/agents/default/SOUL.md
 
 **需要新增**：
 
-1. **dev_init** — 引导首次开发（四原语构建）
+1. **dev_define** — 引导首次开发（四原语构建）
    - 触发："开始开发"、"初始化"、"guide me"
    - 流程：引导用户逐步填写 scope → role → flow（action + SKILL.md）→ 状态流转 → commitment
    - 每一步给出模板和示例，用户确认后写入文件并注册到 socialware.py
@@ -306,7 +306,7 @@ pip install socialwares
 socialwares new my-app
 cd my-app
 socialwares start --role dev      ← 进入 dev 角色
-  "init"                          ← dev_init 引导四原语定义
+  "init"                          ← dev_define 引导四原语定义
   （交互式写 scope → role → flow → commitment）
   socialwares deploy              ← 编译
   开发前后端代码（API + SKILL.md）
@@ -338,7 +338,7 @@ socialwares start --role dev      ← 切回 dev
 |------|---------|
 | install + new | ✓ 完整 |
 | start --role dev | ✓ 完整 |
-| dev_init 引导四原语 | ✓ SKILL.md + references 已有 |
+| dev_define 引导四原语 | ✓ SKILL.md + references 已有 |
 | dev 辅助开发（TDD） | ✗ 缺 dev_build skill |
 | dev 辅助调试 | △ inspect 可看结构，但没有专门的调试 skill |
 | 切换 evolver 测试 | ✓ 5 个 evolve skill |

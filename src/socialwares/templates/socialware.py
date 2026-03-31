@@ -43,7 +43,7 @@ app.action("check_health", role=["default"])
 # 开发操作（dev 角色用于环境配置、项目导航和开发引导）
 app.action("inspect", role=["dev", "evolver"])
 app.action("setup_claude", role=["dev"])
-app.action("dev_init", role=["dev"])
+app.action("dev_define", role=["dev"])
 app.action("dev_build", role=["dev"])
 app.action("dev_iterate", role=["dev"])
 app.action("dev_release", role=["dev"])
