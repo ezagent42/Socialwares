@@ -82,8 +82,11 @@ if [ -d "$RUNTIME_DIR/agents" ]; then
 fi
 
 # Detect python command (python3 on Unix, python on Windows)
+# Windows App Store alias responds to `command -v` but fails to execute
 PYTHON="python3"
-command -v python3 >/dev/null 2>&1 || PYTHON="python"
+if ! $PYTHON --version >/dev/null 2>&1; then
+    PYTHON="python"
+fi
 
 # 3. Parse flow.yaml for role-action mapping (if pyyaml available)
 ROLE_ACTIONS=""
@@ -206,7 +209,7 @@ for a in data.get('$role_name', []):
 set -euo pipefail
 INPUT=$(cat)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PY="python3"; command -v python3 >/dev/null 2>&1 || PY="python"
+PY="python3"; $PY --version >/dev/null 2>&1 || PY="python"
 
 # Find prompts directory
 if [ -f "$(cd "$SCRIPT_DIR" && pwd)/../../.workspace_root" ]; then
@@ -243,7 +246,7 @@ HOOKEOF
 set -euo pipefail
 INPUT=$(cat)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PY="python3"; command -v python3 >/dev/null 2>&1 || PY="python"
+PY="python3"; $PY --version >/dev/null 2>&1 || PY="python"
 
 if [ -f "$(cd "$SCRIPT_DIR" && pwd)/../../.workspace_root" ]; then
     WORKSPACE_ROOT=$(cat "$(cd "$SCRIPT_DIR" && pwd)/../../.workspace_root")
