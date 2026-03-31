@@ -199,7 +199,9 @@ class TestGenerateFlowYaml:
         _add_submit_task(project)
         Compiler(app, project_dir=project).compile()
         data = yaml.safe_load((project / ".runtime" / "flow.yaml").read_text())
-        transitions = data["flows"]["task_lifecycle"]["transitions"]
+        flow = data["flows"]["task_lifecycle"]
+        assert flow["states"] == ["draft", "submitted", "reviewed"]
+        transitions = flow["transitions"]
         assert len(transitions) == 2
         assert transitions[0]["action"] == "submit_task"
 
@@ -212,9 +214,9 @@ class TestGenerateCommitment:
         path = project / ".runtime" / "commitment.yaml"
         assert path.is_file()
         data = yaml.safe_load(path.read_text())
-        assert len(data["commitments"]) == 1
-        assert data["commitments"][0]["id"] == "C1"
-        assert data["commitments"][0]["condition"] == "within 24h"
+        assert "C1" in data["commitments"]
+        assert data["commitments"]["C1"]["condition"] == "within 24h"
+        assert data["commitments"]["C1"]["from"]["role"] == "default"
 
 
 class TestHooks:

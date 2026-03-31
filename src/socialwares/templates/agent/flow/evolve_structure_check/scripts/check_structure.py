@@ -81,7 +81,7 @@ def check_commitment_refs(agent_dir: Path) -> list[str]:
         data = yaml.safe_load(f) or {}
 
     commitments = data.get("commitments", {})
-    if not commitments:
+    if not commitments or not isinstance(commitments, dict):
         return []
 
     # Collect existing roles
@@ -199,8 +199,19 @@ def check_flow_graph(agent_dir: Path) -> list[str]:
             continue
 
         name = fdata.get("name", fname)
-        states = set(fdata.get("states", []))
         transitions = fdata.get("transitions", [])
+
+        # 支持显式 states 列表或从 transitions 推断
+        explicit_states = fdata.get("states", [])
+        if explicit_states:
+            states = set(explicit_states)
+        else:
+            states = set()
+            for t in transitions:
+                if t.get("from"):
+                    states.add(t["from"])
+                if t.get("to"):
+                    states.add(t["to"])
 
         if not states:
             issues.append(f"FLOW {name}: no states defined")

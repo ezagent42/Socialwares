@@ -162,9 +162,40 @@ grep -c -- "---" .runtime/agents/default/SOUL.md
 
 **解决方向**：用户项目不应依赖从 PyPI 安装 socialwares——开发阶段应该用 editable install 或者 path 依赖。模板的 pyproject.toml 需要调整。
 
-**持续存在**：问题 23 轮测试中仍然出现。agent 在 task-review 目录下用 `uv run` 执行脚本时，uv 读取 task-review/pyproject.toml，发现依赖 `socialwares>=0.2.0`，尝试从 PyPI 安装但找不到。
+**已修复（第三轮）**：模板 pyproject.toml 改为 git 依赖 `socialwares @ git+https://github.com/ezagent42/Socialwares.git`。
 
-**根本修复**：evolve SKILL.md 中的脚本调用方式不应该用 `uv run`（会触发依赖解析），应该直接用 `python`。或者模板 pyproject.toml 中把 socialwares 依赖改为可选/去掉（脚本本身不 import socialwares）。
+**第四轮新问题**：git 依赖要求远程仓库有最新代码。当前 feat/dispatch 分支还没 push 到远程，导致 `uv run` 解析 git 依赖时 clone 失败。
+
+## 问题 25：git 依赖需要远程仓库已 push
+
+**现象**：`uv run agent/flow/evolve_*/scripts/*.py` 报 `Failed to download socialwares @ git+https://github.com/ezagent42/Socialwares.git` — git clone 失败。
+
+**原因**：feat/dispatch 分支的代码还没 push 到 GitHub，远程仓库没有 socialwares pip 包的代码。
+
+**解决**：push 当前分支到远程，或者模板 pyproject.toml 的 git URL 指定分支 `git+https://github.com/ezagent42/Socialwares.git@feat/dispatch`。
+
+**更根本的问题**：在开发阶段（代码还没 push），git 依赖不可靠。需要一个本地开发时也能工作的方案。
+
+**可能的方案**：
+1. 模板 pyproject.toml 用 path 依赖：`socialwares @ file:///home/yaosh/projects/Socialwares` — 但路径写死不通用
+2. SKILL.md 中用 `python` 代替 `uv run` — 绕过依赖解析
+3. 用户项目的 venv 共享父项目的 venv（`--active` flag）
+4. `socialwares deploy` 时在 .runtime/ 中生成一个 `.python-version` 或 symlink 指向框架的 venv
+
+## 问题 26：evolve 脚本与编译产物格式不兼容
+
+**现象**：Agent 自己用 `python` 跑 `check_structure.py`，发现两个 bug：
+
+1. **commitment.yaml 格式不匹配**：编译器生成的是 list 格式 `commitments: [{id: C1, ...}]`，但脚本 `commitments.items()` 期望 dict 格式 `commitments: {C1: {...}}`
+2. **flow.yaml 缺 states 字段**：编译器生成的 flow.yaml 只有 transitions，没有显式的 states 列表。脚本 `fdata.get("states", [])` 拿到空列表就报 "no states defined"
+
+**根本原因**：evolve 脚本是按旧版 flow.yaml/commitment.yaml 的格式写的。编译器生成的新格式和旧格式不一致。
+
+**需要修复**：
+1. 编译器 `_generate_commitment_yaml` 改为 dict 格式（和旧版一致），或脚本适配 list 格式
+2. 编译器 `_generate_flow_yaml` 加入 `states` 字段，或脚本从 transitions 推断 states
+
+**注意**：Agent 可能已经在 task-review 目录下自行修改了脚本（他改了本地的而不是模板的）。需要把修复同步到 `src/socialwares/templates/` 中的模板。
 
 **现象 2（python 直接运行）**：`check_structure.py` 报 `flow.yaml not found`——因为现在 flow.yaml 是编译产物在 `.runtime/` 中，不在 `agent/` 下。脚本还在找旧路径。
 

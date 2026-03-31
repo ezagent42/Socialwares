@@ -323,6 +323,7 @@ class Compiler:
             for f in self.app.flows:
                 data["flows"][f.name] = {
                     "resource": f.resource,
+                    "states": f.state_names,
                     "transitions": [
                         {
                             "from": t.from_state,
@@ -351,9 +352,8 @@ class Compiler:
             return
 
         data = {
-            "commitments": [
-                {
-                    "id": c.name,
+            "commitments": {
+                c.name: {
                     "from": {"role": c.from_[0], "action": c.from_[1]},
                     "to": {"role": c.to[0], "action": c.to[1]},
                     "condition": c.condition,
@@ -364,7 +364,7 @@ class Compiler:
                     ),
                 }
                 for c in self.app.commitments
-            ]
+            }
         }
 
         commit_path = self.output / "commitment.yaml"
