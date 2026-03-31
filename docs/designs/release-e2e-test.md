@@ -86,7 +86,7 @@ cd task-review
 
 | | |
 |---|---|
-| **操作** | `socialwares start --role dev`，然后说 "init" |
+| **操作** | `socialwares start --role dev`，然后说 "define" |
 | **目的** | 验证 dev_define skill 能交互式引导四原语定义 |
 | **预期** | Agent 逐步引导完成 scope → role → flow → commitment |
 
@@ -98,7 +98,7 @@ socialwares start --role dev
 在 dev agent 中进行交互式引导：
 
 ```
-你: "init"
+你: "define"
 Agent: 引导 Step 1 — Scope
 你: "这是一个任务审核 App，功能包括创建任务、查看列表、提交审核、审核通过/退回"
 Agent: 写入 agent/scope/scope.md，确认
@@ -379,7 +379,7 @@ cat .runtime/data/evolve/reports/eval_*.json | grep "suggestions"
 ```bash
 socialwares start --role dev
 # "inspect"     → 展示项目结构
-# "init"        → 引导四原语构建
+# "define"      → 定义/重新定义四原语
 # "build"       → TDD 引导（写测试→实现→验证）
 # "release"     → 定版发布引导（deploy→检查→commit→push）
 # Ctrl+C 退出
