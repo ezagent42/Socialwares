@@ -222,21 +222,11 @@ async def ws_chat(ws: WebSocket):
 
                     dtype = data.get("type", "")
 
-                    # Extract result text
+                    # Only use result (final answer), skip assistant (duplicate streaming)
                     if dtype == "result":
                         result_text = data.get("result", "")
                         if result_text:
                             await ws.send_json({"type": "agent", "content": result_text, "msg_type": "result"})
-
-                    # Extract assistant message text
-                    elif dtype == "assistant":
-                        message = data.get("message", {})
-                        content_blocks = message.get("content", [])
-                        for block in content_blocks:
-                            if block.get("type") == "text":
-                                await ws.send_json({"type": "agent", "content": block["text"], "msg_type": "assistant"})
-
-                    # Skip system, rate_limit_event, etc.
 
                 await proc.wait()
                 await ws.send_json({"type": "done"})
