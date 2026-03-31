@@ -70,11 +70,13 @@ socialwares new task-review   # Error: task-review/ already exists
 
 ## Phase 2: App 声明式 API
 
+> 确保在 task-review 项目目录下操作：`cd task-review`
+
 ### 2.1 修改 socialware.py 添加业务逻辑
 
 | | |
 |---|---|
-| **操作** | 编辑 socialware.py，添加角色、action、状态机、commitment |
+| **操作** | 编辑 socialware.py，添加角色、action、流转、commitment |
 | **目的** | 验证声明式 API 被编译器正确读取 |
 
 ```python
@@ -194,9 +196,12 @@ socialwares deploy
 
 # 检查输出
 ls .runtime/agents/          # default  reviewer  evolver
-ls .runtime/agents/default/.claude/skills/  # check_health  create_task  list_tasks
-ls .runtime/agents/reviewer/.claude/skills/ # check_health  list_tasks  review_task
-ls .runtime/agents/evolver/.claude/skills/  # evolve_*（5 个）
+ls .runtime/agents/default/.claude/skills/
+# check_health  close_task  create_task  list_tasks  submit_task
+ls .runtime/agents/reviewer/.claude/skills/
+# check_health  list_tasks  review_task
+ls .runtime/agents/evolver/.claude/skills/
+# evolve_api_check  evolve_auto  evolve_improve  evolve_session_diagnose  evolve_structure_check
 ```
 
 ### 3.2 SOUL.md 合并验证
@@ -208,7 +213,7 @@ ls .runtime/agents/evolver/.claude/skills/  # evolve_*（5 个）
 
 ```bash
 # default 的 SOUL.md 应包含 scope + role + workflow
-cat .runtime/agents/default/SOUL.md | grep -c "---"  # 至少 2 个分隔符
+grep -c -- "---" .runtime/agents/default/SOUL.md  # 至少 2 个分隔符
 cat .runtime/agents/default/SOUL.md | grep "Workflows"  # 应存在
 cat .runtime/agents/default/SOUL.md | grep "submit_task"  # 应存在
 
@@ -304,7 +309,7 @@ socialwares deploy
 
 ```bash
 # 先启动后端
-uvicorn src.api:api --port 8001 &
+uvicorn src.api:app --port 8001 &
 
 # 启动 agent
 socialwares start --role default
@@ -447,7 +452,7 @@ socialwares start --role evolver
 
 ```bash
 # 确保后端运行
-uvicorn src.api:api --port 8001 &
+uvicorn src.api:app --port 8001 &
 
 # 编辑 eval_cases.yaml（在 agent/flow/evolve_api_check/）
 socialwares start --role evolver

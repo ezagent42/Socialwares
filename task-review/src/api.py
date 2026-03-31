@@ -1,7 +1,7 @@
 """Socialware App backend — FastAPI entry point.
 
 Minimal template. Users incrementally grow on this foundation (P1->P5).
-Start: uvicorn src.api:app --port $APP_PORT
+Start: uv run uvicorn src.app:app --port $APP_PORT
 """
 from __future__ import annotations
 

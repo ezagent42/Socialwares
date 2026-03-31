@@ -1,0 +1,39 @@
+# Conversation test cases for the default role.
+# Each case: what user says → what agent should do → what result should contain.
+# Used by: run_auto.py
+#
+# Fields:
+#   input:                 what to say to the agent
+#   expected_skill:        skill the agent should invoke (checked in trace)
+#   expected_contains:     keywords that MUST appear in agent's reply (list)
+#   expected_not_contains: keywords that must NOT appear in agent's reply (list)
+#   description:           human-readable test name
+#
+# Add more files per role: reviewer.yaml, admin.yaml, etc.
+
+role: default
+cases:
+  - input: "check health"
+    expected_skill: check_health
+    expected_contains:
+      - "ok"
+    expected_not_contains:
+      - "error"
+      - "not found"
+    description: "Agent checks health and reports ok"
+
+  # Add more as your app grows:
+  # - input: "create a task: fix login bug"
+  #   expected_skill: create_task
+  #   expected_contains:
+  #     - "task-"
+  #     - "fix login bug"
+  #   expected_not_contains:
+  #     - "error"
+  #   description: "Agent creates task with correct title"
+  #
+  # - input: "list tasks"
+  #   expected_skill: list_tasks
+  #   expected_contains:
+  #     - "task"
+  #   description: "Agent lists tasks"

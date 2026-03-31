@@ -1,10 +1,8 @@
-# Commitment — What
+# Commitment
 
-定义角色之间的协作约束（评估标准，不是强制执行）。
+约束定义。描述角色之间的协作标准。
 
-## 说明
-
-Commitment 在 `socialware.py` 中声明式定义，不再是独立的 YAML 文件。
+Commitment 在 `socialware.py` 中声明式定义：
 
 ```python
 app.commitment("C1",
@@ -16,7 +14,5 @@ app.commitment("C1",
 ```
 
 `socialwares deploy` 编译后生成 `.runtime/commitment.yaml`。
-
-只有 evolver 角色能看到 commitment，用于评估和改进 App。
 
 详见 [Commitment 与 Evolve](../../docs/guides/004-commitment-and-evolve.md)。

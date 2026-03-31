@@ -171,6 +171,12 @@ class Compiler:
         # workspace root marker
         (role_dir / ".workspace_root").write_text(str(self.project_dir))
 
+        # 清除旧的 prompt 文件（幂等：切换适配器后不残留）
+        for old_prompt in ("SOUL.md", "AGENTS.md"):
+            old_file = role_dir / old_prompt
+            if old_file.is_file():
+                old_file.unlink()
+
         # ── Scope + Role → SOUL.md ──
         soul_content = self._build_soul(role_name)
         (role_dir / cfg.prompt_file).write_text(soul_content, encoding="utf-8")
