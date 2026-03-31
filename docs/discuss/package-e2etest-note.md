@@ -302,6 +302,18 @@ agent-workspace/          ← 这是 assign --path 指定的路径
 3. 模板 socialware.py 注册 `app.action("inspect", role=["dev", "evolver"])` 和 `app.action("setup_claude", role=["dev"])`
 4. `socialwares start --role dev` 应该能启动 dev 角色并使用 inspect/setup_claude skill
 
+## 第三轮测试问题
+
+## 问题 23：deploy 后没有 dev 角色
+
+**现象**：`socialwares deploy` 输出只有 default + evolver，没有 dev。
+
+**原因**：模板 `socialware.py` 已经加了 `app.role("dev", ...)`，但用户是用旧版模板 `socialwares new` 生成的项目，`socialware.py` 里没有 dev。需要重新 `socialwares new` 或手动添加。
+
+**实际原因**：E2E 文档 2.1 的 socialware.py 示例缺少 dev 角色和 inspect/setup_claude action。用户按文档操作会覆盖模板生成的 socialware.py，丢失 dev 相关内容。
+
+**已修复**：E2E 文档 2.1 的 socialware.py 示例补充了 dev 角色。
+
 **需要修复**：
 ```bash
 # install 到 channel 下

@@ -89,6 +89,7 @@ app = App("task-review", description="Task review workflow")
 
 app.scope(file="agent/scope/scope.md")
 app.role("default", file="agent/role/default.md")
+app.role("dev", file="agent/role/dev.md")
 app.role("reviewer", "You review and approve tasks.")
 app.role("evolver", file="agent/role/evolver.md")
 
@@ -96,6 +97,9 @@ app.action("check_health", role=["default", "reviewer"])
 app.action("create_task", role=["default"])
 app.action("list_tasks", role=["default", "reviewer"])
 app.action("review_task", role=["reviewer"])
+
+app.action("inspect", role=["dev", "evolver"])
+app.action("setup_claude", role=["dev"])
 
 app.action("evolve_structure_check", role=["evolver"])
 app.action("evolve_api_check", role=["evolver"])
