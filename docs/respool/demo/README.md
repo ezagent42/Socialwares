@@ -52,6 +52,36 @@ one whoami
 
 ---
 
+## 关于启动方式的说明
+
+本 demo 使用的是 **Dev 调试模式**（`cd workspace && make start`），直接进入 workspace 目录启动 Agent TUI。这是当前项目的实际状态。
+
+在 Socialware 的最终用户体验中，ResPool 应该通过以下方式被使用（**尚未实现**）：
+
+```
+最终用户体验（待建）:
+  用户打开 Chat → "/respool show pools" → Agent 已加载 ResPool 能力 → 返回结果
+
+App 间协作（待建）:
+  TaskArena Agent → "/zchat respool: 帮我查 GPU 资源" → ResPool Agent 响应
+
+App 发现（待建）:
+  Dashboard 或 "/socialware list" → 列出所有已注册的 App（ResPool, TaskArena, ...）
+```
+
+当前缺少的层：
+
+| 层 | 状态 | 说明 |
+|---|------|------|
+| Dev 调试（`cd` + `make start`） | ✅ 本 demo 使用 | 开发者直接操作 workspace |
+| 用户路由（`/respool`） | ❌ 待建 | 通过路径唤起特定 App 的 Agent |
+| App 注册 + 发现 | ❌ 待建 | 多个 App 的集中注册和列表 |
+| App 间通信（`/zchat`） | ❌ 待建 | Agent 间 P2P 委派 |
+
+这些属于 Socialware 平台层能力（P0 回环），不是 ResPool 单个 App 的职责。当平台层就绪后，本 demo 的测试步骤可直接复用，只是启动方式从 `make start` 变为平台路由唤起。
+
+---
+
 ## Step 0: 准备 OneSystem 测试数据
 
 ### 0.1 创建测试 Namespace
@@ -97,10 +127,10 @@ one get cfg -q "label.respool.type:quota" -n demo-pool
 
 ---
 
-## Step 1: Deploy + 启动 ResPool
+## Step 1: Deploy + 启动 ResPool（Dev 调试模式）
 
 ```bash
-# 进入 ResPool workspace
+# 进入 ResPool workspace（Dev 调试模式：直接进目录操作）
 cd .socialware/workspace/h2os/respool
 
 # 安装依赖
