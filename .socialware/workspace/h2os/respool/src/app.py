@@ -10,6 +10,10 @@ import json
 import os
 import sys
 from pathlib import Path
+
+# Windows GBK fix: force UTF-8 for subprocess and file I/O
+if sys.platform == "win32":
+    os.environ.setdefault("PYTHONUTF8", "1")
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
