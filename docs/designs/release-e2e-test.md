@@ -80,125 +80,93 @@ cd task-review
 
 ---
 
-## Phase 2: App 声明式 API
+## Phase 2: 通过 Dev 角色交互式定义四原语
 
-### 2.1 修改 socialware.py 添加业务逻辑
-
-| | |
-|---|---|
-| **操作** | 编辑 socialware.py，添加角色、action、流转、commitment |
-| **目的** | 验证声明式 API 被编译器正确读取 |
-
-```python
-# socialware.py — 替换为以下内容
-from socialwares import App
-
-app = App("task-review", description="Task review workflow")
-
-# ── 1. Scope ──
-app.scope(file="agent/scope/scope.md")
-
-# ── 2. Role ──
-app.role("default", file="agent/role/default.md")
-app.role("dev", file="agent/role/dev.md")
-app.role("reviewer", "You review and approve tasks.")
-app.role("evolver", file="agent/role/evolver.md")
-
-# ── 3. Flow ──
-# 业务操作
-app.action("check_health", role=["default", "reviewer"])
-app.action("create_task", role=["default"])
-app.action("list_tasks", role=["default", "reviewer"])
-app.action("review_task", role=["reviewer"])
-
-# 开发操作
-app.action("inspect", role=["dev", "evolver"])
-app.action("setup_claude", role=["dev"])
-app.action("dev_init", role=["dev"])
-app.action("dev_build", role=["dev"])
-app.action("dev_iterate", role=["dev"])
-app.action("dev_release", role=["dev"])
-
-# Evolve 操作
-app.action("evolve_structure_check", role=["evolver"])
-app.action("evolve_api_check", role=["evolver"])
-app.action("evolve_session_diagnose", role=["evolver"])
-app.action("evolve_improve", role=["evolver"])
-app.action("evolve_auto", role=["evolver"])
-
-# 流转
-flow = app.flow("task_lifecycle", resource="task")
-flow.states("draft", "submitted", "reviewed", "closed")
-flow.transition("draft", "submit_task", "submitted", role=["default"])
-flow.transition("submitted", "review_task", "reviewed", role=["reviewer"])
-flow.transition("reviewed", "close_task", "closed", role=["default"])
-
-# ── 4. Commitment ──
-app.commitment("C1",
-    from_=("default", "submit_task"),
-    to=("reviewer", "review_task"),
-    condition="within 24h",
-    on_violation=("reviewer", "remind_review"),
-)
-```
-
-### 2.2 创建业务 skill
+### 2.1 启动 dev 角色，执行 init 引导
 
 | | |
 |---|---|
-| **操作** | 为新 action 创建 SKILL.md（按 SKILL.md + scripts/ + references/ 规范） |
-| **目的** | 编译器校验 action 必须有对应的 SKILL.md |
+| **操作** | `socialwares start --role dev`，然后说 "init" |
+| **目的** | 验证 dev_init skill 能交互式引导四原语定义 |
+| **预期** | Agent 逐步引导完成 scope → role → flow → commitment |
 
 ```bash
-# 创建业务 skill 目录（每个都含 scripts/ + references/）
-for skill in create_task list_tasks review_task submit_task close_task remind_review; do
-    mkdir -p agent/flow/$skill/{scripts,references}
+socialwares deploy   # 先编译默认模板（让 dev 角色可用）
+socialwares start --role dev
+```
+
+在 dev agent 中进行交互式引导：
+
+```
+你: "init"
+Agent: 引导 Step 1 — Scope
+你: "这是一个任务审核 App，功能包括创建任务、查看列表、提交审核、审核通过/退回"
+Agent: 写入 agent/scope/scope.md，确认
+
+Agent: 引导 Step 2 — Role
+你: "两个角色：default 负责创建和提交任务，reviewer 负责审核任务"
+Agent: 创建 agent/role/reviewer.md，注册到 socialware.py，确认
+
+Agent: 引导 Step 3 — Flow（操作）
+你: "default 能 create_task, list_tasks; reviewer 能 review_task, list_tasks; 都能 check_health"
+Agent: 创建各 SKILL.md 目录（含 scripts/ + references/），注册到 socialware.py
+Agent: "这些操作之间有没有固定的流转顺序？"
+你: "有。draft → submit_task → submitted → review_task → reviewed → close_task → closed"
+Agent: 定义 flow 流转到 socialware.py
+
+Agent: 引导 Step 4 — Commitment
+你: "提交后 24 小时内必须审核，否则提醒 reviewer"
+Agent: 添加 commitment 到 socialware.py，用白话翻译确认
+
+Agent: Step 5 — Deploy + 展示编译结果
+```
+
+Ctrl+C 退出 dev agent。
+
+### 2.2 验证交互式定义的结果
+
+| | |
+|---|---|
+| **操作** | 检查 dev_init 生成的文件 |
+| **目的** | 确认四原语文件和 socialware.py 注册都正确 |
+
+```bash
+# 检查 socialware.py 包含了新注册的角色和 action
+grep 'reviewer' socialware.py
+grep 'create_task' socialware.py
+grep 'flow.*task_lifecycle' socialware.py
+grep 'commitment.*C1' socialware.py
+
+# 检查角色文件
+ls agent/role/          # default.md  dev.md  evolver.md  reviewer.md
+
+# 检查 skill 目录（每个都应有 SKILL.md + scripts/ + references/）
+ls agent/flow/create_task/    # SKILL.md  scripts/  references/
+ls agent/flow/review_task/    # SKILL.md  scripts/  references/
+
+# 检查 scope 内容被更新
+cat agent/scope/scope.md      # 应包含 "任务审核" 相关描述
+```
+
+### 2.3 手动补齐（如果 Agent 遗漏）
+
+| | |
+|---|---|
+| **操作** | 检查并补齐 dev_init 可能没覆盖的细节 |
+| **说明** | Agent 可能不会自动创建所有 transition action 的 SKILL.md |
+
+```bash
+# 确保 flow transition 中引用的 action 都有 SKILL.md
+for skill in submit_task close_task remind_review; do
+    if [ ! -f "agent/flow/$skill/SKILL.md" ]; then
+        mkdir -p agent/flow/$skill/{scripts,references}
+        echo -e "---\nname: $skill\n---\n# ${skill//_/ }" > agent/flow/$skill/SKILL.md
+        echo "  Created $skill"
+    fi
 done
 
-cat > agent/flow/create_task/SKILL.md << 'EOF'
----
-name: create_task
-description: "Create a new task"
----
-# Create Task
-## Trigger
-User says "create task", "新建任务" etc.
-## Flow
-1. Ask for task title
-2. POST /api/tasks {"title": "..."}
-3. Return task ID
-EOF
-
-cat > agent/flow/list_tasks/SKILL.md << 'EOF'
----
-name: list_tasks
-description: "List all tasks"
----
-# List Tasks
-## Trigger
-User says "list tasks", "任务列表" etc.
-## Flow
-1. GET /api/tasks
-2. Display task list
-EOF
-
-cat > agent/flow/review_task/SKILL.md << 'EOF'
----
-name: review_task
-description: "Review a task"
----
-# Review Task
-## Trigger
-User says "review task", "审核任务" etc.
-## Flow
-1. GET /api/tasks?status=submitted
-2. Review and approve/reject
-3. POST /api/tasks/{id}/review
-EOF
-
-echo -e "---\nname: submit_task\n---\n# Submit Task" > agent/flow/submit_task/SKILL.md
-echo -e "---\nname: close_task\n---\n# Close Task" > agent/flow/close_task/SKILL.md
-echo -e "---\nname: remind_review\n---\n# Remind Review" > agent/flow/remind_review/SKILL.md
+# 重新编译验证
+socialwares deploy
 ```
 
 ---
