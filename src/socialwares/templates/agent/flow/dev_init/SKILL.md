@@ -34,6 +34,7 @@ Guide the user through building four primitives step by step:
    - Register in `socialware.py`: `app.action("name", role=[...])`
 3. Ask: "这些操作之间有没有固定的流转顺序？"
    - If yes, define flow in `socialware.py`
+4. Note: SKILL.md 只需写基本的 trigger + flow 即可。详细编写可以后续用 skill-creator（通过 "setup claude" 获取）
 
 ### Step 4: Commitment — 定义协作约束
 
