@@ -102,3 +102,213 @@ grep -c -- "---" .runtime/agents/default/SOUL.md
 **原因**：`socialwares.adapters.__file__` 返回 None，说明 `src/socialwares/adapters/` 目录缺少 `__init__.py`，Python 把它当作 namespace package（没有 `__file__`）。
 
 **修复**：在 `src/socialwares/adapters/` 下创建 `__init__.py`。
+
+---
+
+## 已修复记录（2026-03-31）
+
+| 问题 | 修复方式 |
+|------|---------|
+| #2 agent/ README 过时 | 更新 flow/README.md 和 commitment/README.md |
+| #3 模板缺 commitment | 添加 `templates/agent/commitment/README.md` |
+| #4 socialware.py 引导不足 | 按四原语重写模板，去掉"状态机"术语 |
+| #7 grep 语法 | E2E 文档改为 `grep -c -- "---"` |
+| #8 deploy 不幂等 | 编译器写 prompt 前清除旧文件（SOUL.md/AGENTS.md） |
+| #9 uvicorn 命令 | 模板和文档改为 `src.api:app` |
+| #10 adapters __init__.py | 创建 `adapters/__init__.py` |
+
+---
+
+## 第二轮测试问题
+
+## 问题 11：E2E Phase 2 仍缺少 cd 提示
+
+**现象**：Phase 2.1 步骤直接开始编辑 socialware.py，但没有明确的 `cd task-review` 命令行。之前修复只加了一行提示文字（"> 确保在 task-review 项目目录下操作"），但用户仍然容易漏看，应该在 2.1 的 bash 代码块里加上 `cd task-review`。
+
+## 问题 12：Phase 3.1 default skills 预期仍不一致
+
+**现象**：实际 `ls .runtime/agents/default/.claude/skills/` 输出为 `check_health close_task create_task list_tasks submit_task`，包含了 flow transition 中的 `close_task` 和 `submit_task`。
+
+**说明**：因为 `actions_for_role("default")` 会包含 flow transition 中 role=["default"] 的 action（submit_task、close_task），所以 default 角色有 5 个 skill 是正确行为。E2E 文档的预期已更新但需再次确认和实际输出完全一致。
+
+## 问题 13：切换适配器后旧的适配器目录残留
+
+**现象**：`socialwares deploy --adapter codex` 后，`.runtime/agents/{role}/` 下同时存在 `.claude/`（旧）和 `.agents/` + `.codex/`（新）。幂等修复只清理了 prompt 文件（SOUL.md/AGENTS.md），没有清理适配器相关的目录。
+
+**需要修复**：deploy 切换适配器时，应该清除上一次适配器生成的目录（`.claude/`、`.agents/`、`.codex/`），只保留当前适配器的。
+
+## 问题 14：端口占用 + Agent 不知道后端端口
+
+**现象 1**：`uvicorn src.api:app --port 8001` 报端口被占用（之前测试时的进程未退出）。
+
+**解决**：`kill $(lsof -t -i:8001)` 或 `fuser -k 8001/tcp` 杀掉旧进程。
+
+**现象 2**：后端端口在 `pyproject.toml [tool.socialwares] api_port` 中配置，但 Agent 的 SKILL.md 中不知道后端跑在哪个端口。Agent 调用 API 时需要知道 `http://localhost:{port}`。
+
+**需要讨论**：是否在编译时将 api_port 注入到 SOUL.md 或 SKILL.md 中？或者约定环境变量 `APP_PORT`？还是在 SOUL.md 中写死"后端在 localhost:8001"？
+
+## 问题 15：SDK 模式未测试
+
+**现象**：E2E 测试只覆盖了 TUI 模式（`socialwares start --role default`），没有测试 SDK 模式（`socialwares start --role default --prompt "check health"`）。
+
+**需要**：
+1. 确认 `socialwares start --role default --prompt "..."` 能正常调用 SDK adapter
+2. 确认 SDK 模式的 session 保存到 `.runtime/data/sessions/`
+3. 在 E2E 测试文档中补充 SDK 模式的测试步骤
+
+## 问题 16：evolve_structure_check 脚本运行失败
+
+**现象 1（uv run）**：`uv run agent/flow/evolve_structure_check/scripts/check_structure.py` 报错 — 在 task-review 项目中 `uv run` 尝试安装 `socialwares` 依赖，但 PyPI 上没有（尚未发布）。task-review 的 pyproject.toml 依赖 `socialwares>=0.2.0`，uv 会创建独立 venv 并尝试从 PyPI 解析。
+
+**解决方向**：用户项目不应依赖从 PyPI 安装 socialwares——开发阶段应该用 editable install 或者 path 依赖。模板的 pyproject.toml 需要调整。
+
+**现象 2（python 直接运行）**：`check_structure.py` 报 `flow.yaml not found`——因为现在 flow.yaml 是编译产物在 `.runtime/` 中，不在 `agent/` 下。脚本还在找旧路径。
+
+**根本问题**：evolve scripts 是从旧架构搬过来的，内部硬编码了旧的文件路径（`agent/flow/flow.yaml`、`agent/commitment/commitment.yaml`）。重构后这些文件位置变了：
+- flow.yaml → `.runtime/flow.yaml`（编译产物）
+- commitment.yaml → `.runtime/commitment.yaml`（编译产物）
+- 或者 evolve scripts 应该读 `.runtime/agents/{role}/flow.yaml`（编译时复制进去的）
+
+**需要修复**：所有 evolve scripts 的路径引用需要适配新架构。
+
+## 问题 17：Evolver 手动结构检查发现的多个问题
+
+Agent 因脚本崩溃，手动执行结构检查，发现以下问题：
+
+### 17a：inline 定义 role 不会自动创建文件
+
+**现象**：`app.role("reviewer", "You review and approve tasks.")` 使用 inline 方式定义，编译成功（内容写入 SOUL.md），但 `agent/role/reviewer.md` 文件不存在。结构检查发现不一致。
+
+**期望**：即使用 inline 方式定义，编译器也应该在 `agent/role/` 下生成对应的 .md 文件，保持四原语目录的完整性。或者 structure_check 应该认可 inline 定义。
+
+### 17b：inspect 和 setup_claude 是孤立 skill
+
+**现象**：模板包含 `agent/flow/inspect/SKILL.md` 和 `agent/flow/setup_claude/SKILL.md`，但 `socialware.py` 模板中没有注册这两个 action。它们存在但不会被编译到任何角色。
+
+**结论**：inspect 和 setup_claude 是 dev 角色的 skill。dev 应该是模板内置的默认角色（和 default、evolver 一样）。需要：
+1. 模板中添加 `agent/role/dev.md`
+2. 模板 socialware.py 中注册 `app.role("dev", file="agent/role/dev.md")`
+3. 模板 socialware.py 中注册 `app.action("inspect", role=["dev", "evolver"])` 和 `app.action("setup_claude", role=["dev"])`
+
+### 17c：flow.yaml 和 commitment.yaml 是编译产物，不在 agent/ 下
+
+**现象**：结构检查脚本期望在 `agent/` 下找到 flow.yaml 和 commitment.yaml，但新架构中这些是编译产物在 `.runtime/` 中。
+
+**说明**：这不是 bug——是架构变化。但 evolve scripts 需要知道去 `.runtime/` 找这些文件，或者编译器提供参数指定路径。
+
+## 问题 18：assign 的合并测试不充分
+
+**现象**：E2E 测试中 assign 只验证了文件是否注入，没有验证合并行为——即 assign 后原有的 agent workspace 配置（如 zchat 的 MCP permissions、已有的 CLAUDE.md、其他 skills）是否保持不变。
+
+**需要补充的测试场景**：
+1. agent workspace 已有 `.claude/settings.local.json`（含 zchat MCP permissions）→ assign 后 permissions 仍在，hooks 追加进去
+2. agent workspace 已有其他 skills → assign 后原有 skills 不被覆盖（只替换 skills 目录的 symlink）
+3. agent workspace 已有 CLAUDE.md 或其他文件 → assign 后不被删除
+4. 连续 assign 两次不同 role → 第二次应覆盖第一次的配置
+5. assign 后 uninstall → workspace 恢复到 assign 前的状态（目前 uninstall 直接删除文件，不是恢复）
+6. 已有 skills 目录下有其他 skill → assign 应该是追加 symlink，不是替换整个 skills 目录（当前实现是把整个 skills 目录替换为 symlink，会丢失已有 skills）
+
+## 问题 19：install 安装目录不合理 + 缺少路径选项
+
+**现象**：`socialwares install` 把 App 安装到 `~/.socialwares/apps/{name}/`，这是一个隐藏的全局目录。
+
+**期望**：应该安装到 `.socialware/workspace/{channel}/{app}/` 下（和现有的 workspace 结构融合），或者至少支持 `--path` 选项让用户指定安装目录。
+
+```bash
+# 期望的行为：
+socialwares install git@xxx/task-review.git --channel "#support"
+# → .socialware/workspace/support/task-review/
+
+# 或指定路径：
+socialwares install git@xxx/task-review.git --path ./my-apps/task-review
+```
+
+**需要修复**：
+1. 默认安装路径改为 `.socialware/workspace/{channel}/{app}/`
+2. 支持 `--path` 选项覆盖默认路径
+
+## 问题 20：assign 应支持指定 agent workspace 路径
+
+**现象**：`socialwares assign alice-support --role default --channel "#support"` 通过 agent name 去找 zchat 的 workspace 路径（mock 或读 agents.json）。但 zchat 还在开发中，实际使用时用户可能需要直接指定路径。
+
+**关于 agent workspace 的结构**：一个 agent 的 workspace 就是一个目录，`.claude/`（或 `.codex/`）在这个目录下。SOUL.md 也在这个目录根下。所以指定的路径是 `.claude/` 的上一级目录。
+
+```
+agent-workspace/          ← 这是 assign --path 指定的路径
+├── SOUL.md               ← 注入到这里
+├── flow.yaml             ← 注入到这里
+├── commitment.yaml       ← 注入到这里
+├── .workspace_root
+└── .claude/              ← 适配器目录
+    ├── settings.local.json  ← merge 注入
+    └── skills/              ← symlink 注入
+```
+
+**澄清**：`.socialware/workspace/` 的组织应该是：
+
+```
+.socialware/workspace/
+└── {channel-name}/              ← 对应 IRC 频道
+    ├── agents/                  ← 频道内的 agent（每个 agent 一个目录）
+    │   ├── alice-support/       ← agent workspace（Claude Code 的 project-dir）
+    │   │   ├── SOUL.md
+    │   │   ├── .claude/
+    │   │   │   ├── settings.local.json
+    │   │   │   └── skills/      ← symlink 到 app 的 skill
+    │   │   ├── flow.yaml
+    │   │   └── commitment.yaml
+    │   └── bob-reviewer/
+    │       └── ...
+    └── apps/                    ← 频道安装的 app
+        └── task-review/         ← git clone 到这里
+            ├── socialware.py
+            ├── agent/
+            ├── src/
+            └── .runtime/        ← 编译产物
+```
+
+**逻辑**：
+- `socialwares install` → git clone app 到 `workspace/{channel}/apps/{app}/`，编译
+- `socialwares assign` → 从 app 的 `.runtime/agents/{role}/` 把配置注入到 `workspace/{channel}/agents/{agent-name}/`
+- 安装 app = 给频道里的 agent 注入更多设置（skills、hooks、SOUL.md 合并）
+- 一个频道可以安装多个 app，agent 的配置是多个 app 叠加合并的结果
+
+## 问题 21：Evolver 运行时链路未验证
+
+**现象**：E2E 测试只到启动 evolver 为止，没有验证完整的数据链路：
+
+1. **Hooks 是否工作**：和 default agent 对话后，`.runtime/data/prompts/current.jsonl` 是否有记录（UserPromptSubmit + PreToolUse hook 输出）
+2. **Session 是否正确记录**：SDK 模式下 `.runtime/data/sessions/` 是否有 session 文件
+3. **Diagnose 能否读取数据**：evolve_session_diagnose 能否读取 prompts 数据 + commitment.yaml，输出诊断报告
+4. **Violations 是否写入**：诊断发现违反后，`.runtime/data/evolve/violations/` 是否有 violation 记录
+5. **Improve 能否基于诊断结果工作**：evolve_improve 能否读取 violations 和 structure_check 结果
+
+**需要补充的 E2E 测试步骤**：
+```
+① 启动 default agent，对话几轮 → 检查 .runtime/data/prompts/current.jsonl 有记录
+② 启动 evolver → "diagnose" → 检查是否读取了 prompts 数据
+③ 检查 .runtime/data/evolve/violations/ 是否有输出
+④ "improve" → 检查是否基于诊断结果给出建议
+⑤ SDK 模式：socialwares start --role default --prompt "check health" → 检查 .runtime/data/sessions/ 有文件
+```
+
+## 问题 22：dev 角色缺失
+
+**现象**：模板中没有 dev 角色。dev 是默认内置角色（和 default、evolver 并列），负责开发环境配置，拥有 inspect 和 setup_claude 两个 skill。
+
+**需要修复**：
+1. 模板添加 `agent/role/dev.md`（之前重构时被删了）
+2. 模板 socialware.py 注册 `app.role("dev", file="agent/role/dev.md")`
+3. 模板 socialware.py 注册 `app.action("inspect", role=["dev", "evolver"])` 和 `app.action("setup_claude", role=["dev"])`
+4. `socialwares start --role dev` 应该能启动 dev 角色并使用 inspect/setup_claude skill
+
+**需要修复**：
+```bash
+# install 到 channel 下
+socialwares install git@xxx/task-review.git --channel "#support"
+# → .socialware/workspace/support/apps/task-review/
+
+# assign 注入到 channel 下的 agent
+socialwares assign alice-support --role default --channel "#support"
+# → .socialware/workspace/support/agents/alice-support/
+```

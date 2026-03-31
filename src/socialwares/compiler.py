@@ -171,11 +171,15 @@ class Compiler:
         # workspace root marker
         (role_dir / ".workspace_root").write_text(str(self.project_dir))
 
-        # 清除旧的 prompt 文件（幂等：切换适配器后不残留）
+        # 清除旧的适配器产物（幂等：切换适配器后不残留）
         for old_prompt in ("SOUL.md", "AGENTS.md"):
             old_file = role_dir / old_prompt
             if old_file.is_file():
                 old_file.unlink()
+        for old_adapter_dir in (".claude", ".agents", ".codex"):
+            old_dir = role_dir / old_adapter_dir
+            if old_dir.is_dir():
+                shutil.rmtree(old_dir)
 
         # ── Scope + Role → SOUL.md ──
         soul_content = self._build_soul(role_name)

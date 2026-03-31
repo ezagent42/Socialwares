@@ -82,9 +82,12 @@ class TestDeepMerge:
 
 class TestAssignMock:
     def test_mock_workspace(self, tmp_path, monkeypatch) -> None:
-        monkeypatch.setattr("socialwares.cli.SOCIALWARES_HOME", tmp_path)
-        workspace = _get_agent_workspace("test-agent")
+        monkeypatch.setattr("socialwares.cli._workspace_root", lambda: tmp_path)
+        workspace = _get_agent_workspace("test-agent", "#test")
         assert workspace.is_dir()
         assert (workspace / ".claude" / "settings.local.json").is_file()
         settings = json.loads((workspace / ".claude" / "settings.local.json").read_text())
         assert "permissions" in settings
+        # 路径应该是 {workspace_root}/test/agents/test-agent
+        assert "test" in str(workspace)
+        assert "agents" in str(workspace)

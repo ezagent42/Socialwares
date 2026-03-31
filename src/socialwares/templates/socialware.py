@@ -24,6 +24,7 @@ app.scope(file="agent/scope/scope.md")
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 app.role("default", file="agent/role/default.md")
+app.role("dev", file="agent/role/dev.md")
 app.role("evolver", file="agent/role/evolver.md")
 
 # 添加更多角色：
@@ -38,6 +39,10 @@ app.role("evolver", file="agent/role/evolver.md")
 
 # 业务操作
 app.action("check_health", role=["default"])
+
+# 开发操作（dev 角色用于环境配置和项目导航）
+app.action("inspect", role=["dev", "evolver"])
+app.action("setup_claude", role=["dev"])
 
 # 添加更多操作：
 # app.action("create_task", role=["default"])
