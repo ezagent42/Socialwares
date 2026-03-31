@@ -127,10 +127,12 @@ one get cfg -q "label.respool.type:quota" -n demo-pool
 
 ---
 
-## Step 1: Deploy + 启动 ResPool（Dev 调试模式）
+## Step 1: Deploy + 启动 ResPool
+
+### 方式 A: Web Chat（推荐测试方式）
 
 ```bash
-# 进入 ResPool workspace（Dev 调试模式：直接进目录操作）
+# 进入 ResPool workspace
 cd .socialware/workspace/h2os/respool
 
 # 安装依赖
@@ -143,7 +145,23 @@ make deploy
 ls .runtime/agents/
 # 预期: default/  dev/  evolver/  admin/
 
-# 启动 Agent（default 角色）
+# 启动 Web 服务
+uv run uvicorn src.app:app --port 8001
+```
+
+打开浏览器访问 **http://localhost:8001**，即可看到 Chat 界面。
+
+- 右上角切换角色（default / admin / dev / evolver）
+- 输入框发消息，Agent 通过 WebSocket 流式返回
+- 需要 `claude-agent-sdk` 已安装（`uv pip install 'claude-agent-sdk>=0.1.16'`）
+
+### 方式 B: TUI 模式（Dev 调试）
+
+```bash
+cd .socialware/workspace/h2os/respool
+uv sync && make deploy
+
+# 启动 Claude Code TUI
 make start ROLE=default
 ```
 
@@ -320,6 +338,9 @@ make start ROLE=default
 
 ### 6.0 切换到 Admin 角色
 
+**Web Chat 方式**：页面右上角下拉框选 `admin`，自动重连。
+
+**TUI 方式**：
 ```bash
 # 另起一个终端
 cd .socialware/workspace/h2os/respool
