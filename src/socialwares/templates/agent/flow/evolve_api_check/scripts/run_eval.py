@@ -103,11 +103,60 @@ def run_case(case: dict, base_url: str) -> dict:
     return result
 
 
+def _coverage_suggestions(flow_yaml_path: str, eval_cases: list[dict]) -> list[dict]:
+    """检查 eval cases 对 flow.yaml 中 action 的覆盖率，返回未覆盖 action 的 suggestions。"""
+    flow_path = Path(flow_yaml_path)
+    if not flow_path.exists():
+        return []
+
+    with open(flow_path) as f:
+        flow_data = yaml.safe_load(f) or {}
+
+    # 收集所有非 evolve 的 action
+    all_actions = set()
+    for action in flow_data.get("direct_actions", []):
+        name = action.get("action", "")
+        if not name.startswith("evolve_") and name not in ("inspect", "setup_claude"):
+            all_actions.add(name)
+    for flow_name, flow in (flow_data.get("flows") or {}).items():
+        if isinstance(flow, dict):
+            for t in flow.get("transitions", []):
+                name = t.get("action", "")
+                if not name.startswith("evolve_"):
+                    all_actions.add(name)
+
+    # 收集 eval cases 中覆盖的 action（从 description 或 endpoint 推断）
+    covered = set()
+    for case in eval_cases:
+        desc = case.get("description", "").lower()
+        endpoint = case.get("endpoint", "").lower()
+        for action in all_actions:
+            # 简单匹配：action 名出现在 description 或 endpoint 中
+            action_words = action.replace("_", " ").replace("-", " ")
+            if action_words in desc or action in endpoint or action.replace("_", "/") in endpoint:
+                covered.add(action)
+
+    uncovered = all_actions - covered
+    if not uncovered:
+        return []
+
+    coverage_pct = len(covered) / len(all_actions) * 100 if all_actions else 100
+    suggestions = []
+    for action in sorted(uncovered):
+        suggestions.append({
+            "primitive": "flow",
+            "action": f"Add eval case for action '{action}'",
+            "reason": f"Action '{action}' has no API test case (coverage: {coverage_pct:.0f}%)",
+        })
+    return suggestions
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run eval cases against Socialware App")
     parser.add_argument("--cases", required=True, help="Path to eval_cases.yaml")
     default_port = os.environ.get("APP_PORT", "8001")
     parser.add_argument("--base-url", default=f"http://localhost:{default_port}", help="App base URL (default reads APP_PORT env var)")
+    parser.add_argument("--flow-yaml", default=".runtime/flow.yaml", help="flow.yaml for coverage check")
     args = parser.parse_args()
 
     api_checks = load_cases(Path(args.cases))
@@ -155,7 +204,7 @@ def main() -> None:
         "suggestions": [
             {"primitive": "flow", "action": f"Fix API for: {r['description']}", "reason": r.get("status_mismatch", r.get("body_mismatch", "failed"))}
             for r in results if not r["passed"]
-        ],
+        ] + _coverage_suggestions(args.flow_yaml, api_checks),
     }
     with open(report_file, "w") as f:
         json.dump(report_data, f, indent=2, ensure_ascii=False)

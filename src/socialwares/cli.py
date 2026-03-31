@@ -157,9 +157,14 @@ def install(source: str, channel: str, install_path: str | None) -> None:
         app_dir = _channel_dir(channel) / "apps" / app_name
 
     if app_dir.exists():
-        click.echo(f"App {app_name} already installed at {app_dir}")
-        click.echo(f"Use 'socialwares uninstall {app_name} --channel {channel}' first.")
-        raise SystemExit(1)
+        # 目录存在但 installs.json 没记录 → 残留，清掉重装
+        if _find_install_by_channel(channel) is None:
+            click.echo(f"Cleaning up stale directory {app_dir}...")
+            shutil.rmtree(app_dir)
+        else:
+            click.echo(f"App {app_name} already installed at {app_dir}")
+            click.echo(f"Use 'socialwares uninstall {app_name} --channel {channel}' first.")
+            raise SystemExit(1)
 
     click.echo(f"Cloning {source}...")
     app_dir.parent.mkdir(parents=True, exist_ok=True)

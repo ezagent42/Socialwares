@@ -371,49 +371,51 @@ socialwares start --role evolver
 | **目的** | git clone + 编译 |
 
 ```bash
-# 先把项目初始化为 git 仓库
+# 先把项目初始化为 git 仓库（在 task-review 目录下）
 cd task-review
 git init && git add -A && git commit -m "init"
 cd ..
 
-# 安装
+# 安装（在仓库根目录执行）
 socialwares install ./task-review --channel "#test"
 # ✓ Installed task-review to #test
 
 # 验证安装
 socialwares list
-# task-review (#test) — roles: default, reviewer, evolver
+# task-review (#test) — roles: default, dev, reviewer, evolver
 
 # 验证 app 目录
-ls ~/.socialwares/apps/task-review/.runtime/agents/
+ls .socialware/workspace/test/apps/task-review/.runtime/agents/
+# default  dev  reviewer  evolver
 ```
 
 ### 5.2 socialwares assign
 
 | | |
 |---|---|
-| **操作** | 分配角色到 agent（mock 模式） |
-| **目的** | 验证文件正确注入 |
+| **操作** | 分配角色到 agent |
+| **目的** | 验证文件正确注入到 workspace/{channel}/agents/ |
 
 ```bash
+# 在仓库根目录执行
 socialwares assign alice-support  --role default  --channel "#test"
 socialwares assign bob-reviewer   --role reviewer --channel "#test"
 socialwares assign alice-evolver  --role evolver  --channel "#test"
 
-# 验证 mock workspace
-ls ~/.socialwares/mock_agents/alice-support/
-# SOUL.md  flow.yaml  .claude/
+# 验证 agent workspace
+ls .socialware/workspace/test/agents/alice-support/
+# SOUL.md  flow.yaml  commitment.yaml  .claude/
 
-ls ~/.socialwares/mock_agents/alice-support/.claude/
+ls .socialware/workspace/test/agents/alice-support/.claude/
 # settings.local.json  skills
 
 # 验证 settings.local.json merge（保留 permissions + 追加 hooks）
-cat ~/.socialwares/mock_agents/alice-support/.claude/settings.local.json
+cat .socialware/workspace/test/agents/alice-support/.claude/settings.local.json
 # {"permissions": {"allow": []}, "hooks": {"UserPromptSubmit": [...], "PreToolUse": [...]}}
 
-# 验证 skills symlink
-ls -la ~/.socialwares/mock_agents/alice-support/.claude/skills/
-# check_health -> /path/to/.runtime/agents/default/.claude/skills
+# 验证 skills 是逐个 symlink（不是整个目录替换）
+ls -la .socialware/workspace/test/agents/alice-support/.claude/skills/
+# check_health -> .../task-review/.runtime/agents/default/.claude/skills/check_health
 ```
 
 ### 5.3 socialwares uninstall
@@ -430,9 +432,9 @@ socialwares uninstall task-review --channel "#test"
 socialwares list
 # No apps installed.
 
-# 验证 mock workspace 已清理
-ls ~/.socialwares/mock_agents/alice-support/
-# SOUL.md 应该不存在
+# 验证 agent workspace 已清理
+ls .socialware/workspace/test/agents/alice-support/
+# SOUL.md 应该不存在，skills symlink 已清除
 ```
 
 ---

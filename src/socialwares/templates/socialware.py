@@ -40,9 +40,11 @@ app.role("evolver", file="agent/role/evolver.md")
 # 业务操作
 app.action("check_health", role=["default"])
 
-# 开发操作（dev 角色用于环境配置和项目导航）
+# 开发操作（dev 角色用于环境配置、项目导航和开发引导）
 app.action("inspect", role=["dev", "evolver"])
 app.action("setup_claude", role=["dev"])
+app.action("dev_init", role=["dev"])
+app.action("dev_iterate", role=["dev"])
 
 # 添加更多操作：
 # app.action("create_task", role=["default"])

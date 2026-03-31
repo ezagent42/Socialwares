@@ -1,0 +1,26 @@
+[
+  {
+    "app_name": "task-review",
+    "agent_name": "alice-evolver",
+    "role": "evolver",
+    "channel": "#test"
+  },
+  {
+    "app_name": "task-review",
+    "agent_name": "alice-support",
+    "role": "default",
+    "channel": "#test"
+  },
+  {
+    "app_name": "task-review",
+    "agent_name": "bob-reviewer",
+    "role": "reviewer",
+    "channel": "#test"
+  },
+  {
+    "app_name": "task-review",
+    "agent_name": "alice-evolver",
+    "role": "evolver",
+    "channel": "#test"
+  }
+]

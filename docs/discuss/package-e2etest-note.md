@@ -222,6 +222,61 @@ grep -c -- "---" .runtime/agents/default/SOUL.md
 
 **需要修复**：`run_eval.py` 应该读取 flow.yaml，对比注册的 action 和 eval_cases 中覆盖的 action，对未覆盖的 action 生成 suggestion（如 "action 'create_task' has no eval case"）。
 
+## 问题 29：跨平台兼容性
+
+**现象**：hook 脚本（`log_prompt.sh`、`log_tool.sh`）是 bash 脚本，Windows 原生不支持。
+
+**历史**：之前做过跨平台兼容性工作：
+- `cf6fcd9`：claude.sh 中 uuidgen 替换为 python3 uuid（Windows 没有 uuidgen）
+- `b222374`：base.py 添加 explicit UTF-8 encoding（Windows 默认 GBK）
+- `9fd7fd0`：设置 PYTHONUTF8=1（Windows GBK decode 问题）
+- `d9887b6`：deploy.sh 中 Windows python3 检测
+
+**当前状态**：
+- 编译器（compiler.py）：纯 Python，跨平台 ✓
+- CLI（cli.py）：纯 Python，跨平台 ✓
+- Evolve 脚本（*.py）：纯 Python，跨平台 ✓
+- Hook 脚本（*.sh）：bash，Windows 需要 WSL/Git Bash ✗
+- adapters/shell.sh：bash，Windows 需要 WSL ✗
+
+**结论**：核心功能（编译、CLI、evolve 脚本）跨平台。Hook 和 adapter shell 脚本依赖 bash，但 Claude Code / Codex CLI 目前只在 macOS + Linux（含 WSL）上运行，实际不影响。未来如果要完全跨平台，hook 脚本需要改为 Python。
+
+## 问题 30：install 判断"已安装"用目录而不是 installs.json
+
+**现象**：`installs.json` 为空，但 `socialwares install` 报 "already installed"。`socialwares uninstall` 因为 installs.json 为空而找不到记录，无法卸载。死锁。
+
+**原因**：install 命令检查 `app_dir.exists()`（目录是否存在），而 uninstall 检查 `installs.json`（记录是否存在）。两个判断不一致。之前 install 失败但目录已经 git clone 出来了，installs.json 没写入，导致状态不一致。
+
+**需要修复**：install 应该以 `installs.json` 为准，或者 uninstall 也检查目录。最简单的修法：install 时如果目录存在但 installs.json 没记录，直接清掉目录重新安装。
+
+## 问题 31：E2E 文档中 install/assign 路径和说明不准确
+
+**现象**：
+1. Phase 5.1 中 `ls ~/.socialwares/apps/task-review/.runtime/agents/` 路径过期，应为 `.socialware/workspace/test/apps/task-review/.runtime/agents/`
+2. Phase 5.2 没说明 assign 在哪个目录执行（应在仓库根目录）
+3. Phase 5.2 的 mock workspace 路径 `~/.socialwares/mock_agents/` 过期，应为 `.socialware/workspace/test/agents/`
+
+**需要修复**：更新 release-e2e-test.md 中 Phase 5 的所有路径。
+
+## 问题 32（TODO）：dev 角色缺少引导性 skill
+
+**现象**：dev 角色目前只有 inspect 和 setup_claude，缺少开发引导。
+
+**需要新增**：
+
+1. **dev_init** — 引导首次开发（四原语构建）
+   - 触发："开始开发"、"初始化"、"guide me"
+   - 流程：引导用户逐步填写 scope → role → flow（action + SKILL.md）→ 状态流转 → commitment
+   - 每一步给出模板和示例，用户确认后写入文件并注册到 socialware.py
+   - 最后 deploy + 验证
+
+2. **dev_iterate** — 引导持续开发（根据 evolve 报告改进）
+   - 触发："继续改进"、"看报告"、"iterate"
+   - 流程：读取 `.runtime/data/evolve/reports/` 最新报告，解读 suggestions，引导用户修改对应文件
+   - 修改完后重新 deploy + 验证
+
+**优先级**：中。先完成当前 E2E 测试和 bug 修复，再做。
+
 **现象 2（python 直接运行）**：`check_structure.py` 报 `flow.yaml not found`——因为现在 flow.yaml 是编译产物在 `.runtime/` 中，不在 `agent/` 下。脚本还在找旧路径。
 
 **根本问题**：evolve scripts 是从旧架构搬过来的，内部硬编码了旧的文件路径（`agent/flow/flow.yaml`、`agent/commitment/commitment.yaml`）。重构后这些文件位置变了：
