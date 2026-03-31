@@ -70,7 +70,9 @@ socialwares new task-review   # Error: task-review/ already exists
 
 ## Phase 2: App 声明式 API
 
-> 确保在 task-review 项目目录下操作：`cd task-review`
+```bash
+cd task-review
+```
 
 ### 2.1 修改 socialware.py 添加业务逻辑
 

@@ -19,11 +19,30 @@ from pathlib import Path
 import yaml
 
 
+def _find_yaml(agent_dir: Path, name: str, runtime_dir: Path | None = None) -> Path | None:
+    """查找 yaml 文件：优先 .runtime/，其次 agent/ 下。"""
+    if runtime_dir:
+        p = runtime_dir / name
+        if p.exists():
+            return p
+    # 旧路径兼容
+    old_paths = {
+        "flow.yaml": agent_dir / "flow" / "flow.yaml",
+        "commitment.yaml": agent_dir / "commitment" / "commitment.yaml",
+    }
+    p = old_paths.get(name)
+    return p if p and p.exists() else None
+
+
+# 全局 runtime_dir，在 main 中设置
+_runtime_dir: Path | None = None
+
+
 def check_flow_skills(agent_dir: Path) -> list[str]:
     """Check that every action in flow.yaml has a SKILL.md."""
-    flow_yaml = agent_dir / "flow" / "flow.yaml"
-    if not flow_yaml.exists():
-        return ["flow.yaml not found"]
+    flow_yaml = _find_yaml(agent_dir, "flow.yaml", _runtime_dir)
+    if not flow_yaml:
+        return ["flow.yaml not found (run 'socialwares deploy' first)"]
 
     with open(flow_yaml) as f:
         data = yaml.safe_load(f) or {}
@@ -54,8 +73,8 @@ def check_flow_skills(agent_dir: Path) -> list[str]:
 
 def check_commitment_refs(agent_dir: Path) -> list[str]:
     """Check that commitment references valid roles and actions."""
-    commitment_file = agent_dir / "commitment" / "commitment.yaml"
-    if not commitment_file.exists():
+    commitment_file = _find_yaml(agent_dir, "commitment.yaml", _runtime_dir)
+    if not commitment_file:
         return []  # No commitments defined — not an error
 
     with open(commitment_file) as f:
@@ -75,8 +94,8 @@ def check_commitment_refs(agent_dir: Path) -> list[str]:
 
     # Collect existing actions from flow.yaml
     existing_actions = set()
-    flow_yaml = agent_dir / "flow" / "flow.yaml"
-    if flow_yaml.exists():
+    flow_yaml = _find_yaml(agent_dir, "flow.yaml", _runtime_dir)
+    if flow_yaml:
         with open(flow_yaml) as f:
             flow_data = yaml.safe_load(f) or {}
         for action in flow_data.get("direct_actions", []):
@@ -121,9 +140,9 @@ def check_commitment_refs(agent_dir: Path) -> list[str]:
 
 def check_role_flow(agent_dir: Path) -> list[str]:
     """Check role ↔ flow consistency."""
-    flow_yaml = agent_dir / "flow" / "flow.yaml"
+    flow_yaml = _find_yaml(agent_dir, "flow.yaml", _runtime_dir)
     role_dir = agent_dir / "role"
-    if not flow_yaml.exists() or not role_dir.exists():
+    if not flow_yaml or not role_dir.exists():
         return []
 
     with open(flow_yaml) as f:
@@ -163,8 +182,8 @@ def check_role_flow(agent_dir: Path) -> list[str]:
 
 def check_flow_graph(agent_dir: Path) -> list[str]:
     """Check flow state machine graph completeness."""
-    flow_yaml = agent_dir / "flow" / "flow.yaml"
-    if not flow_yaml.exists():
+    flow_yaml = _find_yaml(agent_dir, "flow.yaml", _runtime_dir)
+    if not flow_yaml:
         return []
 
     with open(flow_yaml) as f:
@@ -264,12 +283,17 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Check four primitives structural consistency")
     parser.add_argument("--agent-dir", default="agent", help="Agent directory")
+    parser.add_argument("--runtime-dir", default=".runtime", help="Runtime directory")
     args = parser.parse_args()
 
     agent_dir = Path(args.agent_dir)
     if not agent_dir.exists():
         print(f"Error: {agent_dir} not found")
         sys.exit(1)
+
+    global _runtime_dir
+    rd = Path(args.runtime_dir)
+    _runtime_dir = rd if rd.exists() else None
 
     print("=" * 60)
     print("STRUCTURE CHECK REPORT")
@@ -304,8 +328,11 @@ def main() -> None:
             print(f"  ✗ {issue}")
     else:
         # Check if any flows exist
-        with open(agent_dir / "flow" / "flow.yaml") as f:
-            fdata = yaml.safe_load(f) or {}
+        flow_file = _find_yaml(agent_dir, "flow.yaml", _runtime_dir)
+        fdata = {}
+        if flow_file:
+            with open(flow_file) as f:
+                fdata = yaml.safe_load(f) or {}
         if fdata.get("flows") and fdata["flows"] != {}:
             print("  ✓ All state machine graphs valid")
         else:

@@ -100,6 +100,7 @@ def deploy(adapter: str | None) -> None:
         project_dir=project_dir,
         agent_dir=config.get("agent_dir", "agent"),
         adapter=adapter,
+        config=config,
     )
     result = compiler.compile()
 
@@ -182,6 +183,7 @@ def install(source: str, channel: str, install_path: str | None) -> None:
         project_dir=app_dir,
         agent_dir=config.get("agent_dir", "agent"),
         adapter=adapter,
+        config=config,
     )
     result = compiler.compile()
 

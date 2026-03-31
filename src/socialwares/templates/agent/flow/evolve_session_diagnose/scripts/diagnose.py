@@ -9,7 +9,7 @@ The script does NOT judge fulfillment — conditions are natural language,
 only the evolver (LLM) can interpret them.
 
 Usage:
-    uv run diagnose.py --data-dir .runtime/data --commitment agent/commitment/commitment.yaml
+    uv run diagnose.py --data-dir .runtime/data --commitment .runtime/commitment.yaml
 """
 from __future__ import annotations
 
@@ -277,7 +277,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Extract commitment events from conversation data")
     parser.add_argument("--data-dir", default=".runtime/data", help="Runtime data directory")
-    parser.add_argument("--commitment", default="agent/commitment/commitment.yaml", help="Commitment file")
+    parser.add_argument("--commitment", default=".runtime/commitment.yaml", help="Commitment file")
     args = parser.parse_args()
 
     data_dir = Path(args.data_dir)
@@ -295,7 +295,7 @@ def main() -> None:
     extracted = extract_commitment_events(commitments, prompt_entries, sessions)
 
     # Extract flow transition events
-    flow_yaml_path = Path("agent/flow/flow.yaml")
+    flow_yaml_path = Path(".runtime/flow.yaml") if Path(".runtime/flow.yaml").exists() else Path("agent/flow/flow.yaml")
     flow_transitions = extract_flow_transitions(flow_yaml_path, prompt_entries)
 
     # Print text report

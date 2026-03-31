@@ -78,10 +78,12 @@ class Compiler:
         project_dir: str | Path = ".",
         agent_dir: str = "agent",
         adapter: str = "claude",
+        config: dict | None = None,
     ) -> None:
         self.app = app
         self.project_dir = Path(project_dir).resolve()
         self.agent_dir = self.project_dir / agent_dir
+        self.config = config or {}
         if adapter not in ADAPTERS:
             raise ValueError(f"Unknown adapter: {adapter} (supported: {', '.join(ADAPTERS)})")
         self.adapter = adapter
@@ -96,6 +98,7 @@ class Compiler:
 
         self._create_data_dirs()
         self._clean_removed_roles()
+        self._sync_inline_content()
         self._validate_flow()
 
         for role_name in self.app.roles:
@@ -133,6 +136,28 @@ class Compiler:
         for old_dir in agents_dir.iterdir():
             if old_dir.is_dir() and old_dir.name not in self.app.roles:
                 shutil.rmtree(old_dir)
+
+    # ── 2b. Inline role → 生成文件 ──
+
+    def _sync_inline_content(self) -> None:
+        """如果四原语用 inline 定义，自动生成对应文件。
+
+        保持 agent/ 目录完整性。文件已存在则跳过（不覆盖）。
+        """
+        # Scope
+        scope_dir = self.agent_dir / "scope"
+        scope_dir.mkdir(parents=True, exist_ok=True)
+        scope_file = scope_dir / "scope.md"
+        if not scope_file.is_file() and self.app.scope_content:
+            scope_file.write_text(self.app.scope_content, encoding="utf-8")
+
+        # Role
+        role_dir = self.agent_dir / "role"
+        role_dir.mkdir(parents=True, exist_ok=True)
+        for role_name, role_def in self.app.roles.items():
+            role_file = role_dir / f"{role_name}.md"
+            if not role_file.is_file():
+                role_file.write_text(role_def.content, encoding="utf-8")
 
     # ── 3. Flow 校验 ──
 
@@ -216,6 +241,10 @@ class Compiler:
         workflow_text = self._serialize_workflows(role_name)
         if workflow_text:
             parts.append(workflow_text)
+
+        # Backend 配置注入
+        api_port = self.config.get("api_port", 8001)
+        parts.append(f"\n---\n\n## Backend\n\nAPI: http://localhost:{api_port}\n")
 
         return "\n".join(parts)
 
