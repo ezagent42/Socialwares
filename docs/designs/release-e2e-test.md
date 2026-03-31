@@ -195,19 +195,21 @@ echo "# Remind Review" > agent/flow/remind_review/SKILL.md
 |---|---|
 | **操作** | `socialwares deploy` |
 | **目的** | 编译四原语 → .runtime/ |
-| **预期** | 3 个角色目录，各有正确的 SOUL.md + skills |
+| **预期** | 4 个角色目录，各有正确的 SOUL.md + skills |
 
 ```bash
 socialwares deploy
 
 # 检查输出
-ls .runtime/agents/          # default  reviewer  evolver
+ls .runtime/agents/          # default  dev  reviewer  evolver
 ls .runtime/agents/default/.claude/skills/
 # check_health  close_task  create_task  list_tasks  submit_task
+ls .runtime/agents/dev/.claude/skills/
+# inspect  setup_claude
 ls .runtime/agents/reviewer/.claude/skills/
 # check_health  list_tasks  review_task
 ls .runtime/agents/evolver/.claude/skills/
-# evolve_api_check  evolve_auto  evolve_improve  evolve_session_diagnose  evolve_structure_check
+# evolve_api_check  evolve_auto  evolve_improve  evolve_session_diagnose  evolve_structure_check  inspect
 ```
 
 ### 3.2 SOUL.md 合并验证
@@ -264,7 +266,7 @@ cat .runtime/commitment.yaml
 
 # manifest
 cat .runtime/compile_manifest.yaml
-# app: task-review, roles: default/reviewer/evolver
+# app: task-review, roles: default/dev/reviewer/evolver
 ```
 
 ### 3.5 Flow 校验错误
@@ -314,12 +316,15 @@ socialwares deploy
 | **预期** | Claude Code 启动，加载 SOUL.md + skills |
 
 ```bash
-# 先启动后端
+# 先杀掉之前可能残留的后端进程
+fuser -k 8001/tcp 2>/dev/null || true
+
+# 启动后端（端口来自 pyproject.toml [tool.socialwares] api_port）
 uvicorn src.api:app --port 8001 &
 
-# 启动 agent
+# 启动 agent（adapter 自动从 pyproject.toml 读取，无需 --adapter）
 socialwares start --role default
-# Claude Code 打开，SOUL.md 加载
+# Claude Code 打开，SOUL.md 加载（含 Backend: http://localhost:8001）
 # 输入 "check health" → 验证 skill 可用
 # Ctrl+C 退出
 ```

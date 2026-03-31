@@ -314,6 +314,19 @@ agent-workspace/          ← 这是 assign --path 指定的路径
 
 **已修复**：E2E 文档 2.1 的 socialware.py 示例补充了 dev 角色。
 
+## 问题 24（澄清）：codex 适配器生成 .agents/ 和 .codex/ 两个目录
+
+**现象**：`socialwares deploy --adapter codex` 后每个 role 目录下有 `.agents/` 和 `.codex/` 两个目录。
+
+**结论：这是正确行为，不是 bug。**
+
+Codex CLI 的约定：
+- `.agents/skills/` — skills 目录（Codex 读 skills 的位置）
+- `.codex/hooks.json` — hooks 配置
+- `.codex/config.toml` — 功能开关（`codex_hooks = true`）
+
+对比 Claude Code 把 skills + hooks 都在 `.claude/` 下。这是两个平台不同的目录约定。
+
 **需要修复**：
 ```bash
 # install 到 channel 下
