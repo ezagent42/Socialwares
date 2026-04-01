@@ -729,10 +729,10 @@ socialwares deploy
 
 ## 测试完成检查清单
 
-- [ ] Phase 1: `socialwares new` 生成完整项目（含 dev 角色、6 个 dev skill）
+- [ ] Phase 1: `socialwares new` 生成完整项目（含 dev 角色、5 个 dev skill）
 - [ ] Phase 1: socialware.py 模板渲染正确（dev_build, dev_release 已注册）
-- [ ] Phase 2: socialware.py 声明式 API 可用（4 原语 + inline role）
-- [ ] Phase 2: 业务 skill 按规范创建（SKILL.md + scripts/ + references/）
+- [ ] Phase 2: dev_define 交互式引导四原语定义
+- [ ] Phase 2: 生成的 skill 按规范创建（SKILL.md + scripts/ + references/）
 - [ ] Phase 3: `socialwares deploy` 正确编译（SOUL.md、skills symlink、flow.yaml、commitment.yaml、hooks、manifest）
 - [ ] Phase 3: hooks 为 Python 脚本（.py，跨平台）
 - [ ] Phase 3: inline role 自动生成 .md 文件
