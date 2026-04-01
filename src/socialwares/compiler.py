@@ -285,7 +285,10 @@ class Compiler:
 
         for action_name in all_actions:
             project_skill = flow_dir / action_name
-            if project_skill.exists():
+            if project_skill.is_symlink():
+                # Re-create symlink (may point to old location)
+                project_skill.unlink()
+            elif project_skill.exists():
                 continue  # User has their own — don't override
             builtin_skill = self._builtin_flow_dir / action_name
             if builtin_skill.is_dir():
