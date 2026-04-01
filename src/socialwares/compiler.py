@@ -400,10 +400,10 @@ class Compiler:
             settings = {
                 "hooks": {
                     "UserPromptSubmit": [
-                        {"hooks": [{"type": "command", "command": f"uv run python {log_prompt}", "timeout": 5}]}
+                        {"hooks": [{"type": "command", "command": f"uv run --no-project python {log_prompt}", "timeout": 5}]}
                     ],
                     "PreToolUse": [
-                        {"hooks": [{"type": "command", "command": f"uv run python {log_tool}", "timeout": 5}]}
+                        {"hooks": [{"type": "command", "command": f"uv run --no-project python {log_tool}", "timeout": 5}]}
                     ],
                 }
             }
@@ -417,10 +417,10 @@ class Compiler:
             hooks = {
                 "hooks": {
                     "UserPromptSubmit": [
-                        {"hooks": [{"type": "command", "command": f"uv run python {log_prompt}", "timeout": 5}]}
+                        {"hooks": [{"type": "command", "command": f"uv run --no-project python {log_prompt}", "timeout": 5}]}
                     ],
                     "PreToolUse": [
-                        {"hooks": [{"type": "command", "command": f"uv run python {log_tool}", "timeout": 5}]}
+                        {"hooks": [{"type": "command", "command": f"uv run --no-project python {log_tool}", "timeout": 5}]}
                     ],
                 }
             }
