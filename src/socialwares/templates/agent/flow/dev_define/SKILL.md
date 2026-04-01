@@ -29,8 +29,8 @@ If definitions already exist, show a summary: "Currently there are X roles, Y ac
 
 ### Step 1: Scope — "What can this App do?"
 
-1. Ask user: "What does this App do? What are the main features?"
-2. Based on response, write/update `agent/scope/scope.md`
+1. Ask user: "What does this App do? What are the main features? And what does it NOT do?"
+2. Based on response, write/update `agent/scope/scope.md` with exactly two sections: `## Capabilities` and `## Boundaries`. Do NOT add any other sections.
 3. Show the result, confirm with user
 4. See `references/four-primitives-guide.md` for scope template
 

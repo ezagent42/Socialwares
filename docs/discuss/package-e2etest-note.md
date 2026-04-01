@@ -386,8 +386,14 @@ define → deploy → build → 手动测试 → iterate（看报告改进）→
 **结论**：App 之间的协作通过 IRC 总线处理，不在 App 层面定义。Connections 段应该从 scope 模板中删除。
 
 **需要修改**：
-1. `four-primitives-guide.md` 中 scope 模板删除 `## Connections` 段
-2. dev_define SKILL.md 中要求 Agent 严格按照模板来，不要自己发挥加字段
+1. `four-primitives-guide.md` 中 scope 模板删除 `## Connections` 段 — **已修复**
+2. dev_define SKILL.md 中要求 Agent 严格按照模板来 — **已修复**
+
+### 问题 40：four-primitives-guide 仍残留 Connections 相关内容
+
+**现象**：虽然 scope 模板的 Connections 段已删，但 guide 文本中仍有 "是否需要连接外部 App" 的提问引导，导致 Agent 仍然问这个问题。
+
+**修复**：彻底清除 guide 中所有 Connections 相关文字。
 
 ### 问题 39：Python hook 被 enforce-tools.sh 拦截
 
