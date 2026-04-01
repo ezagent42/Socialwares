@@ -238,6 +238,49 @@ class TestHooks:
             source = hook_path.read_text()
             compile(source, str(hook_path), "exec")  # raises SyntaxError if invalid
 
+    def test_hook_writes_by_session_id(self, tmp_path: Path) -> None:
+        """Hook script writes to {session_id}.jsonl when session_id present."""
+        app, project = _make_project(tmp_path)
+        _add_submit_task(project)
+        Compiler(app, project_dir=project, adapter="claude").compile()
+        hook = project / ".runtime" / "agents" / "default" / ".claude" / "hooks" / "log_prompt.py"
+
+        import subprocess
+
+        # With session_id → writes to {session_id}.jsonl
+        result = subprocess.run(
+            ["python", str(hook)],
+            input='{"prompt":"test","session_id":"sess-42"}',
+            capture_output=True, text=True, cwd=str(project),
+        )
+        prompts_dir = project / ".runtime" / "data" / "prompts"
+        assert (prompts_dir / "sess-42.jsonl").is_file()
+        line = json.loads((prompts_dir / "sess-42.jsonl").read_text().strip())
+        assert line["session_id"] == "sess-42"
+        assert line["content"] == "test"
+
+        # Without session_id → falls back to current.jsonl
+        subprocess.run(
+            ["python", str(hook)],
+            input='{"prompt":"no session"}',
+            capture_output=True, text=True, cwd=str(project),
+        )
+        assert (prompts_dir / "current.jsonl").is_file()
+        line = json.loads((prompts_dir / "current.jsonl").read_text().strip())
+        assert line["session_id"] == ""
+
+    def test_hook_command_uses_no_project(self, tmp_path: Path) -> None:
+        """Hook command in settings.local.json uses uv run --no-project."""
+        app, project = _make_project(tmp_path)
+        _add_submit_task(project)
+        Compiler(app, project_dir=project, adapter="claude").compile()
+        settings = json.loads(
+            (project / ".runtime" / "agents" / "default" / ".claude" / "settings.local.json").read_text()
+        )
+        for hook_type in ("UserPromptSubmit", "PreToolUse"):
+            cmd = settings["hooks"][hook_type][0]["hooks"][0]["command"]
+            assert "--no-project" in cmd
+
     def test_codex_hooks_generated(self, tmp_path: Path) -> None:
         app, project = _make_project(tmp_path)
         _add_submit_task(project)
