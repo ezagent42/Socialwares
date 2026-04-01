@@ -3,7 +3,7 @@
 After applying changes, save a report using the script:
 
 ```bash
-uv run --no-project agent/flow/evolve_improve/scripts/save_report.py \
+uv run --no-project --with pyyaml agent/flow/evolve_improve/scripts/save_report.py \
   --change '{"primitive":"flow","file":"agent/flow/create_task/SKILL.md","action":"Updated trigger phrases and API endpoint notation","reason":"40% error rate — SKILL.md lacked request format"}' \
   --based-on diagnose_20250326_120000.json \
   --based-on eval_20250326_120000.json \
@@ -26,7 +26,7 @@ Each `--change` is a JSON object:
 Pass `--change` multiple times for batch improvements:
 
 ```bash
-uv run --no-project agent/flow/evolve_improve/scripts/save_report.py \
+uv run --no-project --with pyyaml agent/flow/evolve_improve/scripts/save_report.py \
   --change '{"primitive":"flow","file":"agent/flow/create_task/SKILL.md","action":"Added JSON body format","reason":"Missing request format"}' \
   --change '{"primitive":"commitment","file":".runtime/commitment.yaml","action":"Added on_violation for C1","reason":"C1 violated but no escalation path"}' \
   --based-on diagnose_20250326_120000.json

@@ -95,7 +95,7 @@ After applying changes, **always** run the save_report script:
 
 ```bash
 WORKSPACE_ROOT=$(cat .workspace_root) && cd "$WORKSPACE_ROOT"
-uv run --no-project agent/flow/evolve_improve/scripts/save_report.py \
+uv run --no-project --with pyyaml agent/flow/evolve_improve/scripts/save_report.py \
   --change '{"primitive":"flow","file":"agent/flow/create_task/SKILL.md","action":"Updated trigger","reason":"40% error rate"}' \
   --based-on diagnose_20250326_120000.json \
   --next-step "Run 'evaluate' to check if score improved"

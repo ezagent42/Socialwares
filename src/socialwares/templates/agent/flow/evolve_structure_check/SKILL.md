@@ -9,7 +9,7 @@ description: "Check structural consistency of four primitives — no app needed"
 
 ```bash
 WORKSPACE_ROOT=$(cat .workspace_root) && cd "$WORKSPACE_ROOT"
-uv run --no-project agent/flow/evolve_structure_check/scripts/check_structure.py --agent-dir agent
+uv run --no-project --with pyyaml agent/flow/evolve_structure_check/scripts/check_structure.py --agent-dir agent
 ```
 
 ## Trigger
@@ -57,7 +57,7 @@ cd "$WORKSPACE_ROOT"
 ## Usage
 
 ```bash
-uv run --no-project agent/flow/evolve_structure_check/scripts/check_structure.py --agent-dir agent
+uv run --no-project --with pyyaml agent/flow/evolve_structure_check/scripts/check_structure.py --agent-dir agent
 ```
 
 ## What It Checks

@@ -101,6 +101,7 @@ class Compiler:
         self._create_data_dirs()
         self._clean_removed_roles()
         self._sync_inline_content()
+        self._link_builtin_skills()
         self._validate_flow()
 
         for role_name in self.app.roles:
@@ -270,6 +271,26 @@ class Compiler:
         if len(lines) <= 2:
             return ""
         return "\n".join(lines)
+
+    def _link_builtin_skills(self) -> None:
+        """Symlink built-in skills into project agent/flow/ so scripts are reachable."""
+        flow_dir = self.agent_dir / "flow"
+        flow_dir.mkdir(parents=True, exist_ok=True)
+
+        # Collect all actions that need skills
+        all_actions: set[str] = set(self.app.actions.keys())
+        for f in self.app.flows:
+            for t in f.transitions:
+                all_actions.add(t.action)
+
+        for action_name in all_actions:
+            project_skill = flow_dir / action_name
+            if project_skill.exists():
+                continue  # User has their own — don't override
+            builtin_skill = self._builtin_flow_dir / action_name
+            if builtin_skill.is_dir():
+                target = os.path.relpath(builtin_skill, flow_dir)
+                project_skill.symlink_to(target)
 
     def _find_skill_dir(self, action_name: str) -> Path | None:
         """Find skill directory: project agent/flow/ first, then framework built-in."""
