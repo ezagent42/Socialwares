@@ -2,7 +2,7 @@
 
 ## Mapping: Action → API → Test
 
-Socialware 的 TDD 开发遵循三层映射关系：
+TDD development in Socialware follows a three-layer mapping:
 
 ```
 socialware.py                 src/api.py                  tests/test_api.py
@@ -13,12 +13,12 @@ app.action("list_tasks")    → @app.get("/tasks")        → test_list_tasks()
 app.action("resolve_task")  → @app.post("/tasks/{id}")  → test_resolve_task()
 ```
 
-每个 `app.action(...)` 注册的业务操作，都应有对应的 API endpoint 和测试用例。
+Each business operation registered via `app.action(...)` should have a corresponding API endpoint and test case.
 
 ## Example Test Structure
 
 ```python
-"""tests/test_api.py — Socialware App API 测试。"""
+"""tests/test_api.py — Socialware App API tests."""
 from __future__ import annotations
 
 import pytest
@@ -29,7 +29,7 @@ from src.api import app
 
 @pytest.fixture
 async def client():
-    """创建异步测试客户端。"""
+    """Create an async test client."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
@@ -39,17 +39,17 @@ async def client():
 
 @pytest.mark.asyncio
 async def test_health(client):
-    """GET /health 应返回 status ok。"""
+    """GET /health should return status ok."""
     resp = await client.get("/health")
     assert resp.status_code == 200
     assert resp.json() == {"status": "ok"}
 
 
-# ── 业务操作示例: create_task ─────────────────────────
+# ── Business operation example: create_task ──────────
 
 @pytest.mark.asyncio
 async def test_create_task(client):
-    """POST /tasks 应创建任务并返回 id。"""
+    """POST /tasks should create a task and return an id."""
     payload = {"title": "Write unit tests", "assignee": "default"}
     resp = await client.post("/tasks", json=payload)
     assert resp.status_code == 200
@@ -60,16 +60,16 @@ async def test_create_task(client):
 
 @pytest.mark.asyncio
 async def test_create_task_missing_title(client):
-    """POST /tasks 缺少 title 时应返回 422。"""
+    """POST /tasks should return 422 when title is missing."""
     resp = await client.post("/tasks", json={"assignee": "default"})
     assert resp.status_code == 422
 
 
-# ── 业务操作示例: list_tasks ──────────────────────────
+# ── Business operation example: list_tasks ───────────
 
 @pytest.mark.asyncio
 async def test_list_tasks(client):
-    """GET /tasks 应返回任务列表。"""
+    """GET /tasks should return a list of tasks."""
     resp = await client.get("/tasks")
     assert resp.status_code == 200
     assert isinstance(resp.json(), list)
@@ -78,7 +78,7 @@ async def test_list_tasks(client):
 ## Example API Endpoint Implementation
 
 ```python
-"""src/api.py — 新增业务 endpoint 的模式。"""
+"""src/api.py — Pattern for adding business endpoints."""
 from __future__ import annotations
 
 import uuid
@@ -102,7 +102,7 @@ class TaskResponse(BaseModel):
     created_at: str
 
 
-# ── In-memory store (替换为持久化存储) ─────────────────
+# ── In-memory store (replace with persistent storage) ─
 
 _tasks: dict[str, dict] = {}
 
@@ -111,7 +111,7 @@ _tasks: dict[str, dict] = {}
 
 @app.post("/tasks", response_model=TaskResponse)
 async def create_task(payload: TaskCreate) -> dict:
-    """创建一个新任务。"""
+    """Create a new task."""
     task_id = uuid.uuid4().hex[:8]
     task = {
         "id": task_id,
@@ -125,13 +125,13 @@ async def create_task(payload: TaskCreate) -> dict:
 
 @app.get("/tasks")
 async def list_tasks() -> list[dict]:
-    """列出所有任务。"""
+    """List all tasks."""
     return list(_tasks.values())
 
 
 @app.post("/tasks/{task_id}/resolve")
 async def resolve_task(task_id: str) -> dict:
-    """标记任务为已完成。"""
+    """Mark a task as resolved."""
     if task_id not in _tasks:
         raise HTTPException(404, f"Task {task_id} not found")
     _tasks[task_id]["resolved"] = True
@@ -142,27 +142,27 @@ async def resolve_task(task_id: str) -> dict:
 ## How to Run Tests
 
 ```bash
-# 运行全部测试（详细输出）
+# Run all tests (verbose output)
 uv run pytest tests/ -v
 
-# 运行指定测试
+# Run a specific test
 uv run pytest tests/test_api.py -v -k test_create_task
 
-# 运行并显示覆盖率
+# Run with coverage report
 uv run pytest tests/ -v --cov=src --cov-report=term-missing
 ```
 
 ## TDD Cycle Checklist
 
-1. **Red**: 先写测试，运行确认失败
-2. **Green**: 写最少的代码让测试通过
-3. **Refactor**: 重构代码（加类型、模型、错误处理），确保测试仍然通过
-4. **Repeat**: 对下一个 action 重复以上步骤
+1. **Red**: Write the test first, run it and confirm it fails
+2. **Green**: Write the minimum code to make the test pass
+3. **Refactor**: Refactor the code (add types, models, error handling), ensure tests still pass
+4. **Repeat**: Repeat the above steps for the next action
 
 ## Tips
 
-- 每次只实现一个 action 的 API endpoint
-- 测试用例应覆盖正常路径和异常路径（如缺少字段、资源不存在）
-- 使用 Pydantic `BaseModel` 做请求验证，FastAPI 会自动返回 422
-- 保持 endpoint 函数简洁，复杂逻辑抽到 service 层
-- SKILL.md 也需要"测试"——检查 trigger、flow、error handling 是否完整
+- Implement only one action's API endpoint at a time
+- Test cases should cover both happy paths and error paths (e.g., missing fields, resource not found)
+- Use Pydantic `BaseModel` for request validation — FastAPI will automatically return 422
+- Keep endpoint functions concise; extract complex logic into a service layer
+- SKILL.md also needs "testing" — check that trigger, flow, and error handling are complete

@@ -7,7 +7,7 @@ description: "Guide release workflow — verify, commit, tag, push"
 
 ## Trigger
 
-User says "release", "publish", "发布", "定版", "push", "commit" etc.
+User says "release", "publish", "push", "commit", "tag" etc.
 
 ## Flow
 
@@ -31,7 +31,7 @@ WORKSPACE_ROOT=$(cat .workspace_root) && cd "$WORKSPACE_ROOT"
 ls -t .runtime/data/evolve/reports/check_*.json | head -1 | xargs cat
 ```
 
-Verify the structure check result is **PASS**. If not, guide the user to fix structure issues first (suggest `dev_iterate`).
+Verify the structure check result is **PASS**. If not, guide the user to fix structure issues first (suggest `build`).
 
 #### 1c. Run API tests (if backend is running)
 
@@ -86,7 +86,7 @@ git commit -m "<message>"
 
 #### 3c. Create version tag (if appropriate)
 
-Ask the user: "要打版本标签吗？（如 v0.1.0）"
+Ask the user: "Do you want to create a version tag? (e.g. v0.1.0)"
 
 If yes:
 
@@ -124,6 +124,6 @@ After a successful push, suggest next steps:
 - Always run pre-release checks before any git operations — do not skip
 - Never stage `.runtime/`, `.socialware/workspace/`, or `__pycache__/` directories
 - Let the user review `git diff --staged` before committing — don't auto-commit without confirmation
-- If pre-release checks fail, guide the user to fix issues first (suggest `dev_iterate`)
+- If pre-release checks fail, guide the user to fix issues first (suggest `build`)
 - Use the user's language (Chinese or English based on their input)
 - Refer to `references/release-checklist.md` for the full checklist

@@ -1,8 +1,8 @@
 # Commitment
 
-约束定义。描述角色之间的协作标准。
+Collaboration constraints between roles.
 
-Commitment 在 `socialware.py` 中声明式定义：
+Commitments are declared in `socialware.py`:
 
 ```python
 app.commitment("C1",
@@ -13,6 +13,4 @@ app.commitment("C1",
 )
 ```
 
-`socialwares deploy` 编译后生成 `.runtime/commitment.yaml`。
-
-详见 [Commitment 与 Evolve](../../docs/guides/004-commitment-and-evolve.md)。
+`socialwares deploy` compiles them into `.runtime/commitment.yaml`.

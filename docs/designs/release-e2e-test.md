@@ -38,7 +38,7 @@ ls                          # socialware.py  agent  src  app  pyproject.toml
 ls agent/role/              # default.md  dev.md  evolver.md
 ls agent/scope/             # scope.md
 ls agent/commitment/        # README.md
-ls agent/flow/              # check_health  dev_define  dev_build  dev_iterate  dev_release
+ls agent/flow/              # check_health  dev_define  dev_build  dev_release
                             # inspect  setup_claude
                             # evolve_structure_check  evolve_api_check  evolve_session_diagnose
                             # evolve_improve  evolve_auto
@@ -191,7 +191,7 @@ ls .runtime/agents/default/.claude/skills/
 # check_health  close_task  create_task  list_tasks  submit_task
 
 ls .runtime/agents/dev/.claude/skills/
-# dev_build  dev_define  dev_iterate  dev_release  inspect  setup_claude
+# dev_build  dev_define  dev_release  inspect  setup_claude
 
 ls .runtime/agents/reviewer/.claude/skills/
 # check_health  list_tasks  review_task
@@ -374,7 +374,7 @@ cat .runtime/data/evolve/reports/eval_*.json | grep "suggestions"
 | | |
 |---|---|
 | **操作** | 启动 dev 角色 |
-| **目的** | 验证 dev skills（inspect, setup_claude, dev_define, dev_build, dev_iterate, dev_release） |
+| **目的** | 验证 dev skills（inspect, setup_claude, dev_define, dev_build, dev_release） |
 
 ```bash
 socialwares start --role dev
@@ -742,7 +742,7 @@ socialwares deploy
 - [ ] Phase 3: 缺失 SKILL.md 报错
 - [ ] Phase 4: 单角色 / 多角色本地启动（Python launcher，跨平台）
 - [ ] Phase 4: Evolver 交互 + 报告输出到 .runtime/data/evolve/reports/
-- [ ] Phase 4: Dev 角色可用（inspect, dev_define, dev_build, dev_iterate, dev_release）
+- [ ] Phase 4: Dev 角色可用（inspect, dev_define, dev_build, dev_release）
 - [ ] Phase 4: SDK 模式可用 + session 保存
 - [ ] Phase 5: `socialwares install` 到 .socialware/workspace/{channel}/apps/
 - [ ] Phase 5: `socialwares assign` 注入文件（JSON merge 正确，skills 逐个 symlink）

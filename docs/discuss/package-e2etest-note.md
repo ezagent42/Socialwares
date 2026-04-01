@@ -347,6 +347,76 @@ socialwares start --role dev      ← 切回 dev
 | 定版发布 | ✗ 缺 dev_release skill |
 | new --from git 模板 | ✗ CLI 未实现 |
 
+---
+
+## 第五轮测试问题（2026-03-31）
+
+### 问题 35：dev_define 应逐步引导，不应一步到位
+
+**现象**：dev_define 的 SKILL.md 虽然写了 Step 1-5 的引导流程，但实际 Agent 执行时倾向于一次性问完所有问题或一步到位让用户写所有内容。
+
+**期望**：严格逐步执行——每一步只问一个原语，等用户确认后才进入下一步。比如：
+1. 先只问 Scope："这个 App 做什么？" → 写好 scope.md → 确认
+2. 再问 Role："有哪些角色？" → 写好 role/*.md → 确认
+3. 再问 Flow → 再问 Commitment → 最后 Deploy
+
+**需要修改**：SKILL.md 中加强"一步一步"的指令，明确要求 Agent 每步只问一个原语，等用户 confirm 后才继续。
+
+### 问题 36：dev_define 完成后的引导不合理
+
+**现象**：define 完四原语后，SKILL.md 引导用户去 `socialwares start --role default` 测试或 `--role evolver` 检查。但此时前后端代码都还没实现，default agent 会变成 simulator 直接回答问题（因为 API 不存在），evolver 的 eval 也会全部 fail。
+
+**期望**：define 完成后，下一步应该是引导用户用 dev 角色开发前后端：
+1. `socialwares deploy` — 先编译
+2. 继续在 dev 角色中说 "build" — 用 dev_build skill 引导 TDD 开发（写测试 → 实现 API → 验证）
+3. 前后端实现后，再建议切 default 测试业务、切 evolver 检查质量
+
+**需要修改**：dev_define 的 Step 5 结尾改为推荐 dev_build，而不是直接跳到 default/evolver。
+
+完整的 dev 角色内工作流应该是：
+```
+define → deploy → build → 手动测试 → iterate（看报告改进）→ release
+```
+不需要频繁切角色，dev 角色覆盖整个开发周期。
+
+### 问题 37：scope.md 中空的 Connections 段
+
+**现象**：dev_define 生成的 scope.md 包含空的 `## Connections` 段。这是因为 Agent 从 `references/four-primitives-guide.md` 中抄了模板结构，但用户没有声明和其他 App 的协作关系。
+
+**结论**：App 之间的协作通过 IRC 总线处理，不在 App 层面定义。Connections 段应该从 scope 模板中删除。
+
+**需要修改**：
+1. `four-primitives-guide.md` 中 scope 模板删除 `## Connections` 段
+2. dev_define SKILL.md 中要求 Agent 严格按照模板来，不要自己发挥加字段
+
+### 问题 39：Python hook 被 enforce-tools.sh 拦截
+
+**现象**：evolver 运行时所有 hook 报错 `UserPromptSubmit hook error` / `PreToolUse hook error`。
+
+**原因**：用户全局安装了 agent-setup 插件，其中 enforce-tools.sh 拦截了所有 `python` 命令，要求用 `uv run python` 代替。编译器生成的 hook command 是 `python /path/to/log_prompt.py`，被拦截。
+
+**修复**：编译器生成 hook command 时用 `uv run python` 而不是 `python`。
+
+### 问题 38：dev_iterate 和 dev_build 应合并
+
+**现象**：dev_build（从零开发）和 dev_iterate（读报告改进）本质上是同一件事——iterate = 读报告 + build。
+
+**合并方案**：统一为 `dev_build`，流程：
+1. 检查 `.runtime/data/evolve/reports/` 是否有报告
+   - 有 → 读报告，列出待修项，按优先级引导开发
+   - 没有 → 直接引导从零开发
+2. TDD 循环：写测试 → 实现 → 验证
+3. deploy + 验证
+
+**合并后 dev 角色的 skill**：
+```
+dev_define   — 定义四原语（决策）
+dev_build    — 开发实现（含报告驱动的改进）
+dev_release  — 发布（收尾）
+inspect      — 查看项目结构
+setup_claude — 环境配置
+```
+
 **现象 2（python 直接运行）**：`check_structure.py` 报 `flow.yaml not found`——因为现在 flow.yaml 是编译产物在 `.runtime/` 中，不在 `agent/` 下。脚本还在找旧路径。
 
 **根本问题**：evolve scripts 是从旧架构搬过来的，内部硬编码了旧的文件路径（`agent/flow/flow.yaml`、`agent/commitment/commitment.yaml`）。重构后这些文件位置变了：
