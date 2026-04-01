@@ -232,6 +232,11 @@ class TestHooks:
         )
         assert "hooks" in settings
         assert "UserPromptSubmit" in settings["hooks"]
+        # Verify generated hook scripts have valid Python syntax
+        for hook_name in ("log_prompt.py", "log_tool.py"):
+            hook_path = role_dir / ".claude" / "hooks" / hook_name
+            source = hook_path.read_text()
+            compile(source, str(hook_path), "exec")  # raises SyntaxError if invalid
 
     def test_codex_hooks_generated(self, tmp_path: Path) -> None:
         app, project = _make_project(tmp_path)

@@ -434,24 +434,26 @@ class Compiler:
     def _hook_script(self, event_type: str) -> str:
         """生成 hook Python 脚本内容（跨平台）。"""
         if event_type == "user_prompt":
-            extract = """\
-    entry = {
-        'timestamp': datetime.now(timezone.utc).isoformat(),
-        'type': 'user_prompt',
-        'role': role,
-        'content': data.get('prompt', ''),
-        'session_id': data.get('session_id', ''),
-    }"""
+            extract = (
+                "entry = {\n"
+                "    'timestamp': datetime.now(timezone.utc).isoformat(),\n"
+                "    'type': 'user_prompt',\n"
+                "    'role': role,\n"
+                "    'content': data.get('prompt', ''),\n"
+                "    'session_id': data.get('session_id', ''),\n"
+                "}"
+            )
         else:
-            extract = """\
-    entry = {
-        'timestamp': datetime.now(timezone.utc).isoformat(),
-        'type': 'tool_call',
-        'role': role,
-        'tool': data.get('tool_name', ''),
-        'input': data.get('tool_input', {}),
-        'session_id': data.get('session_id', ''),
-    }"""
+            extract = (
+                "entry = {\n"
+                "    'timestamp': datetime.now(timezone.utc).isoformat(),\n"
+                "    'type': 'tool_call',\n"
+                "    'role': role,\n"
+                "    'tool': data.get('tool_name', ''),\n"
+                "    'input': data.get('tool_input', {}),\n"
+                "    'session_id': data.get('session_id', ''),\n"
+                "}"
+            )
 
         return f'''#!/usr/bin/env python3
 """Hook — record {event_type} for commitment analysis (cross-platform)."""
