@@ -9,7 +9,7 @@ description: "Automated conversation testing — run agent on test cases via SDK
 
 ```bash
 WORKSPACE_ROOT=$(cat .workspace_root) && cd "$WORKSPACE_ROOT"
-uv run agent/flow/evolve_auto/scripts/run_auto.py --tests-dir agent/flow/evolve_auto/conversation_tests --adapter claude
+uv run --no-project agent/flow/evolve_auto/scripts/run_auto.py --tests-dir agent/flow/evolve_auto/conversation_tests --adapter claude
 ```
 
 ## Trigger
@@ -72,7 +72,7 @@ cd "$WORKSPACE_ROOT"
 ```bash
 WORKSPACE_ROOT=$(cat .workspace_root)
 cd "$WORKSPACE_ROOT"
-uv run agent/flow/evolve_auto/scripts/run_auto.py \
+uv run --no-project agent/flow/evolve_auto/scripts/run_auto.py \
   --tests-dir agent/flow/evolve_auto/conversation_tests \
   --adapter claude
 ```

@@ -9,7 +9,7 @@ description: "Run API eval cases against live app and report performance score"
 
 ```bash
 WORKSPACE_ROOT=$(cat .workspace_root) && cd "$WORKSPACE_ROOT"
-uv run agent/flow/evolve_api_check/scripts/run_eval.py \
+uv run --no-project agent/flow/evolve_api_check/scripts/run_eval.py \
   --cases agent/flow/evolve_api_check/eval_cases.yaml \
   --base-url <APP_BASE_URL>
 ```
@@ -66,7 +66,7 @@ cd "$WORKSPACE_ROOT"
 ```bash
 WORKSPACE_ROOT=$(cat .workspace_root)
 cd "$WORKSPACE_ROOT"
-uv run agent/flow/evolve_api_check/scripts/run_eval.py \
+uv run --no-project agent/flow/evolve_api_check/scripts/run_eval.py \
   --cases agent/flow/evolve_api_check/eval_cases.yaml \
   --base-url <APP_BASE_URL>
 ```
