@@ -60,7 +60,21 @@ def new(name: str) -> None:
         click.echo(f"Error: templates not found at {templates_dir}")
         raise SystemExit(1)
 
-    shutil.copytree(templates_dir, target)
+    # Built-in skills managed by the framework — not copied to project
+    BUILTIN_SKILLS = {
+        "dev_define", "dev_build", "dev_release",
+        "evolve_structure_check", "evolve_api_check",
+        "evolve_session_diagnose", "evolve_improve", "evolve_auto",
+        "inspect", "setup_claude",
+    }
+
+    def _ignore_builtin_skills(directory: str, contents: list[str]) -> list[str]:
+        """Skip built-in skills when copying templates."""
+        if Path(directory).name == "flow" and "SKILL.md" not in contents:
+            return [c for c in contents if c in BUILTIN_SKILLS]
+        return []
+
+    shutil.copytree(templates_dir, target, ignore=_ignore_builtin_skills)
 
     # 渲染占位符
     for fname in ("socialware.py", "pyproject.toml"):

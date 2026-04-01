@@ -84,6 +84,8 @@ class Compiler:
         self.project_dir = Path(project_dir).resolve()
         self.agent_dir = self.project_dir / agent_dir
         self.config = config or {}
+        # Built-in skills from the framework package
+        self._builtin_flow_dir = Path(__file__).parent / "templates" / "agent" / "flow"
         if adapter not in ADAPTERS:
             raise ValueError(f"Unknown adapter: {adapter} (supported: {', '.join(ADAPTERS)})")
         self.adapter = adapter
@@ -162,25 +164,23 @@ class Compiler:
     # ── 3. Flow 校验 ──
 
     def _validate_flow(self) -> None:
-        """校验每个 action 都有对应的 agent/flow/{action}/SKILL.md。"""
-        flow_dir = self.agent_dir / "flow"
+        """校验每个 action 都有对应的 SKILL.md（项目或框架内置）。"""
         errors: list[str] = []
 
-        # 收集所有需要校验的 action（直接注册的 + flow transition 中的）
         all_actions: set[str] = set(self.app.actions.keys())
         for f in self.app.flows:
             for t in f.transitions:
                 all_actions.add(t.action)
 
         for action_name in all_actions:
-            skill_dir = flow_dir / action_name
-            if not skill_dir.is_dir():
-                errors.append(f"action '{action_name}': 目录 {skill_dir} 不存在")
+            skill_dir = self._find_skill_dir(action_name)
+            if skill_dir is None:
+                errors.append(f"action '{action_name}': skill directory not found")
             elif not (skill_dir / "SKILL.md").is_file():
-                errors.append(f"action '{action_name}': {skill_dir / 'SKILL.md'} 不存在")
+                errors.append(f"action '{action_name}': SKILL.md not found in {skill_dir}")
 
         if errors:
-            raise ValueError("Flow 校验失败:\n" + "\n".join(f"  - {e}" for e in errors))
+            raise ValueError("Flow validation failed:\n" + "\n".join(f"  - {e}" for e in errors))
 
     # ── 4. 编译单个 role ──
 
@@ -271,6 +271,16 @@ class Compiler:
             return ""
         return "\n".join(lines)
 
+    def _find_skill_dir(self, action_name: str) -> Path | None:
+        """Find skill directory: project agent/flow/ first, then framework built-in."""
+        project_skill = self.agent_dir / "flow" / action_name
+        if project_skill.is_dir():
+            return project_skill
+        builtin_skill = self._builtin_flow_dir / action_name
+        if builtin_skill.is_dir():
+            return builtin_skill
+        return None
+
     # ── Flow → skills symlink ──
 
     def _link_skills(self, role_name: str, role_dir: Path) -> int:
@@ -280,12 +290,11 @@ class Compiler:
         skills_dir.mkdir(parents=True, exist_ok=True)
 
         role_actions = self.app.actions_for_role(role_name)
-        flow_dir = self.agent_dir / "flow"
         skill_count = 0
 
         for action_name in role_actions:
-            source = flow_dir / action_name
-            if not source.is_dir():
+            source = self._find_skill_dir(action_name)
+            if source is None:
                 continue
 
             link = skills_dir / action_name
