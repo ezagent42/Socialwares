@@ -151,12 +151,65 @@ def _coverage_suggestions(flow_yaml_path: str, eval_cases: list[dict]) -> list[d
     return suggestions
 
 
+def _skill_api_mismatch(agent_flow_dir: str, base_url: str) -> list[dict]:
+    """Check API paths in SKILL.md against actual backend routes."""
+    import re
+    flow_dir = Path(agent_flow_dir)
+    if not flow_dir.is_dir():
+        return []
+
+    # Extract API paths from all SKILL.md files
+    api_pattern = re.compile(r'(GET|POST|PUT|DELETE|PATCH)\s+(/\S+)')
+    skill_apis: dict[str, list[tuple[str, str]]] = {}  # action → [(method, path)]
+
+    for skill_dir in flow_dir.iterdir():
+        if not skill_dir.is_dir():
+            continue
+        skill_md = skill_dir / "SKILL.md"
+        if not skill_md.is_file():
+            continue
+        content = skill_md.read_text(encoding="utf-8")
+        matches = api_pattern.findall(content)
+        if matches:
+            skill_apis[skill_dir.name] = matches
+
+    if not skill_apis:
+        return []
+
+    # Test each documented API path against the backend
+    suggestions = []
+    for action, apis in sorted(skill_apis.items()):
+        for method, path in apis:
+            # Clean path (remove {id} style params for testing)
+            test_path = re.sub(r'\{[^}]+\}', '1', path)
+            url = f"{base_url}{test_path}"
+            try:
+                req = Request(url, method=method)
+                resp = urlopen(req, timeout=3)
+                # Any non-404 response means the route exists
+            except HTTPError as e:
+                if e.code == 404:
+                    suggestions.append({
+                        "primitive": "flow",
+                        "action": f"Fix {action}: {method} {path} returns 404",
+                        "reason": f"SKILL.md documents {method} {path} but backend returns 404. Either fix the API path in SKILL.md or implement the endpoint.",
+                    })
+                # Other errors (400, 422, etc.) mean the route exists but input is wrong — OK
+            except URLError:
+                pass  # Backend not reachable — skip
+            except Exception:
+                pass
+
+    return suggestions
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run eval cases against Socialware App")
     parser.add_argument("--cases", required=True, help="Path to eval_cases.yaml")
     default_port = os.environ.get("APP_PORT", "8001")
     parser.add_argument("--base-url", default=f"http://localhost:{default_port}", help="App base URL (default reads APP_PORT env var)")
     parser.add_argument("--flow-yaml", default=".runtime/flow.yaml", help="flow.yaml for coverage check")
+    parser.add_argument("--agent-flow-dir", default="agent/flow", help="agent/flow dir for SKILL.md API path check")
     args = parser.parse_args()
 
     api_checks = load_cases(Path(args.cases))
@@ -184,6 +237,13 @@ def main() -> None:
     score = passed / total if total > 0 else 0
     print(f"\nAPI Score: {passed}/{total} ({score:.0%})")
 
+    # Check SKILL.md API path consistency
+    mismatches = _skill_api_mismatch(args.agent_flow_dir, args.base_url)
+    if mismatches:
+        print(f"\nSKILL.md API Mismatches: {len(mismatches)}")
+        for m in mismatches:
+            print(f"  ✗ {m['action']}")
+
     # Save report (only if .runtime/ exists — means we're in a workspace)
     if not Path(".runtime").exists():
         sys.exit(0)
@@ -204,7 +264,8 @@ def main() -> None:
         "suggestions": [
             {"primitive": "flow", "action": f"Fix API for: {r['description']}", "reason": r.get("status_mismatch", r.get("body_mismatch", "failed"))}
             for r in results if not r["passed"]
-        ] + _coverage_suggestions(args.flow_yaml, api_checks),
+        ] + _coverage_suggestions(args.flow_yaml, api_checks)
+          + _skill_api_mismatch(args.agent_flow_dir, args.base_url),
     }
     with open(report_file, "w") as f:
         json.dump(report_data, f, indent=2, ensure_ascii=False)

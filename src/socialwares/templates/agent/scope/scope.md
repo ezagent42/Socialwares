@@ -10,8 +10,3 @@ This is a Socialware App template.
 ## Boundaries
 
 - (What the Agent should NOT do)
-- (Participation rules: who can join, minimum members)
-
-## Connections
-
-- (External Apps this App can delegate to via /zchat)

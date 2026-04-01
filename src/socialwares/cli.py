@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
+
+import yaml
 
 import click
 
@@ -245,13 +248,34 @@ def assign(agent_name: str, role: str, channel: str, agent_path: str | None) -> 
     else:
         workspace = _get_agent_workspace(agent_name, channel)
 
-    # 注入 SOUL.md（覆盖）
+    app_name = info["app_name"]
+    source_tag = f"socialware:{app_name}:{role}"
+
+    # ── SOUL.md / AGENTS.md: merge with source markers (idempotent) ──
     for prompt_file in ("SOUL.md", "AGENTS.md"):
         src = role_dir / prompt_file
-        if src.is_file():
-            shutil.copy2(src, workspace / prompt_file)
+        if not src.is_file():
+            continue
+        dst = workspace / prompt_file
+        new_block = src.read_text(encoding="utf-8")
+        marker_start = f"<!-- {source_tag} -->"
+        marker_end = f"<!-- /{source_tag} -->"
+        tagged_block = f"{marker_start}\n{new_block}\n{marker_end}"
 
-    # 注入 skills（逐个 symlink，追加不替换）
+        if dst.is_file():
+            existing = dst.read_text(encoding="utf-8")
+            if marker_start in existing:
+                # Replace existing block (idempotent)
+                pattern = re.escape(marker_start) + r".*?" + re.escape(marker_end)
+                existing = re.sub(pattern, tagged_block, existing, flags=re.DOTALL)
+            else:
+                # Append new block
+                existing = existing.rstrip() + "\n\n" + tagged_block + "\n"
+            dst.write_text(existing, encoding="utf-8")
+        else:
+            dst.write_text(tagged_block + "\n", encoding="utf-8")
+
+    # ── Skills: per-skill symlink (append, don't replace) ──
     src_skills = role_dir / ".claude" / "skills"
     if src_skills.is_dir():
         dst_skills = workspace / ".claude" / "skills"
@@ -261,31 +285,36 @@ def assign(agent_name: str, role: str, channel: str, agent_path: str | None) -> 
             if dst_link.is_symlink():
                 dst_link.unlink()
             elif dst_link.exists():
-                shutil.rmtree(dst_link)
-            # 解析源 symlink 的实际目标
-            if skill_link.is_symlink():
-                dst_link.symlink_to(skill_link.resolve())
-            else:
-                dst_link.symlink_to(skill_link.resolve())
+                continue  # User's own skill — don't override
+            dst_link.symlink_to(skill_link.resolve())
 
-    # 注入 hooks（merge，不覆盖已有配置）
+    # ── settings.local.json: deep merge (idempotent) ──
     sw_settings_path = role_dir / ".claude" / "settings.local.json"
     ws_settings_path = workspace / ".claude" / "settings.local.json"
     if sw_settings_path.is_file():
         ws_settings_path.parent.mkdir(parents=True, exist_ok=True)
+        new_settings = json.loads(sw_settings_path.read_text())
         if ws_settings_path.is_file():
             existing = json.loads(ws_settings_path.read_text())
-            new_settings = json.loads(sw_settings_path.read_text())
             merged = _deep_merge(existing, new_settings)
             ws_settings_path.write_text(json.dumps(merged, indent=2))
         else:
-            shutil.copy2(sw_settings_path, ws_settings_path)
+            ws_settings_path.write_text(json.dumps(new_settings, indent=2))
 
-    # 注入 commitment.yaml + flow.yaml
-    for fname in ("commitment.yaml", "flow.yaml"):
+    # ── flow.yaml + commitment.yaml: deep merge (idempotent) ──
+    for fname in ("flow.yaml", "commitment.yaml"):
         src = role_dir / fname
-        if src.is_file():
-            shutil.copy2(src, workspace / fname)
+        if not src.is_file():
+            continue
+        dst = workspace / fname
+        new_data = yaml.safe_load(src.read_text(encoding="utf-8")) or {}
+        if dst.is_file():
+            existing_data = yaml.safe_load(dst.read_text(encoding="utf-8")) or {}
+            _deep_merge(existing_data, new_data)
+            with dst.open("w", encoding="utf-8") as f:
+                yaml.dump(existing_data, f, default_flow_style=False, allow_unicode=True)
+        else:
+            shutil.copy2(src, dst)
 
     _save_assignment(info["app_name"], agent_name, role, channel)
 

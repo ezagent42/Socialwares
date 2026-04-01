@@ -417,7 +417,37 @@ define → deploy → build → 手动测试 → iterate（看报告改进）→
 - TUI 模式：hook → `current.jsonl`（追加，不分片）
 - SDK 模式：每次调用 → `session_{timestamp}.json`（天然分片）
 
-**需要改进**：hook 脚本应该按 session 分片。Claude Code 每次启动有一个 session_id，hook 收到的数据里有 `session_id` 字段。可以按 session_id 写到不同文件，或在 `current.jsonl` 中用 session_id 区分后由 diagnose 分组。
+**需要改进**：hook 脚本应该按 session 分片。— **已修复**：按 session_id 写到 `{session_id}.jsonl`。
+
+### 问题 45（架构）：assign 应全部用合并策略，保证幂等
+
+**当前行为**：
+- SOUL.md：复制覆盖 ✗
+- flow.yaml：复制覆盖 ✗
+- commitment.yaml：复制覆盖 ✗
+- settings.local.json：部分 merge（hooks 追加）
+- skills：逐个 symlink ✓
+
+**问题**：
+1. 一个 agent 被 assign 多个 app 的角色时，后一个覆盖前一个
+2. 多次 assign 同一个 role 会重复追加 hooks
+3. 不幂等——同一操作执行两次结果不同
+
+**期望行为**：
+- SOUL.md：追加合并（多个 app 的 scope + role 拼接，用 `---` 分隔，附带 app 来源标记）
+- flow.yaml：deep merge（多个 app 的 direct_actions + flows 合并）
+- commitment.yaml：deep merge（多个 app 的 commitments 合并）
+- settings.local.json：deep merge（hooks 去重追加，permissions 合并）
+- skills：逐个 symlink（已正确）
+- 幂等：同一 app 同一 role assign 两次，结果和一次相同
+
+**去重机制**：每个注入内容附带来源标记（app name + role），merge 时按来源替换而不是追加。例如 SOUL.md 中：
+```markdown
+<!-- socialware:task-review:default -->
+...scope + role content...
+<!-- /socialware:task-review:default -->
+```
+第二次 assign 同一来源时替换该区块，不重复追加。
 
 ### 问题 43（架构）：内置 skill 应从框架读取，不是复制到项目
 
