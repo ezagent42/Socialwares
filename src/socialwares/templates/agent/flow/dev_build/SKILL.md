@@ -119,16 +119,24 @@ uv run pytest tests/ -v
 
 Repeat Step 2 for each remaining action or reported issue.
 
-### Step 3: Review SKILL.md Quality
+### Step 3: Review SKILL.md Quality + API Path Consistency
 
 For each action's `agent/flow/{action}/SKILL.md`, verify:
 
 1. **Trigger**: Clear trigger keywords defined
 2. **Flow**: Step-by-step execution instructions present
-3. **Error handling**: What to do when things go wrong
-4. **References**: Any supporting docs in `references/` directory
+3. **API path consistency**: Every API path in SKILL.md (e.g. `POST /api/tasks`) must match the actual endpoint in `src/api.py`. Read both files and compare. Fix any mismatch immediately — this is a common source of agent errors.
+4. **Error handling**: What to do when things go wrong
 
-If SKILL.md is missing or incomplete, guide user to improve it.
+```bash
+# Quick check: extract API paths from SKILL.md and verify against running backend
+WORKSPACE_ROOT=$(cat .workspace_root) && cd "$WORKSPACE_ROOT"
+grep -rh 'GET \|POST \|PUT \|DELETE ' agent/flow/*/SKILL.md | sort -u
+grep -h '@app\.' src/api.py | sort -u
+# These two lists should be consistent
+```
+
+If SKILL.md is missing, incomplete, or has wrong API paths, fix it before deploy.
 
 ### Step 4: Deploy and Verify
 

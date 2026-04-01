@@ -395,6 +395,51 @@ define → deploy → build → 手动测试 → iterate（看报告改进）→
 
 **修复**：彻底清除 guide 中所有 Connections 相关文字。— **已修复**
 
+### 问题 42：SKILL.md 中 API 路径和实际后端路由不一致
+
+**现象**：dev_build 在 SKILL.md 中写了 `POST /api/tasks`，但实际实现的端点是 `POST /tasks`。default agent 按 SKILL.md 调用 `/api/tasks` → 404，自行改为 `/tasks` 才成功。
+
+**影响**：SKILL.md 和 API 实现脱节，agent 行为不可预测。
+
+**当前 evolve 能力**：
+- evolve_api_check：只跑 eval_cases.yaml 中定义的测试用例，不对比 SKILL.md 内容
+- evolve_structure_check：只检查文件是否存在，不看内容
+
+**需要增强**：evolve_api_check 或新增一个检查，从 SKILL.md 中提取 API 路径（正则匹配 `GET/POST/PUT/DELETE /...`），与后端实际路由（`GET /health` 返回的 OpenAPI spec 或直接 curl 测试）对比，发现不一致时报 suggestion。
+
+**根本原因**：dev_build 引导开发时，SKILL.md 的 API 路径和 src/api.py 的路由应该同步生成/更新，而不是分开写导致脱节。
+
+### 问题 43（架构）：内置 skill 应从框架读取，不是复制到项目
+
+**现象**：`socialwares new` 把 evolve_*、dev_*、inspect、setup_claude、check_health 全部复制到项目的 `agent/flow/` 下。框架升级后（`pip install --upgrade socialwares`），旧项目的这些 skill 不会更新。
+
+**当前行为**：
+```
+socialwares new → 复制 templates/agent/flow/* 到 project/agent/flow/
+socialwares deploy → 从 project/agent/flow/ 读取所有 skill
+```
+
+**期望行为**：
+```
+socialwares new → 只复制用户需要编辑的文件（scope.md, default.md, check_health/SKILL.md）
+socialwares deploy → 内置 skill 从框架包读取 + 用户 skill 从 project/agent/flow/ 读取
+```
+
+**分类**：
+- **内置 skill**（框架管理，用户不改）：evolve_*, dev_*, inspect, setup_claude
+- **用户 skill**（用户创建和编辑）：check_health, create_task, review_task...
+
+**修改方案**：
+1. 编译器区分两类 skill 来源：框架内置 vs 项目自定义
+2. `socialwares new` 不复制内置 skill 到项目（或只复制为只读引用）
+3. `socialwares deploy` 时内置 skill 从 `src/socialwares/templates/agent/flow/` 读取
+4. 用户如需自定义内置 skill，可以在项目里创建同名目录覆盖
+
+**好处**：
+- `pip install --upgrade socialwares` 后重新 deploy 即可获得最新内置 skill
+- 项目 agent/flow/ 更干净，只有用户的业务 skill
+- 不会出现"框架修了 bug 但旧项目还是旧版 skill"的问题
+
 ### 问题 41：E2E Phase 3.2 inline role 验证不准确
 
 **现象**：E2E 文档 Phase 3.2 检查 `grep "review and approve" .runtime/agents/reviewer/SOUL.md` 和 `ls agent/role/reviewer.md`（编译器自动生成）。但现在 Phase 2 改成了 dev_define 交互式引导，Agent 会用 `app.role("reviewer", file="agent/role/reviewer.md")` 而不是 inline 方式。所以：
