@@ -393,7 +393,16 @@ define → deploy → build → 手动测试 → iterate（看报告改进）→
 
 **现象**：虽然 scope 模板的 Connections 段已删，但 guide 文本中仍有 "是否需要连接外部 App" 的提问引导，导致 Agent 仍然问这个问题。
 
-**修复**：彻底清除 guide 中所有 Connections 相关文字。
+**修复**：彻底清除 guide 中所有 Connections 相关文字。— **已修复**
+
+### 问题 41：E2E Phase 3.2 inline role 验证不准确
+
+**现象**：E2E 文档 Phase 3.2 检查 `grep "review and approve" .runtime/agents/reviewer/SOUL.md` 和 `ls agent/role/reviewer.md`（编译器自动生成）。但现在 Phase 2 改成了 dev_define 交互式引导，Agent 会用 `app.role("reviewer", file="agent/role/reviewer.md")` 而不是 inline 方式。所以：
+1. reviewer.md 是 dev_define 创建的，不是编译器自动生成的
+2. SOUL.md 中的内容取决于 Agent 写了什么，不一定包含 "review and approve"
+3. inline 自动生成文件的功能仍然存在（编译器 `_sync_inline_content`），但 E2E 测试流程中不会触发它
+
+**需要修改**：E2E Phase 3.2 的 inline 验证应改为独立的编译器测试，或在 Phase 3 中用一个临时的 inline role 来验证。
 
 ### 问题 39：Python hook 被 enforce-tools.sh 拦截
 
