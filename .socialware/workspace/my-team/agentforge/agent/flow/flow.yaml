@@ -1,0 +1,69 @@
+# Flow definitions — action registry and state machines.
+#
+# Each named flow (F1, F2, ...) defines a state machine.
+# Direct actions have no state machine — they execute immediately.
+#
+# Structure follows SwSim §2 Flows pattern:
+#   flows:     named state machines with transitions
+#   direct_actions:  actions without state machine
+
+flows: {}
+  # Example (uncomment and customize for your app):
+  #
+  # F1:
+  #   name: task_lifecycle
+  #   resource: task              # what object has this state (task, order, user, etc.)
+  #   description: "Task from creation to closure"
+  #   states: [draft, submitted, under_review, approved, rejected, closed]
+  #   transitions:
+  #     - { from: draft,         action: submit,      to: submitted,    role: [default] }
+  #     - { from: submitted,     action: review,      to: under_review, role: [reviewer] }
+  #     - { from: under_review,  action: approve,     to: approved,     role: [reviewer] }
+  #     - { from: under_review,  action: reject,      to: rejected,     role: [reviewer] }
+  #     - { from: approved,      action: close,       to: closed,       role: [default] }
+
+direct_actions:
+  - action: check_health
+    role: [default, dev, evolver]
+    description: "Check app health status"
+
+  - action: setup_claude
+    role: [dev]
+    description: "Configure Claude Code environment (agent-setup plugin, settings, hooks)"
+
+  - { action: evolve_structure_check,    role: [evolver], description: "Check structural consistency of four primitives" }
+  - { action: evolve_session_diagnose, role: [evolver], description: "Diagnose issues from runtime data" }
+  - { action: evolve_api_check,     role: [evolver], description: "Run eval cases and report score" }
+  - { action: evolve_improve,  role: [evolver], description: "Propose and apply four-primitive changes" }
+  - { action: evolve_auto,     role: [evolver], description: "Run automated evolution loop (EvoSkill)" }
+  - { action: inspect, role: [dev, evolver], description: "Show project structure and dev workflow" }
+
+  # === Agent 配置管理 (AgentForge CMS) ===
+  - action: manage_agent
+    role: [default]
+    description: "Create, list, view, delete Agent configurations"
+
+  - action: manage_role
+    role: [default]
+    description: "Add, edit, list, delete roles for an Agent"
+
+  - action: manage_skill
+    role: [default]
+    description: "Add, edit, list, delete skills for an Agent"
+
+  - action: manage_scope
+    role: [default]
+    description: "View and update an Agent's scope definition"
+
+  - action: manage_commitment
+    role: [default]
+    description: "View and update an Agent's eval metrics"
+
+  # === 导出/导入 ===
+  - action: export_agent
+    role: [default]
+    description: "Export Agent config to shareable package"
+
+  - action: import_agent
+    role: [default]
+    description: "Import Agent config from shared package"

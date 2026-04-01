@@ -1,6 +1,6 @@
 # AgentForge 双交互模式实现详解
 
-> 版本: v1.1 | 日期: 2026-03-26
+> 版本: v1.2 | 日期: 2026-03-27
 > 关联文档: [agentforge-cms-design.md](./2026-03-26-agentforge-cms-design.md) §2.3
 
 ## 1. 核心思路
@@ -713,10 +713,10 @@ const COMPONENT_MAP: Record<string, Record<string, React.ComponentType<any>>> = 
     confirm_required: ConfirmDialog,
   },
   scope: {
-    updated:          MarkdownPreview,  // 展示更新后的 SOUL.md
+    updated:          MarkdownPreview,  // 展示更新后的 scope.md / role.md
   },
   commitment: {
-    updated:          YamlPreview,      // 展示更新后的 eval.yaml
+    updated:          YamlPreview,      // 展示更新后的 commitment.yaml
   },
   deploy: {
     exported:         DeployLog,        // 展示导出日志
@@ -903,7 +903,7 @@ T4. Dashboard 中各 Card 显示导出状态
     多选自动清空
 ```
 
-### 7.3 场景：通过 UI 编辑角色 SOUL.md
+### 7.3 场景：通过 UI 编辑角色 role.md
 
 ```
 T1. 用户点击 RoleCard 上的 [编辑] 按钮
@@ -916,7 +916,7 @@ T1. 用户点击 RoleCard 上的 [编辑] 按钮
     Chat 显示: 🔧 edit role: reviewer
 
 T2. Agent 响应:
-    text: "以下是 reviewer 角色当前的 SOUL.md 内容："
+    text: "以下是 reviewer 角色当前的内容："
     structured: {
       type: "role",
       action: "editing",
@@ -930,7 +930,7 @@ T2. Agent 响应:
     ↓
     Chat Panel 渲染 MarkdownEditor (内联在对话流中):
     ┌─────────────────────────────────────┐
-    │ 🤖 以下是 reviewer 当前的 SOUL.md：  │
+    │ 🤖 以下是 reviewer 当前的内容：       │
     │ ┌─────────────────────────────────┐ │
     │ │ # Reviewer                      │ │
     │ │ 你是审核者...                    │ │
@@ -947,7 +947,7 @@ T3. 用户在编辑器中修改内容，点击 [保存]
     })
 
 T4. Agent 响应:
-    text: "已更新 reviewer 角色的 SOUL.md"
+    text: "已更新 reviewer 角色的内容"
     structured: { type:"role", action:"updated", data:{...} }
 ```
 
@@ -1007,7 +1007,7 @@ async def chat_send(request: ChatSendRequest, user: User = Depends(get_current_u
    - export: 逐个导出，每完成一个返回一次 structured
    - detail: 返回所有目标的汇总表格
 4. entity === "_dialog" → 确认/取消上一轮操作
-5. context 字段包含额外数据（如编辑后的 SOUL.md 内容）
+5. context 字段包含额外数据（如编辑后的 role.md 内容）
 ```
 
 ---
@@ -1094,9 +1094,9 @@ app/src/
 │   ├── batch-action-bar.tsx     # 批量操作栏 (多选后显示)
 │   ├── confirm-dialog.tsx       # 确认对话框 (Agent 请求确认时)
 │   ├── delete-result.tsx        # 删除成功提示
-│   ├── markdown-editor.tsx      # Markdown 编辑器 (编辑 SOUL.md/SKILL.md)
+│   ├── markdown-editor.tsx      # Markdown 编辑器 (编辑 scope.md/role.md/SKILL.md)
 │   ├── markdown-preview.tsx     # Markdown 预览
-│   ├── yaml-editor.tsx          # YAML 编辑器 (编辑 eval.yaml)
+│   ├── yaml-editor.tsx          # YAML 编辑器 (编辑 commitment.yaml)
 │   ├── yaml-preview.tsx         # YAML 预览
 │   ├── deploy-log.tsx           # 部署日志
 │   └── cards/

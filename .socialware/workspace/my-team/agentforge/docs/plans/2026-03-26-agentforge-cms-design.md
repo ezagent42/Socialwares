@@ -1,19 +1,72 @@
 # AgentForge CMS 内容管理系统设计
 
-> 版本: v1.0 | 日期: 2026-03-26
+> 版本: v1.2 | 日期: 2026-03-31
 
 ## 1. 概述
 
-AgentForge 是一个 **Agent 创建与管理平台**，采用 CMS（内容管理系统）模式，让用户通过 Chat 对话来创建、编辑、管理 Agent 配置。
+AgentForge 是一个 **Agent 创建与管理平台**，采用 CMS（内容管理系统）模式，让用户通过 Chat 对话来创建、编辑、管理 Agent。
+
+### 1.1 Agent vs App（四原语）的区别
+
+| 概念 | 层级 | 包含 |
+|------|------|------|
+| **Agent** | 个体 | 身份描述 (role.md) + 技能 (skills) + 模型选择 |
+| **App (Workspace)** | 应用 | 四原语 (Scope + Role + Flow + Commitment) + 后端 + 前端 |
+
+**四原语是 App 级别的概念，不是 Agent 级别的。** 在 Socialware 框架中：
+- `scope.md` — App 的能力边界
+- `commitment.yaml` — App 的质量标准（由 evolver 评估用）
+- `flow.yaml` — App 的操作注册表
+- `role/*.md` — Agent 在 App 中的身份定义
+
+**AgentForge 管理的核心对象是 Agent（不是 App），Agent 的定义是 model 无关的：**
+
+```
+Agent = {
+  name: "code-review",          ← 名称
+  role_md: "# Code Reviewer\n  ← 身份描述（你是谁、做什么、怎么回复）
+            你是一个代码审查者...",
+  skills: [                     ← 技能列表（可选）
+    { name: "review_diff", skill_md: "..." },
+    { name: "check_security", skill_md: "..." },
+  ],
+}
+```
+
+**Agent 定义不包含 model — 同一个 Agent 可以运行在任何平台上。** 导出时用户选择目标格式：
+
+```
+导出时用户选择格式:
+  → gitagent     — GitAgent 标准 (agent.yaml + SOUL.md + skills/)，可再导出到任意平台
+  → claude-code  — CLAUDE.md + .claude/skills/，直接在 Claude Code 中使用
+  → codex        — AGENTS.md + .agents/skills/，直接在 Codex 中使用
+  → cursor       — .cursor/rules，直接在 Cursor 中使用
+  → socialwares  — 四原语 + Makefile，通过 make deploy + make start 使用
+```
+
+参考标准: [GitAgent](https://github.com/open-gitagent/gitagent) — 框架无关的 git-native Agent 定义标准。
+
+**导出通过 Adapter 模式实现：**
+```
+Agent (DB)
+    │
+    ├── GitAgentAdapter    → agent.yaml + SOUL.md + skills/
+    ├── ClaudeCodeAdapter  → CLAUDE.md + .claude/skills/
+    ├── CodexAdapter       → AGENTS.md + .agents/skills/
+    ├── CursorAdapter      → .cursor/rules
+    └── SocialwaresAdapter → agent/ 四原语 + Makefile
+```
+
+每个 Adapter 从统一的 Agent 数据 (role_md + skills) 生成平台特定的文件。
 
 **类比 CMS：**
 
 | CMS 概念 | AgentForge 对应 |
 |----------|----------------|
-| 文章/页面 | Agent 定义（一套完整的四原语配置） |
-| 媒体/组件 | Skill、Hook、MCP Server |
-| 分类/标签 | Role（角色）、权限映射 |
-| 发布 | 导出为标准四原语文件 → deploy |
+| 文章/页面 | Agent 定义（身份 + 技能） |
+| 媒体库/组件市场 | Skill 搜索与导入（find_skill — 本地/内建/GitAgent Registry/URL） |
+| 发布/导出 | 多格式导出（GitAgent / Claude Code / Codex / Cursor / Socialwares） |
+| 导入 | 多格式导入（自动检测格式） |
 
 **核心原则：用户永远在和 AgentForge 的 Agent 对话，Agent 是唯一的操作中介。**
 
@@ -24,23 +77,23 @@ AgentForge 是一个 **Agent 创建与管理平台**，采用 CMS（内容管理
 ### 2.1 整体架构图
 
 ```
-┌─────────────────────────────────────────────────────┐
-│               FRONTEND (Next.js) — 单页面            │
-│                                                      │
-│  ┌──────────────────────┬─────────────────────────┐  │
-│  │   Dashboard 区域      │      Chat Panel         │  │
-│  │                      │                         │  │
-│  │  Agent 返回数据的     │  - 消息列表              │  │
-│  │  Card/Table 展示     │  - ui_block 内联渲染     │  │
-│  │                      │  - 输入框                │  │
-│  │  (从 Chat Store      │                         │  │
-│  │   自动提取渲染)       │                         │  │
-│  └──────────┬───────────┴───────────┬─────────────┘  │
-│             └───────────────────────┘                 │
-│                   Chat Store (共享状态)                │
-│                         │                            │
-│                   SSE / WebSocket                     │
-└─────────────────────────┼────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                   FRONTEND (Next.js) — 单页面             │
+│                                                           │
+│  ┌──┬──────────────┬──────────────────────────────────┐   │
+│  │  │  Dashboard   │       Chat Terminal               │   │
+│  │侧│              │                                  │   │
+│  │边│  Agent Card  │  消息列表 + StructuredBlock 渲染   │   │
+│  │栏│  列表        │  命令面板 (输入时弹出)             │   │
+│  │  │  (entities)  │  输入框 + Send                    │   │
+│  │☀ │              │                                  │   │
+│  │👤│              │                                  │   │
+│  └──┴──────────────┴──────────────────────────────────┘   │
+│                                                           │
+│                   Chat Store (zustand 共享状态)             │
+│                         │                                 │
+│                   SSE (POST /api/chat/send)                │
+└─────────────────────────┼─────────────────────────────────┘
                           │
 ┌─────────────────────────┼────────────────────────────┐
 │                  BACKEND (FastAPI)                     │
@@ -385,12 +438,15 @@ async function checkAuth(): Promise<User | null> {
 
 | 决策点 | 选择 | 原因 |
 |--------|------|------|
-| Agent 通信方式 | 复用已有 Adapter Layer + SSE/WS 包装 | adapter 抽象已完成，天然支持多平台切换 |
+| Agent 通信方式 | 复用已有 Adapter Layer + SSE 包装 | adapter 抽象已完成，天然支持多平台切换 |
 | UI 渲染策略 | 前端根据 `type + action` 自动推断组件 | Agent 不耦合前端组件名，只关心业务语义 |
-| Dashboard 数据源 | Chat Store（Agent 返回数据的卡片化视图） | 统一由 Chat 驱动 |
-| 页面结构 | 单页面（Dashboard + Chat 并排） | 无路由，简化架构 |
+| Dashboard 数据源 | Chat Store entities（Agent 返回数据的卡片化视图） | 统一由 Chat 驱动 |
+| 页面布局 | 三栏：Sidebar（图标导航）+ Dashboard + Chat Terminal | 紧凑、可切换视图 |
+| 主题 | 亮/暗双主题，CSS 变量 + localStorage 持久化 | 跟随系统偏好，可手动切换 |
 | Session 管理 | 单会话模式（per user） | 体验连贯 |
 | 数据存储 | SQLite | Agent 配置持久化，支持查询和导出 |
+| Agent 数据模型 | name + role_md + skills（model 无关） | 同一 Agent 可导出到任意平台 |
+| 导出格式 | Adapter 模式（GitAgent / Claude / Codex / Cursor / Socialwares） | 参考 GitAgent 标准，一次创建多平台使用 |
 | 登录认证 | GitHub OAuth，后端处理 | 前端无路由，后端是数据唯一入口 |
 | 用户隔离 | 按 GitHub 用户隔离 | 每个用户独立的 Agent 配置空间 |
 
@@ -400,146 +456,115 @@ async function checkAuth(): Promise<User | null> {
 
 ### 5.1 页面布局
 
-单页面，两种状态：未登录（Login 页）和已登录（Dashboard + Chat）。
+三栏布局：窄 Sidebar（图标导航）+ Dashboard Panel + Chat Terminal。
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  AgentForge                        👤 alice [Logout] │
-├─────────────────────────┬───────────────────────────┤
-│                         │                           │
-│   Dashboard 区域         │    Chat Panel             │
-│                         │                           │
-│  ┌───────────────────┐  │  ┌─────────────────────┐  │
-│  │ Agent: task-mgr   │  │  │ 🤖 已创建 Agent:    │  │
-│  │ Roles: 2          │  │  │    task-manager      │  │
-│  │ Skills: 5         │  │  │    [agent_card]      │  │
-│  │ [展开详情]         │  │  ├─────────────────────┤  │
-│  └───────────────────┘  │  │ 👤 给它加个 reviewer │  │
-│                         │  │    角色              │  │
-│  ┌───────────────────┐  │  ├─────────────────────┤  │
-│  │ Agent: chatbot    │  │  │ 🤖 已添加角色:      │  │
-│  │ Roles: 1          │  │  │    reviewer          │  │
-│  │ Skills: 3         │  │  │    [role_card]       │  │
-│  │ [展开详情]         │  │  └─────────────────────┘  │
-│  └───────────────────┘  │                           │
-│                         │  ┌─────────────────────┐  │
-│                         │  │ 输入消息...     [发送] │  │
-│                         │  └─────────────────────┘  │
-└─────────────────────────┴───────────────────────────┘
+未登录:
+┌───────────────────────────────┐
+│         AgentForge            │
+│                               │
+│    [Continue with GitHub]     │
+│                               │
+│    Craft · Configure · Deploy │
+└───────────────────────────────┘
+
+已登录:
+┌──┬──────────────┬──────────────────────────┐
+│  │  AGENTS  2   │  AgentForge Terminal     │
+│  │              │                          │
+│  │ ┌──────────┐ │  消息列表                 │
+│侧│ │code-rev  │ │  + StructuredBlock 渲染   │
+│边│ │ EXAMPLE  │ │                          │
+│栏│ └──────────┘ │  ┌────────────────────┐  │
+│  │ ┌──────────┐ │  │ /create-agent      │  │
+│  │ │task-mgr  │ │  │ /list-agents       │  │ ← 命令面板
+│  │ │ CLAUDE   │ │  │ /find-skill        │  │
+│☀ │ └──────────┘ │  └────────────────────┘  │
+│👤│              │  [> 输入指令...]   [Send] │
+└──┴──────────────┴──────────────────────────┘
+
+Sidebar 图标 (上→下):
+  Logo → Terminal → Dashboard → (spacer) → Theme toggle → User avatar
 ```
+
+**Sidebar:**
+- 窄栏（56px），只有图标
+- Terminal/Dashboard 视图切换（移动端单视图，桌面端并排）
+- 主题切换（亮/暗）
+- 用户头像 → 点击弹出退出确认
+
+**Dashboard Panel:**
+- Agent 卡片列表（从 Chat Store entities 聚合）
+- 批量操作栏（多选后出现 Export/Delete/Clear）
+- Example Agent 有角标，不可删除
+
+**Chat Terminal:**
+- 消息列表 + StructuredBlockRenderer 内联渲染
+- 命令面板（输入时弹出，点击直接发送）
+- 加载状态动画
 
 ### 5.2 Chat Store（前端状态管理）
 
-Chat Store 是前端的核心状态容器，保存所有 Agent 返回的数据：
-
 ```typescript
 interface ChatStore {
-  // 用户信息
   user: User | null;
-
-  // 消息列表 (Chat Panel 渲染)
   messages: Message[];
+  entities: EntityStore;        // Dashboard 数据源
+  selected: TargetItem[];       // 批量操作选中项
+  session: { connected: boolean; loading: boolean };
 
-  // 结构化数据索引 (Dashboard 渲染)
-  entities: {
-    agents: Record<string, AgentData>;
-    roles: Record<string, RoleData>;
-    skills: Record<string, SkillData>;
-  };
-
-  // Session 状态
-  session: {
-    connected: boolean;
-    adapterId: string;
-  };
-}
-
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;            // 文本内容
-  structured?: StructuredData; // 结构化数据 (可选)
-  timestamp: number;
-  source: "chat" | "ui_action"; // 消息来源: 手动输入 or UI 操作生成
-}
-
-interface StructuredData {
-  type: "agent" | "role" | "skill" | "scope" | "commitment" | "deploy";
-  action: "created" | "updated" | "deleted" | "listed" | "exported";
-  data: Record<string, any>;
+  // 方法
+  checkAuth(): Promise<void>;
+  sendMessage(content: string, source: "chat" | "ui_action", displayText?: string): Promise<void>;
+  sendUIAction(action: UIAction): Promise<void>;
+  toggleSelect(item: TargetItem): void;
+  clearSelection(): void;
 }
 ```
 
-**渲染规则：**
+### 5.3 渲染规则
 
 | `type` | `action` | Chat 内联组件 | Dashboard 行为 |
 |--------|----------|--------------|---------------|
-| agent | created | AgentCard | 添加到 agents 列表 |
-| agent | listed | AgentTable | 刷新 agents 列表 |
-| agent | deleted | 删除确认提示 | 从列表移除 |
-| role | created | RoleCard | 更新对应 agent 的 roles |
-| role | updated | RoleCard (编辑态) | 更新对应 role 数据 |
-| skill | created | SkillCard | 更新对应 agent 的 skills |
-| skill | listed | SkillTable | 刷新 skills 列表 |
-| deploy | exported | DeployLog | 显示部署状态 |
-
-### 5.3 Dashboard 数据提取
-
-Dashboard 从 Chat Store 的消息历史中提取最新状态：
-
-```typescript
-function aggregateEntities(messages: Message[]): EntityStore {
-  const entities: EntityStore = { agents: {}, roles: {}, skills: {} };
-
-  for (const msg of messages) {
-    if (!msg.structured) continue;
-    const { type, action, data } = msg.structured;
-
-    switch (type) {
-      case "agent":
-        if (action === "created" || action === "updated")
-          entities.agents[data.id] = data;
-        if (action === "deleted")
-          delete entities.agents[data.id];
-        if (action === "listed")
-          data.agents?.forEach(a => entities.agents[a.id] = a);
-        break;
-      // ... 同理处理 role, skill
-    }
-  }
-  return entities;
-}
-```
+| agent | created | AgentCard | 添加到列表 |
+| agent | detailed | AgentDetail（四原语展开） | — |
+| agent | listed | DataTable | 刷新列表 |
+| agent | deleted | DeleteResult | 从列表移除 |
+| agent | confirm_required | ConfirmDialog | — |
+| skill | created | SkillCard | — |
+| skill | editing | MarkdownEditor | — |
+| scope | editing | MarkdownEditor | — |
+| deploy | exported | DeployLog（下载按钮） | — |
 
 ### 5.4 UI 组件清单
 
-**Chat 组件：**
-- `ChatPanel` — 消息列表 + 输入框 + SSE 连接管理
-- `MessageBubble` — 单条消息渲染（文本 + 可选 ui_block）
-- `StructuredBlockRenderer` — 根据 `type + action` 分发到具体组件
+**布局组件：**
+- `AppShell` — 主布局（Sidebar + Dashboard + Chat）
+- `Sidebar` — 图标导航 + 主题切换 + 用户菜单
+- `LoginPage` — GitHub 登录页
 
-**Card 组件（Chat 内联 + Dashboard 共用）：**
-- `AgentCard` — 显示 Agent 名称、描述、角色数、技能数
-- `RoleCard` — 显示角色名称、SOUL.md 预览
-- `SkillCard` — 显示技能名称、描述、关联角色标签
-- `DeployLog` — 显示部署编译日志
+**Chat 组件：**
+- `ChatPanel` — 消息列表 + 命令面板 + 输入框 + SSE 流式渲染
+- `MessageBubble` — 消息气泡（区分 chat / ui_action 来源样式）
+- `StructuredBlockRenderer` — type + action → 组件分发
+
+**Card 组件（Chat + Dashboard 共用）：**
+- `AgentCard` — Agent 信息 + checkbox 多选 + View/Export/Delete 按钮 + Example 角标
+- `AgentDetail` — 四原语展开视图（Scope/Roles/Skills/Commitment 分区）
+- `RoleCard` — 角色名 + 描述预览
+- `SkillCard` — 技能名 + 描述 + 角色标签
+- `DeployLog` — 导出结果 + zip 下载按钮
 
 **Dashboard 组件：**
-- `DashboardPanel` — 从 Chat Store 的 entities 中提取数据，渲染 Card 列表
-- `AgentDetail` — 展开某个 Agent，显示其下所有 Role/Skill/Scope/Commitment
+- `DashboardPanel` — Agent 列表 + 空状态 + 批量操作栏
+- `BatchActionBar` — 多选后的 Export/Delete/Clear 操作
 
-**编辑组件（在 Chat 流中内联）：**
-- `MarkdownEditor` — 编辑 SOUL.md / SKILL.md 内容
-- `YamlEditor` — 编辑 eval.yaml / flow.yaml
-
-**交互组件：**
-- `ConfirmDialog` — Agent 请求确认时的 [确认] / [取消] 按钮
-- `ActionButton` — Card 上的操作按钮（删除、编辑、导出等），点击后生成 prompt
-- `PromptGenerator` — 将 UI 操作转为自然语言 prompt 并发送
-
-**Auth 组件：**
-- `LoginPage` — GitHub 登录按钮
-- `UserBar` — 顶部用户信息 + Logout 按钮
+**编辑/交互组件：**
+- `MarkdownEditor` — 内联 Markdown 编辑器（Edit/Preview 切换）
+- `MarkdownPreview` — 只读 Markdown 预览
+- `YamlEditor` / `YamlPreview` — YAML 编辑/预览
+- `ConfirmDialog` — 确认/取消对话框
+- `ActionButton` — Card 操作按钮（发送 UIAction）
 
 ---
 
@@ -558,8 +583,10 @@ POST /api/auth/logout        # → 清除 session
 POST /api/chat/send          # ← 用户发消息给 Agent
 GET  /api/chat/stream        # → SSE 流，接收 Agent 响应
 
-# === System ===
-GET  /health                 # → 健康检查
+# === System (继承自模板) ===
+GET  /health                           # → 健康检查
+GET  /violations                       # → 列出未解决的 commitment 违规
+POST /violations/{violation_id}/resolve # → 标记违规已解决
 ```
 
 ### 6.2 Auth 实现
@@ -604,39 +631,88 @@ async def get_current_user(request: Request) -> User:
     """
 ```
 
-### 6.3 Session Manager
+### 6.3 Session Manager + Agent 集成
 
-管理 per-user 的 Agent 会话：
+**核心原则：用户消息必须经过 Agent（Claude/Codex/Kimi）处理，由 Agent 决定调用哪个 CRUD 函数。** Session Manager 不做意图解析，只负责管理 Agent 会话和消息转发。
+
+```
+用户消息 → Session Manager → Adapter → Agent (Claude SDK)
+                                          │
+                                Agent 根据 SOUL.md 理解身份
+                                Agent 根据 SKILL.md 决定操作
+                                          │
+                                Agent 调用 CRUD 函数 (通过 Bash/tool)
+                                          │
+                                Agent 返回 ```json:structured 结果
+                                          │
+                              Session Manager 解析 structured 块
+                                          │
+                                    SSE → 前端
+```
+
+**Agent 的执行环境：**
+
+Agent 运行在 `.runtime/agents/default/` 中（由 `deploy.sh` 编译生成），具备：
+- `SOUL.md` — 合并了 scope.md + role/default.md，告诉 Agent 它是 AgentForge 管理者
+- `.claude/skills/` — 链接了所有 skill（manage_agent、manage_skill、export_agent、import_agent 等）
+- 每个 SKILL.md 中描述了触发条件、执行流程、CRUD 函数调用方式、结构化响应格式
+
+**Agent 如何调用 CRUD：**
+
+Agent 通过 Bash 工具执行 Python 脚本或直接调用 API：
+```bash
+# Agent 在 SKILL.md 指导下执行
+uv run python -c "
+import asyncio
+from src.db import Database
+from src.crud.agent_crud import create_agent
+db = Database('.runtime/data/Sqlite/agentforge.db')
+asyncio.run(db.init())
+result = asyncio.run(create_agent(db, '$USER_ID', 'task-manager', 'desc', 'claude'))
+print(result)
+"
+```
+
+或者 Agent 通过 HTTP 调用后端 API（如果我们提供内部 CRUD 端点）。
+
+**Session Manager 架构：**
 
 ```python
 class SessionManager:
-    """Per-user Agent 会话管理"""
+    """Per-user Agent 会话管理 — 不做意图解析，只做消息转发"""
 
-    # user_id → AgentSession
     sessions: dict[str, AgentSession]
 
     async def get_or_create(user_id: str, adapter_name: str) -> AgentSession:
-        """获取用户的 Agent 会话，不存在则创建"""
+        """获取用户的 Agent 会话，不存在则创建
+
+        1. 加载 .runtime/agents/default/ 的 RoleConfig
+        2. 实例化对应的 Adapter (Claude/Codex/Kimi)
+        3. 建立 Agent SDK 连接
+        """
 
     async def send(user_id: str, message: str) -> AsyncIterator[AgentResponse]:
         """
-        发送用户消息:
+        转发用户消息给 Agent:
         1. 获取用户的 AgentSession
-        2. 调用 adapter.query(prompt)
-        3. 解析 Agent 响应，提取结构化数据
-        4. 保存到 chat_history 表 (绑定 user_id)
-        5. yield 响应块
+        2. 将 user_id 注入消息上下文（Agent 需要知道是谁在操作）
+        3. 调用 adapter.launch_sdk(prompt)
+        4. 流式接收 Agent 响应
+        5. 解析 ```json:structured 代码块
+        6. 保存到 chat_history 表
+        7. yield SSE 事件
         """
 
     async def disconnect(user_id: str):
-        """断开用户的 Agent 会话"""
+        """断开 Agent 会话"""
 
 
 class AgentSession:
     """单个用户的 Agent 会话"""
 
     user_id: str
-    adapter: BaseAdapter
+    adapter: BaseAdapter      # Claude/Codex/Kimi SDK adapter
+    config: RoleConfig        # .runtime/agents/default/ 的配置
     history: list[ChatMessage]
     connected: bool
 ```
@@ -653,7 +729,24 @@ class AgentSession:
 
 每个 adapter 的 `launch_sdk()` 实现必须遵守此规则。`BaseAdapter` 文档中应标注此约束。
 
-### 6.5 Agent 响应解析
+deploy.sh 是 adapter-aware 的（`--adapter claude|codex|kimi`），为不同平台生成不同配置：
+
+| | Claude | Codex | Kimi |
+|--|--------|-------|------|
+| Skills 目录 | `.claude/skills/` | `.agents/skills/` | `.agents/skills/` |
+| Prompt 文件 | `SOUL.md` | `AGENTS.md` | `AGENTS.md` |
+| Hooks | `.claude/hooks/` | `.codex/hooks/` | 无 |
+
+### 6.5 Hook 数据采集
+
+deploy.sh 为每个角色生成两个 hook 脚本（Claude/Codex），用于采集运行时数据：
+
+- `log_prompt.sh` (UserPromptSubmit) — 记录用户输入到 `.runtime/data/prompts/*.jsonl`
+- `log_tool.sh` (PreToolUse) — 记录工具调用到 `.runtime/data/prompts/*.jsonl`
+
+这些数据是 evolver 诊断的来源。Kimi 平台无 hook 支持。
+
+### 6.6 Agent 响应解析
 
 Agent 在回复中使用 JSON 代码块标记结构化输出：
 
@@ -683,21 +776,38 @@ Agent 在回复中使用 JSON 代码块标记结构化输出：
 
 ### 6.5 Business Layer
 
-Agent 的 Skill 通过 Python 函数调用这些模块，不经过 HTTP：
+Agent 的 Skill 通过 Python 函数调用这些模块，不经过 HTTP。
+
+**核心原则：CRUD 操作只写入 DB。导出时从 DB 生成完整 workspace。**
+
+```
+创建/编辑 Agent → 写入 SQLite (DB) ← UI 唯一数据源
+
+导出:
+    从 DB 读取配置 + 从模板复制运行时工具
+    → 打包为完整可运行的 workspace zip
+    → 浏览器下载
+
+导入:
+    方式 1: AgentForge UI 上传 zip → 解析四原语文件 → 写入 DB（UI 可管理）
+    方式 2: 手动解压 zip 到独立 workspace → make deploy → 直接可用
+
+运行 Agent:
+    导出的 workspace 中 → make deploy → make start ROLE=default
+```
 
 #### 6.5.1 Agent CRUD
 
 ```python
 # src/crud/agent_crud.py
 
-def create_agent(user_id: str, name: str, description: str) -> Agent:
+def create_agent(user_id: str, name: str, description: str, model: str = "claude") -> Agent:
     """
-    创建 Agent 配置:
-    1. 在 agents 表插入记录 (绑定 user_id)
-    2. 自动创建默认 scope
-    3. 自动创建默认 role (default)
-    4. 自动注册 check_health skill
-    5. 返回 Agent 对象
+    创建 Agent 配置 (只写 DB):
+    1. 在 agents 表插入记录 (绑定 user_id, 含 model 字段)
+    2. 自动创建默认 scope + default 角色 + 空 commitment
+    3. 返回 Agent 对象
+    注：配置只存 DB，导出时才生成文件
     """
 
 def get_agent(user_id: str, agent_id: str) -> Agent:
@@ -719,7 +829,7 @@ def create_role(agent_id: str, name: str, soul_md: str) -> Role:
     """为指定 Agent 创建角色"""
 
 def update_role(role_id: str, soul_md: str) -> Role:
-    """更新角色的 SOUL.md 内容"""
+    """更新角色的 role.md 内容"""
 
 def list_roles(agent_id: str) -> list[Role]:
     """列出指定 Agent 的所有角色"""
@@ -757,7 +867,7 @@ def update_scope(agent_id: str, soul_md: str) -> Scope:
 
 # src/crud/commitment_crud.py
 def get_commitment(agent_id: str) -> Commitment:
-def update_commitment(agent_id: str, eval_yaml: str) -> Commitment:
+def update_commitment(agent_id: str, commitment_yaml: str) -> Commitment:
 ```
 
 #### 6.5.5 Export
@@ -771,9 +881,9 @@ def export_agent(agent_id: str, output_dir: Path):
 
     output_dir/
     ├── agent/
-    │   ├── role/{name}/SOUL.md
-    │   ├── scope/SOUL.md
-    │   ├── commitment/eval.yaml
+    │   ├── role/{name}.md
+    │   ├── scope/scope.md
+    │   ├── commitment/commitment.yaml
     │   ├── flow/
     │   │   ├── flow.yaml          (自动生成)
     │   │   └── {skill}/SKILL.md
@@ -787,51 +897,88 @@ def export_agent(agent_id: str, output_dir: Path):
 
 ---
 
-## 7. 数据库设计
+## 7. .runtime/ 目录结构
 
-使用 SQLite，存储于 `.runtime/data/Sqlite/agentforge.db`：
+`make deploy` 后生成的完整 .runtime/ 结构：
+
+```
+.runtime/
+├── .deploy_stamp              ← Makefile 增量构建标记
+├── data/
+│   ├── Files/                 ← 应用文件
+│   ├── Sqlite/                ← 数据库 (agentforge.db)
+│   ├── prompts/               ← Hook 日志 (JSONL)
+│   ├── sessions/              ← SDK 会话记录 (JSON)
+│   └── evolve/
+│       ├── reports/           ← 诊断报告 (JSON)
+│       ├── violations/        ← Commitment 违规 (JSONL)
+│       ├── auto_sessions/     ← 自动测试会话 (JSON)
+│       └── state.yaml         ← 增量扫描游标
+└── agents/
+    ├── default/               ← default 角色的 PROJECT_DIR
+    │   ├── .claude/skills/    ← 允许的技能 (符号链接)
+    │   ├── .claude/hooks/     ← log_prompt.sh, log_tool.sh
+    │   ├── .claude/settings.local.json
+    │   ├── .workspace_root    ← 工作区根路径
+    │   ├── SOUL.md            ← 合并的 prompt (scope.md + role.md)
+    │   ├── commitment.yaml    ← 复制
+    │   └── flow.yaml          ← 复制 (供参考)
+    ├── dev/                   ← dev 角色
+    └── evolver/               ← evolver 角色 (类似结构)
+```
+
+## 8. 数据库设计
+
+使用 SQLite，存储于 `.runtime/data/Sqlite/agentforge.db`。
+
+### 8.1 核心数据模型
+
+Agent 的核心数据只有两个：身份描述和技能。Model 在导出时选择，不存储在 Agent 中。
+
+```
+Agent (model 无关)
+ ├── name          "code-review"
+ ├── role_md       "# Code Reviewer\n你是..."    ← Agent 的身份定义
+ └── skills[]
+      ├── { name: "review_diff", skill_md: "...", description: "..." }
+      └── { name: "check_security", skill_md: "...", description: "..." }
+```
+
+### 8.2 表结构
 
 ```sql
 -- 用户 (GitHub OAuth)
 CREATE TABLE users (
-    id              TEXT PRIMARY KEY,           -- UUID
-    github_id       INTEGER NOT NULL UNIQUE,    -- GitHub user ID
-    github_login    TEXT NOT NULL,              -- GitHub username
-    github_name     TEXT DEFAULT '',            -- GitHub display name
-    github_avatar   TEXT DEFAULT '',            -- Avatar URL
+    id              TEXT PRIMARY KEY,
+    github_id       INTEGER NOT NULL UNIQUE,
+    github_login    TEXT NOT NULL,
+    github_name     TEXT DEFAULT '',
+    github_avatar   TEXT DEFAULT '',
     created_at      TEXT DEFAULT (datetime('now')),
     updated_at      TEXT DEFAULT (datetime('now'))
 );
 
 -- 登录会话
 CREATE TABLE sessions (
-    id              TEXT PRIMARY KEY,           -- session_id (UUID)
+    id              TEXT PRIMARY KEY,
     user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at      TEXT DEFAULT (datetime('now')),
-    expires_at      TEXT NOT NULL               -- 过期时间
+    expires_at      TEXT NOT NULL
 );
 
--- Agent 定义
+-- Agent 定义（核心表，model 无关）
 CREATE TABLE agents (
     id              TEXT PRIMARY KEY,
     user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name            TEXT NOT NULL,
     description     TEXT DEFAULT '',
+    role_md         TEXT DEFAULT '',             -- Agent 身份描述（Markdown）
+    is_example      INTEGER DEFAULT 0,
     created_at      TEXT DEFAULT (datetime('now')),
     updated_at      TEXT DEFAULT (datetime('now')),
-    UNIQUE(user_id, name)                       -- 同一用户下 Agent 名唯一
+    UNIQUE(user_id, name)
 );
-
--- 角色定义
-CREATE TABLE roles (
-    id              TEXT PRIMARY KEY,
-    agent_id        TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-    name            TEXT NOT NULL,
-    soul_md         TEXT DEFAULT '',
-    created_at      TEXT DEFAULT (datetime('now')),
-    updated_at      TEXT DEFAULT (datetime('now')),
-    UNIQUE(agent_id, name)
-);
+-- 注：不存储 model。Agent 定义是 model 无关的，model 在导出时选择。
 
 -- 技能定义
 CREATE TABLE skills (
@@ -843,29 +990,6 @@ CREATE TABLE skills (
     created_at      TEXT DEFAULT (datetime('now')),
     updated_at      TEXT DEFAULT (datetime('now')),
     UNIQUE(agent_id, name)
-);
-
--- 技能-角色权限映射
-CREATE TABLE skill_roles (
-    skill_id        TEXT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
-    role_id         TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-    PRIMARY KEY (skill_id, role_id)
-);
-
--- Scope 定义 (每个 Agent 一条)
-CREATE TABLE scopes (
-    id              TEXT PRIMARY KEY,
-    agent_id        TEXT NOT NULL UNIQUE REFERENCES agents(id) ON DELETE CASCADE,
-    soul_md         TEXT DEFAULT '',
-    updated_at      TEXT DEFAULT (datetime('now'))
-);
-
--- Commitment 定义 (每个 Agent 一条)
-CREATE TABLE commitments (
-    id              TEXT PRIMARY KEY,
-    agent_id        TEXT NOT NULL UNIQUE REFERENCES agents(id) ON DELETE CASCADE,
-    eval_yaml       TEXT DEFAULT '',
-    updated_at      TEXT DEFAULT (datetime('now'))
 );
 
 -- 对话历史
@@ -882,7 +1006,7 @@ CREATE TABLE chat_history (
 
 ---
 
-## 8. 消息协议
+## 9. 消息协议
 
 ### 8.1 前端 → 后端
 
@@ -972,7 +1096,7 @@ interface ErrorEvent {
 
 ---
 
-## 9. 前端渲染映射
+## 10. 前端渲染映射
 
 前端根据 `type + action` 自动推断渲染组件：
 
@@ -1010,14 +1134,14 @@ function StructuredBlockRenderer({ data }: { data: StructuredData }) {
 
 ---
 
-## 10. 技术栈
+## 11. 技术栈
 
 | 层 | 技术 | 说明 |
 |----|------|------|
 | 前端框架 | Next.js 15 + React 19 | 已有 |
 | 前端样式 | Tailwind CSS 4 | 已有 |
 | 前端状态 | zustand 或 React Context | 轻量级 Chat Store |
-| 前端 Markdown | react-markdown | SOUL.md 预览 |
+| 前端 Markdown | react-markdown | scope.md / role.md 预览 |
 | 后端框架 | FastAPI | 已有 |
 | 数据库 | SQLite (aiosqlite) | 轻量、无需额外服务 |
 | ORM | 无，直接 SQL | 表结构简单 |
@@ -1028,32 +1152,48 @@ function StructuredBlockRenderer({ data }: { data: StructuredData }) {
 
 ---
 
-## 11. 开发阶段
+## 12. 开发阶段
 
 ```
-Phase 1 — 登录 + 通信骨架
+Phase 1 — 登录 + 通信骨架                              [已完成]
   ├── 后端: GitHub OAuth (login/callback/me/logout)
-  ├── 后端: Session Manager + /api/chat/send + /api/chat/stream (SSE)
-  ├── 后端: 对接已有 Adapter Layer
+  ├── 后端: Session Manager + /api/chat/send (SSE)
   ├── 前端: Login 页 + Auth 状态管理
-  ├── 前端: Chat Panel 组件 (消息列表 + 输入框 + SSE 连接)
-  └── 验证: GitHub 登录 → 发消息 → Agent 回复 → 前端显示
+  ├── 前端: Chat Panel + 命令面板
+  └── 验证: GitHub 登录 → 发消息 → 响应 → 前端显示
 
-Phase 2 — 数据库 + CRUD
-  ├── 后端: SQLite 初始化 + 表结构 (含 users/sessions)
-  ├── 后端: agent_crud / role_crud / skill_crud / scope_crud / commitment_crud
-  ├── Agent: manage_agent / manage_role / manage_skill 等 Skill
-  └── 验证: 通过 Chat 创建 Agent → 数据写入 DB (绑定用户)
+Phase 2 — 数据库 + CRUD                                [已完成]
+  ├── 后端: SQLite 初始化 + 9 张表
+  ├── 后端: 6 个 CRUD 模块 + export + import
+  ├── 后端: session.py 硬编码意图匹配（临时方案）
+  └── 验证: 通过 Chat 创建 Agent → 数据写入 DB
 
-Phase 3 — 结构化渲染
-  ├── 后端: Agent 响应解析 (提取 structured block)
+Phase 3 — 结构化渲染 + 前端                             [已完成]
   ├── 前端: Chat Store + StructuredBlockRenderer
-  ├── 前端: AgentCard / RoleCard / SkillCard 组件
-  └── 验证: Chat 中显示操作结果卡片
+  ├── 前端: AgentCard / RoleCard / SkillCard + AgentDetail
+  ├── 前端: Sidebar + Dashboard + 主题切换
+  └── 验证: Chat 中显示操作结果卡片 + Dashboard 联动
 
-Phase 4 — Dashboard + 导出
-  ├── 前端: Dashboard Panel (从 Chat Store 聚合数据)
-  ├── 后端: export.py (DB → 四原语文件)
-  ├── 前端: DeployLog 组件
-  └── 验证: 创建 Agent → Dashboard 显示 → 导出为文件
+Phase 4 — Dashboard + 导出                              [已完成]
+  ├── 前端: Dashboard Panel + 批量操作
+  ├── 后端: export → 浏览器下载 zip
+  ├── 后端: 创建引导 wizard（7 步流程）
+  ├── 预设 example agent (code-review-example)
+  └── 验证: 创建 Agent → Dashboard 显示 → 导出 zip → 解压可用
+
+Phase 5 — Agent 集成（待实现）
+  ├── 后端: Session Manager 接入真实 Adapter Layer
+  │   - 替换 session.py 中的硬编码意图匹配
+  │   - 用户消息通过 Claude SDK 发给 Agent
+  │   - Agent 根据 SKILL.md 理解意图并调用 CRUD
+  ├── 后端: CRUD 函数提供为 Agent 可调用的工具
+  │   - 方案 A: Agent 通过 Bash 执行 Python 脚本调用 CRUD
+  │   - 方案 B: 提供内部 HTTP API，Agent 通过 curl 调用
+  ├── 后端: user_id 上下文注入
+  │   - Session Manager 将 user_id 注入 Agent 的系统提示
+  │   - Agent 在调用 CRUD 时使用该 user_id
+  ├── 后端: Agent 响应解析
+  │   - 从 Agent 的回复中提取 ```json:structured 代码块
+  │   - 通过 SSE 推送给前端
+  └── 验证: 用户发消息 → Agent 理解 → 调用 CRUD → 返回结构化数据 → 前端渲染
 ```
