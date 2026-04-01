@@ -509,7 +509,12 @@ data_dir.mkdir(parents=True, exist_ok=True)
 
 {extract}
 
-log_file = data_dir / "current.jsonl"
+# Write to session-specific file if session_id available, else current.jsonl
+session_id = entry.get("session_id", "")
+if session_id:
+    log_file = data_dir / f"{{session_id}}.jsonl"
+else:
+    log_file = data_dir / "current.jsonl"
 with open(log_file, "a", encoding="utf-8") as f:
     f.write(json.dumps(entry, ensure_ascii=False) + "\\n")
 '''

@@ -409,6 +409,16 @@ define → deploy → build → 手动测试 → iterate（看报告改进）→
 
 **根本原因**：dev_build 引导开发时，SKILL.md 的 API 路径和 src/api.py 的路由应该同步生成/更新，而不是分开写导致脱节。
 
+### 问题 44：hook 日志不分片，无法区分对话
+
+**现象**：所有 TUI 对话的 hook 日志都追加到同一个 `current.jsonl`，不按 session 分片。多次对话混在一起，diagnose 无法区分哪些记录属于哪次对话。
+
+**当前行为**：
+- TUI 模式：hook → `current.jsonl`（追加，不分片）
+- SDK 模式：每次调用 → `session_{timestamp}.json`（天然分片）
+
+**需要改进**：hook 脚本应该按 session 分片。Claude Code 每次启动有一个 session_id，hook 收到的数据里有 `session_id` 字段。可以按 session_id 写到不同文件，或在 `current.jsonl` 中用 session_id 区分后由 diagnose 分组。
+
 ### 问题 43（架构）：内置 skill 应从框架读取，不是复制到项目
 
 **现象**：`socialwares new` 把 evolve_*、dev_*、inspect、setup_claude、check_health 全部复制到项目的 `agent/flow/` 下。框架升级后（`pip install --upgrade socialwares`），旧项目的这些 skill 不会更新。
