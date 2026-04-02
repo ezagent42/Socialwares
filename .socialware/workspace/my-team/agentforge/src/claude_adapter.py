@@ -1,6 +1,7 @@
 """Claude SDK adapter — sends user messages to Claude Agent with SOUL.md + SKILL.md context."""
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import AsyncIterator
@@ -269,23 +270,66 @@ async def send_to_agent(
     message: str,
     system_prompt: str,
     history: list[dict] | None = None,
+    db=None,
+    user_id: str = "",
 ) -> AsyncIterator[str]:
-    """Send message to Claude Agent and stream response chunks."""
+    """Send message to Claude Agent with tool use support.
+
+    If db and user_id are provided, enables tool use loop:
+    1. Send message + tools to Claude
+    2. If Claude returns tool_use, execute locally and send tool_result back
+    3. Repeat until Claude returns a final text response
+    """
     import anthropic
 
     client = anthropic.AsyncAnthropic()
 
     messages = []
     if history:
-        for h in history[-10:]:  # Keep last 10 messages for context
+        for h in history[-10:]:
             messages.append({"role": h["role"], "content": h["content"]})
     messages.append({"role": "user", "content": message})
 
-    async with client.messages.stream(
-        model="claude-sonnet-4-20250514",
-        max_tokens=2048,
-        system=system_prompt,
-        messages=messages,
-    ) as stream:
-        async for text in stream.text_stream:
-            yield text
+    # Use tools only when db is available
+    tools = AGENT_TOOLS if db else None
+
+    while True:
+        kwargs = {
+            "model": "claude-sonnet-4-20250514",
+            "max_tokens": 2048,
+            "system": system_prompt,
+            "messages": messages,
+        }
+        if tools:
+            kwargs["tools"] = tools
+
+        response = await client.messages.create(**kwargs)
+
+        # Check if response contains tool use
+        tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
+
+        if not tool_use_blocks:
+            # Final text response — yield all text blocks
+            for block in response.content:
+                if block.type == "text":
+                    yield block.text
+            break
+
+        # Execute tools and build tool_result message
+        messages.append({"role": "assistant", "content": response.content})
+
+        tool_results = []
+        for tool_block in tool_use_blocks:
+            result = await execute_tool(tool_block.name, tool_block.input, user_id, db)
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": tool_block.id,
+                "content": json.dumps(result, ensure_ascii=False),
+            })
+
+        messages.append({"role": "user", "content": tool_results})
+
+        # Safety: max 5 tool-use rounds to prevent infinite loop
+        if len([m for m in messages if m["role"] == "user"]) > 7:
+            yield "Too many tool calls, stopping."
+            break

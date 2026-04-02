@@ -61,3 +61,13 @@ def test_execute_tool_unknown():
     """Unknown tool should return error dict."""
     result = asyncio.run(execute_tool("unknown_tool", {}, "u1", None))
     assert "error" in result
+
+
+def test_send_to_agent_has_tools_param():
+    """send_to_agent should accept db and user_id params for tool execution."""
+    import inspect
+    from src.claude_adapter import send_to_agent
+    sig = inspect.signature(send_to_agent)
+    params = list(sig.parameters.keys())
+    assert "db" in params
+    assert "user_id" in params
