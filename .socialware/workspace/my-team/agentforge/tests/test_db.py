@@ -1,6 +1,5 @@
 import pytest
 import asyncio
-from pathlib import Path
 
 
 @pytest.fixture
@@ -17,13 +16,29 @@ def db(db_path):
 
 
 def test_database_creates_tables(db, db_path):
-    """Database.init() creates all required tables."""
     assert db_path.exists()
     tables = asyncio.run(db.list_tables())
-    expected = {"users", "sessions", "agents", "roles", "skills", "skill_roles", "scopes", "commitments", "chat_history"}
+    expected = {"users", "sessions", "agents", "skills", "chat_history"}
     assert set(tables) == expected
 
 
+def test_database_no_old_tables(db):
+    tables = asyncio.run(db.list_tables())
+    for old in ["roles", "scopes", "commitments", "skill_roles"]:
+        assert old not in tables
+
+
+def test_agents_has_role_md(db):
+    async def _check():
+        conn = await db.connect()
+        cursor = await conn.execute("PRAGMA table_info(agents)")
+        columns = {row[1] for row in await cursor.fetchall()}
+        await conn.close()
+        return columns
+    columns = asyncio.run(_check())
+    assert "role_md" in columns
+    assert "model" not in columns
+
+
 def test_database_is_idempotent(db):
-    """Calling init() twice does not raise."""
     asyncio.run(db.init())

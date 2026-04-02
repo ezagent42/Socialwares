@@ -53,10 +53,20 @@ class SessionManager:
 
         # Execute real operations
         try:
-            if ui_action:
+            if ui_action and _should_use_sdk(message, session):
+                # Convert UI action to natural language and route through Agent
+                sdk_message = _ui_action_to_text(ui_action)
+                try:
+                    response_text, structured = await _handle_via_sdk(sdk_message, user_id, db, session)
+                except Exception:
+                    response_text, structured = await _handle_ui_action(ui_action, user_id, db, session)
+            elif ui_action:
                 response_text, structured = await _handle_ui_action(ui_action, user_id, db, session)
             elif _should_use_sdk(message, session):
-                response_text, structured = await _handle_via_sdk(message, user_id, db, session)
+                try:
+                    response_text, structured = await _handle_via_sdk(message, user_id, db, session)
+                except Exception:
+                    response_text, structured = await _handle_natural_language(message, user_id, db, session)
             else:
                 response_text, structured = await _handle_natural_language(message, user_id, db, session)
         except Exception as e:
@@ -781,14 +791,28 @@ def _should_use_sdk(message: str, session: dict) -> bool:
 
 async def _handle_via_sdk(message: str, user_id: str, db: Database, session: dict) -> tuple[str, dict | None]:
     """Route message to Claude Agent via SDK with tool use."""
-    from src.claude_adapter import build_system_prompt, send_to_agent
+    from src.claude_adapter import send_to_agent, _SDK_SYSTEM_PROMPT
 
-    system_prompt = build_system_prompt(_RUNTIME_DIR, user_id, str(db.db_path))
+    # Convert slash commands to natural language so Claude Code CLI
+    # doesn't intercept them as built-in skills.
+    sdk_message = message
+    slash_map = {
+        "/list-agents": "list all agents",
+        "/create-agent": "create a new agent (guide me step by step)",
+        "/add-skill": "add a skill to an agent (guide me step by step)",
+        "/export-agent": "export an agent (ask me which agent and format)",
+        "/import-agent": "import an agent configuration",
+        "/delete-agent": "delete an agent (ask me which one and confirm)",
+        "/find-skill": "search for existing skills",
+    }
+    lower = message.strip().lower()
+    if lower in slash_map:
+        sdk_message = slash_map[lower]
 
     full_response = ""
     async for chunk in send_to_agent(
-        message, system_prompt, session.get("history"),
-        db=db, user_id=user_id,
+        sdk_message, _SDK_SYSTEM_PROMPT, session.get("history"),
+        db=db, user_id=user_id, session=session,
     ):
         full_response += chunk
 
@@ -859,6 +883,34 @@ def _extract_description(message: str) -> str:
         if match:
             return match.group(1).strip()
     return ""
+
+
+def _ui_action_to_text(ui_action: dict) -> str:
+    """Convert a UI action dict to natural language for the Agent."""
+    entity = ui_action.get("entity", "")
+    action = ui_action.get("action", "")
+    targets = ui_action.get("targets", [])
+    context = ui_action.get("context", {})
+    names = ", ".join(t.get("name", t.get("id", "")) for t in targets)
+
+    if entity == "_dialog":
+        return "confirm" if action == "confirm" else "cancel"
+
+    if action == "delete":
+        return f"delete {entity} {names}"
+    if action == "detail":
+        return f"show details of {entity} {names}"
+    if action == "export":
+        fmt = context.get("format", "gitagent")
+        return f"export {entity} {names} in {fmt} format"
+    if action == "edit":
+        return f"edit {entity} {names}"
+    if action == "update":
+        field = context.get("field", "")
+        value = context.get("value", "")
+        return f"update {entity} {names} set {field} to: {value}"
+
+    return f"{action} {entity} {names}"
 
 
 def _parse_ui_action(message: str) -> dict | None:

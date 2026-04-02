@@ -20,15 +20,17 @@ function DeleteResult({ data }: { data: Record<string, any> }) {
 }
 
 function DeployLog({ data }: { data: Record<string, any> }) {
-  const downloads: Array<{ name: string; download_url: string }> = data.downloads ?? [];
+  const downloads: Array<{ name: string; download_url: string; format?: string }> = data.downloads ?? [];
   if (downloads.length === 0 && data.download_url) {
-    downloads.push({ name: data.agent_name ?? "agent", download_url: data.download_url });
+    downloads.push({ name: data.agent_name ?? "agent", download_url: data.download_url, format: data.format });
   }
+  const fmt = data.format ?? downloads[0]?.format ?? "";
 
   return (
     <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border-primary)', background: 'var(--bg-elevated)' }}>
       <p className="text-sm font-medium mb-3" style={{ color: 'var(--text-primary)' }}>
         {downloads.length === 1 ? `Export ready: ${downloads[0].name}` : `${downloads.length} exports ready`}
+        {fmt && <span className="ml-2 text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>{fmt}</span>}
       </p>
       <div className="space-y-2">
         {downloads.map((d, i) => (
@@ -44,7 +46,7 @@ function DeployLog({ data }: { data: Record<string, any> }) {
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
             </svg>
-            Download {d.name}.zip
+            Download {d.name}.zip{d.format ? ` (${d.format})` : ""}
           </a>
         ))}
       </div>
@@ -53,7 +55,7 @@ function DeployLog({ data }: { data: Record<string, any> }) {
 }
 
 function DataTable({ data }: { data: Record<string, any> }) {
-  const items = data.agents ?? data.roles ?? data.skills ?? [];
+  const items = data.agents ?? data.roles ?? data.skills ?? data.results ?? [];
   if (!Array.isArray(items) || items.length === 0) {
     return <p className="text-sm text-gray-500">暂无数据</p>;
   }
@@ -62,7 +64,7 @@ function DataTable({ data }: { data: Record<string, any> }) {
       {items.map((item: any, i: number) => {
         if (data.agents) return <AgentCard key={item.id ?? i} data={item} />;
         if (data.roles) return <RoleCard key={item.id ?? i} data={item} />;
-        if (data.skills) return <SkillCard key={item.id ?? i} data={item} />;
+        if (data.skills || data.results) return <SkillCard key={item.id ?? i} data={item} />;
         return null;
       })}
     </div>

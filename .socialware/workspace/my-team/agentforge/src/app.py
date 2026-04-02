@@ -9,12 +9,17 @@ from dotenv import load_dotenv
 load_dotenv()  # must be before other imports that read env vars
 
 import json
+import logging
 import os
+import traceback
 from pathlib import Path
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
+
+logger = logging.getLogger(__name__)
 
 # App config — agent reads these to know where the API is
 APP_HOST = os.getenv("APP_HOST", "0.0.0.0")
@@ -25,6 +30,12 @@ app = FastAPI(
     description="Web application for agent interaction visualization",
     version="0.1.0",
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception: {traceback.format_exc()}")
+    return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
 from src.db import Database
@@ -134,22 +145,28 @@ async def chat_send(request: Request):
 
 
 @app.get("/api/export/{agent_id}")
-async def export_download(agent_id: str, request: Request):
-    """Download agent config as zip file."""
+async def export_download(agent_id: str, request: Request, format: str = "gitagent"):
+    """Download agent config as zip file. format: gitagent|claude-code|codex|cursor|socialwares"""
     from fastapi.responses import FileResponse
     from src.crud.export import export_agent_zip
 
     db = await get_db()
     user = await get_current_user(request, db)
 
-    # Verify agent belongs to user
-    from src.crud.agent_crud import get_agent
-    await get_agent(db, user["id"], agent_id)
+    try:
+        from src.crud.agent_crud import get_agent
+        await get_agent(db, user["id"], agent_id)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
 
-    zip_path, agent_name = await export_agent_zip(db, agent_id)
+    try:
+        zip_path, agent_name = await export_agent_zip(db, agent_id, format=format)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
     return FileResponse(
         path=str(zip_path),
-        filename=f"{agent_name}.zip",
+        filename=f"{agent_name}-{format}.zip",
         media_type="application/zip",
     )
 

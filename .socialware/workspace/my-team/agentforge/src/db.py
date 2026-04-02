@@ -27,21 +27,11 @@ CREATE TABLE IF NOT EXISTS agents (
     user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name            TEXT NOT NULL,
     description     TEXT DEFAULT '',
-    model           TEXT DEFAULT 'claude',
+    role_md         TEXT DEFAULT '',
     is_example      INTEGER DEFAULT 0,
     created_at      TEXT DEFAULT (datetime('now')),
     updated_at      TEXT DEFAULT (datetime('now')),
     UNIQUE(user_id, name)
-);
-
-CREATE TABLE IF NOT EXISTS roles (
-    id              TEXT PRIMARY KEY,
-    agent_id        TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-    name            TEXT NOT NULL,
-    soul_md         TEXT DEFAULT '',
-    created_at      TEXT DEFAULT (datetime('now')),
-    updated_at      TEXT DEFAULT (datetime('now')),
-    UNIQUE(agent_id, name)
 );
 
 CREATE TABLE IF NOT EXISTS skills (
@@ -53,26 +43,6 @@ CREATE TABLE IF NOT EXISTS skills (
     created_at      TEXT DEFAULT (datetime('now')),
     updated_at      TEXT DEFAULT (datetime('now')),
     UNIQUE(agent_id, name)
-);
-
-CREATE TABLE IF NOT EXISTS skill_roles (
-    skill_id        TEXT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
-    role_id         TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-    PRIMARY KEY (skill_id, role_id)
-);
-
-CREATE TABLE IF NOT EXISTS scopes (
-    id              TEXT PRIMARY KEY,
-    agent_id        TEXT NOT NULL UNIQUE REFERENCES agents(id) ON DELETE CASCADE,
-    soul_md         TEXT DEFAULT '',
-    updated_at      TEXT DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS commitments (
-    id              TEXT PRIMARY KEY,
-    agent_id        TEXT NOT NULL UNIQUE REFERENCES agents(id) ON DELETE CASCADE,
-    commitment_yaml TEXT DEFAULT '',
-    updated_at      TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS chat_history (

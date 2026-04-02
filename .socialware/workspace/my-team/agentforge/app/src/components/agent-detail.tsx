@@ -8,10 +8,8 @@ interface Props {
 }
 
 export function AgentDetail({ data }: Props) {
-  const roles: any[] = data.roles ?? [];
   const skills: any[] = data.skills ?? [];
-  const scope: string = data.scope ?? "";
-  const commitment: string = data.commitment ?? "";
+  const roleMd: string = data.role_md ?? "";
 
   return (
     <div className="space-y-4 max-w-2xl">
@@ -21,11 +19,6 @@ export function AgentDetail({ data }: Props) {
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base font-bold" style={{ color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>{data.name}</h2>
-              {data.model && (
-                <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full uppercase tracking-wider" style={{ background: "var(--bg-tertiary)", color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>
-                  {data.model}
-                </span>
-              )}
               {data.is_example && (
                 <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full uppercase tracking-wider" style={{ background: "var(--color-accent-subtle)", color: "var(--color-accent)", fontFamily: "var(--font-mono)" }}>
                   EXAMPLE
@@ -39,44 +32,18 @@ export function AgentDetail({ data }: Props) {
           </div>
         </div>
         <div className="flex gap-3 mt-3 text-xs" style={{ color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>
-          <span>{roles.length} roles</span>
           <span>{skills.length} skills</span>
         </div>
       </div>
 
-      {/* Scope */}
-      <Section title="SCOPE" icon="scope">
-        {scope ? (
+      {/* Role / Identity */}
+      <Section title="IDENTITY" icon="role">
+        {roleMd ? (
           <div className="prose prose-sm max-w-none text-sm" style={{ color: "var(--text-secondary)" }}>
-            <ReactMarkdown>{scope}</ReactMarkdown>
+            <ReactMarkdown>{roleMd}</ReactMarkdown>
           </div>
         ) : (
-          <Empty>No scope defined</Empty>
-        )}
-      </Section>
-
-      {/* Roles */}
-      <Section title="ROLES" icon="role" count={roles.length}>
-        {roles.length === 0 ? (
-          <Empty>No roles defined</Empty>
-        ) : (
-          <div className="space-y-2">
-            {roles.map((role, i) => (
-              <div key={role.id ?? i} className="rounded-lg border p-3" style={{ borderColor: "var(--border-secondary)", background: "var(--bg-secondary)" }}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "var(--color-accent)" }} />
-                  <span className="text-sm font-semibold" style={{ color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>{role.name}</span>
-                </div>
-                {role.soul_md ? (
-                  <div className="prose prose-sm max-w-none text-xs leading-relaxed pl-3.5" style={{ color: "var(--text-tertiary)" }}>
-                    <ReactMarkdown>{role.soul_md}</ReactMarkdown>
-                  </div>
-                ) : role.soul_md_preview ? (
-                  <p className="text-xs pl-3.5" style={{ color: "var(--text-tertiary)" }}>{role.soul_md_preview}</p>
-                ) : null}
-              </div>
-            ))}
-          </div>
+          <Empty>No identity defined</Empty>
         )}
       </Section>
 
@@ -90,15 +57,6 @@ export function AgentDetail({ data }: Props) {
               <div key={skill.id ?? i} className="rounded-lg border p-3" style={{ borderColor: "var(--border-secondary)", background: "var(--bg-secondary)" }}>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-sm font-semibold" style={{ color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>{skill.name}</span>
-                  {skill.roles && Array.isArray(skill.roles) && (
-                    <div className="flex gap-1">
-                      {skill.roles.map((r: string, j: number) => (
-                        <span key={j} className="text-[9px] font-medium px-1.5 py-0.5 rounded" style={{ background: "var(--color-accent-subtle)", color: "var(--color-accent)", fontFamily: "var(--font-mono)" }}>
-                          {r}
-                        </span>
-                      ))}
-                    </div>
-                  )}
                 </div>
                 {skill.description && <p className="text-xs mb-2" style={{ color: "var(--text-tertiary)" }}>{skill.description}</p>}
                 {skill.skill_md && (
@@ -116,27 +74,14 @@ export function AgentDetail({ data }: Props) {
           </div>
         )}
       </Section>
-
-      {/* Commitment */}
-      <Section title="COMMITMENT" icon="commitment">
-        {commitment && commitment !== "commitments: {}" ? (
-          <pre className="text-xs leading-relaxed p-3 rounded-md overflow-x-auto" style={{ background: "var(--bg-secondary)", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", border: "1px solid var(--border-secondary)" }}>
-            {commitment}
-          </pre>
-        ) : (
-          <Empty>No commitments defined</Empty>
-        )}
-      </Section>
     </div>
   );
 }
 
 function Section({ title, icon, count, children }: { title: string; icon: string; count?: number; children: React.ReactNode }) {
   const iconColor = {
-    scope: "#3b82f6",
     role: "#10b981",
     skill: "#f59e0b",
-    commitment: "#8b5cf6",
   }[icon] ?? "var(--text-tertiary)";
 
   return (

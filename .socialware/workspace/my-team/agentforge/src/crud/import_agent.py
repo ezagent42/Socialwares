@@ -1,165 +1,127 @@
-"""Import agent configuration from standard four-primitive file structure into DB."""
+"""Import agent — auto-detect format and parse to role_md + skills."""
 from __future__ import annotations
-
 import re
-import uuid
 from pathlib import Path
-
 import yaml
-
 from src.db import Database
+from src.crud.agent_crud import create_agent
+from src.crud.skill_crud import create_skill
 
 
-def _uuid() -> str:
-    return uuid.uuid4().hex[:12]
+def detect_format(source_dir: Path) -> str:
+    if (source_dir / "agent.yaml").exists():
+        return "gitagent"
+    if (source_dir / "CLAUDE.md").exists() or (source_dir / ".claude").exists():
+        return "claude-code"
+    if (source_dir / ".cursor" / "rules").exists():
+        return "cursor"
+    if (source_dir / "AGENTS.md").exists() or (source_dir / ".agents").exists():
+        return "codex"
+    if (source_dir / "agent" / "role").exists():
+        return "socialwares"
+    raise ValueError("Unknown format — cannot detect agent config in this directory")
 
 
-def _parse_agent_name(source_dir: Path) -> str:
-    """Parse agent name from pyproject.toml [project] section."""
-    toml_path = source_dir / "pyproject.toml"
-    if not toml_path.exists():
-        raise ValueError(f"Missing pyproject.toml in {source_dir}")
-    text = toml_path.read_text(encoding="utf-8")
-    match = re.search(r'^name\s*=\s*"([^"]+)"', text, re.MULTILINE)
-    if not match:
-        raise ValueError("Could not parse agent name from pyproject.toml")
-    return match.group(1)
+def _parse_gitagent(source_dir: Path) -> dict:
+    data = yaml.safe_load((source_dir / "agent.yaml").read_text())
+    name = data.get("name", "imported-agent")
+    desc = data.get("description", "")
+    role_md = ""
+    if (source_dir / "SOUL.md").exists():
+        role_md = (source_dir / "SOUL.md").read_text()
+    skills = []
+    skills_dir = source_dir / "skills"
+    if skills_dir.exists():
+        for skill_dir in skills_dir.iterdir():
+            if skill_dir.is_dir() and (skill_dir / "SKILL.md").exists():
+                skill_md = (skill_dir / "SKILL.md").read_text()
+                skills.append({"name": skill_dir.name, "skill_md": skill_md, "description": ""})
+    return {"name": name, "description": desc, "role_md": role_md, "skills": skills}
+
+
+def _parse_claude_code(source_dir: Path) -> dict:
+    role_md = ""
+    if (source_dir / "CLAUDE.md").exists():
+        role_md = (source_dir / "CLAUDE.md").read_text()
+    name = "imported-agent"
+    match = re.search(r'^#\s+(.+)', role_md)
+    if match:
+        name = re.sub(r'[^\w\-]', '_', match.group(1).strip()).strip('_') or "imported-agent"
+    skills = []
+    skills_dir = source_dir / ".claude" / "skills"
+    if skills_dir.exists():
+        for skill_dir in skills_dir.iterdir():
+            if skill_dir.is_dir() and (skill_dir / "SKILL.md").exists():
+                skills.append({"name": skill_dir.name, "skill_md": (skill_dir / "SKILL.md").read_text(), "description": ""})
+    return {"name": name, "description": "", "role_md": role_md, "skills": skills}
+
+
+def _parse_codex(source_dir: Path) -> dict:
+    role_md = ""
+    if (source_dir / "AGENTS.md").exists():
+        role_md = (source_dir / "AGENTS.md").read_text()
+    name = "imported-agent"
+    match = re.search(r'^#\s+(.+)', role_md)
+    if match:
+        name = re.sub(r'[^\w\-]', '_', match.group(1).strip()).strip('_') or "imported-agent"
+    skills = []
+    skills_dir = source_dir / ".agents" / "skills"
+    if skills_dir.exists():
+        for skill_dir in skills_dir.iterdir():
+            if skill_dir.is_dir() and (skill_dir / "SKILL.md").exists():
+                skills.append({"name": skill_dir.name, "skill_md": (skill_dir / "SKILL.md").read_text(), "description": ""})
+    return {"name": name, "description": "", "role_md": role_md, "skills": skills}
+
+
+def _parse_cursor(source_dir: Path) -> dict:
+    content = (source_dir / ".cursor" / "rules").read_text()
+    name = "imported-agent"
+    match = re.search(r'^#\s+(.+)', content)
+    if match:
+        name = re.sub(r'[^\w\-]', '_', match.group(1).strip()).strip('_') or "imported-agent"
+    return {"name": name, "description": "", "role_md": content, "skills": []}
+
+
+def _parse_socialwares(source_dir: Path) -> dict:
+    role_md = ""
+    role_dir = source_dir / "agent" / "role"
+    if role_dir.exists():
+        for f in role_dir.glob("*.md"):
+            role_md = f.read_text()
+            break
+    name = "imported-agent"
+    match = re.search(r'^#\s+(.+)', role_md)
+    if match:
+        name = re.sub(r'[^\w\-]', '_', match.group(1).strip()).strip('_') or "imported-agent"
+    skills = []
+    flow_dir = source_dir / "agent" / "flow"
+    if flow_dir.exists():
+        for skill_dir in flow_dir.iterdir():
+            if skill_dir.is_dir() and (skill_dir / "SKILL.md").exists():
+                skills.append({"name": skill_dir.name, "skill_md": (skill_dir / "SKILL.md").read_text(), "description": ""})
+    return {"name": name, "description": "", "role_md": role_md, "skills": skills}
+
+
+_PARSERS = {
+    "gitagent": _parse_gitagent,
+    "claude-code": _parse_claude_code,
+    "codex": _parse_codex,
+    "cursor": _parse_cursor,
+    "socialwares": _parse_socialwares,
+}
 
 
 async def import_agent(db: Database, user_id: str, source_dir: Path) -> dict:
-    """Parse standard four-primitive file structure and import into DB.
-
-    Reads:
-    - agent/role/*.md -> roles table
-    - agent/scope/scope.md -> scopes table
-    - agent/flow/*/SKILL.md -> skills table
-    - agent/flow/flow.yaml -> skill_roles mapping
-    - agent/commitment/commitment.yaml -> commitments table
-    - pyproject.toml -> agent name/description
-
-    Returns: same format as create_agent (id, name, description, roles, skills)
-    """
     source_dir = Path(source_dir)
+    fmt = detect_format(source_dir)
+    parsed = _PARSERS[fmt](source_dir)
 
-    # 1. Read agent name from pyproject.toml
-    agent_name = _parse_agent_name(source_dir)
+    agent = await create_agent(db, user_id, parsed["name"], parsed["description"], parsed["role_md"])
+    for skill in parsed.get("skills", []):
+        await create_skill(db, agent["id"], skill["name"], skill["skill_md"], skill.get("description", ""))
 
-    # 2. Validate scope exists
-    scope_path = source_dir / "agent" / "scope" / "scope.md"
-    if not scope_path.exists():
-        raise ValueError(
-            f"Missing required file: agent/scope/scope.md in {source_dir}"
-        )
-
-    # 3. Check name conflict
-    conn = await db.connect()
-    try:
-        cursor = await conn.execute(
-            "SELECT id FROM agents WHERE user_id = ? AND name = ?",
-            (user_id, agent_name),
-        )
-        if await cursor.fetchone():
-            raise ValueError(f"Agent '{agent_name}' already exists")
-
-        # 4. Insert agent record
-        agent_id = _uuid()
-        await conn.execute(
-            "INSERT INTO agents (id, user_id, name, description) VALUES (?, ?, ?, ?)",
-            (agent_id, user_id, agent_name, ""),
-        )
-
-        # 5. Read and insert roles
-        role_dir = source_dir / "agent" / "role"
-        role_map: dict[str, str] = {}  # role_name -> role_id
-        roles_result: list[dict] = []
-        if role_dir.is_dir():
-            for role_file in sorted(role_dir.glob("*.md")):
-                role_name = role_file.stem
-                soul_md = role_file.read_text(encoding="utf-8")
-                role_id = _uuid()
-                await conn.execute(
-                    "INSERT INTO roles (id, agent_id, name, soul_md) VALUES (?, ?, ?, ?)",
-                    (role_id, agent_id, role_name, soul_md),
-                )
-                role_map[role_name] = role_id
-                roles_result.append({"id": role_id, "name": role_name})
-
-        # 6. Insert scope
-        scope_id = _uuid()
-        scope_md = scope_path.read_text(encoding="utf-8")
-        await conn.execute(
-            "INSERT INTO scopes (id, agent_id, soul_md) VALUES (?, ?, ?)",
-            (scope_id, agent_id, scope_md),
-        )
-
-        # 7. Insert commitment
-        commitment_path = source_dir / "agent" / "commitment" / "commitment.yaml"
-        commit_id = _uuid()
-        commitment_yaml = (
-            commitment_path.read_text(encoding="utf-8")
-            if commitment_path.exists()
-            else "commitments: {}"
-        )
-        await conn.execute(
-            "INSERT INTO commitments (id, agent_id, commitment_yaml) VALUES (?, ?, ?)",
-            (commit_id, agent_id, commitment_yaml),
-        )
-
-        # 8. Parse flow.yaml for action->role mapping
-        flow_path = source_dir / "agent" / "flow" / "flow.yaml"
-        action_role_map: dict[str, list[str]] = {}  # action_name -> [role_names]
-        action_desc_map: dict[str, str] = {}  # action_name -> description
-        if flow_path.exists():
-            flow_data = yaml.safe_load(
-                flow_path.read_text(encoding="utf-8")
-            )
-            for action in flow_data.get("direct_actions", []):
-                action_name = action["action"]
-                action_role_map[action_name] = action.get("role", [])
-                action_desc_map[action_name] = action.get("description", "")
-
-        # 9. Read and insert skills
-        flow_dir = source_dir / "agent" / "flow"
-        skills_result: list[dict] = []
-        if flow_dir.is_dir():
-            for skill_dir in sorted(flow_dir.iterdir()):
-                if not skill_dir.is_dir():
-                    continue
-                skill_file = skill_dir / "SKILL.md"
-                if not skill_file.exists():
-                    continue
-                skill_name = skill_dir.name
-                skill_md = skill_file.read_text(encoding="utf-8")
-                description = action_desc_map.get(skill_name, "")
-
-                skill_id = _uuid()
-                await conn.execute(
-                    "INSERT INTO skills (id, agent_id, name, description, skill_md) "
-                    "VALUES (?, ?, ?, ?, ?)",
-                    (skill_id, agent_id, skill_name, description, skill_md),
-                )
-
-                # Create skill_roles based on flow.yaml mapping
-                mapped_role_names = action_role_map.get(skill_name, [])
-                for rname in mapped_role_names:
-                    rid = role_map.get(rname)
-                    if rid:
-                        await conn.execute(
-                            "INSERT INTO skill_roles (skill_id, role_id) VALUES (?, ?)",
-                            (skill_id, rid),
-                        )
-
-                skills_result.append({"id": skill_id, "name": skill_name})
-
-        await conn.commit()
-
-        return {
-            "id": agent_id,
-            "name": agent_name,
-            "description": "",
-            "roles": roles_result,
-            "skills": skills_result,
-            "scope": {"id": scope_id},
-        }
-    finally:
-        await conn.close()
+    from src.crud.agent_crud import get_agent
+    full = await get_agent(db, user_id, agent["id"])
+    full["source"] = "imported"
+    full["format"] = fmt
+    return full

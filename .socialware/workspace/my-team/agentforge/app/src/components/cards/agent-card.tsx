@@ -43,9 +43,9 @@ export function AgentCard({ data }: { data: Record<string, any> }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{data.name}</h3>
-            {data.model && (
-              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full uppercase tracking-wider" style={{ background: 'var(--bg-tertiary)', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-                {data.model}
+            {data.role_md_preview && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded truncate max-w-[120px]" style={{ background: 'var(--bg-tertiary)', color: 'var(--text-tertiary)' }}>
+                {data.role_md_preview.replace(/^#\s*/, '').slice(0, 30)}
               </span>
             )}
           </div>

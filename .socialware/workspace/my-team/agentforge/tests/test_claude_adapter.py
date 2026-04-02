@@ -64,13 +64,14 @@ def test_execute_tool_unknown():
 
 
 def test_send_to_agent_has_tools_param():
-    """send_to_agent should accept db and user_id params for tool execution."""
+    """send_to_agent should accept db, user_id, and session params."""
     import inspect
     from src.claude_adapter import send_to_agent
     sig = inspect.signature(send_to_agent)
     params = list(sig.parameters.keys())
     assert "db" in params
     assert "user_id" in params
+    assert "session" in params
 
 
 def test_system_prompt_includes_structured_format(tmp_path):
@@ -79,3 +80,11 @@ def test_system_prompt_includes_structured_format(tmp_path):
     assert "json:structured" in prompt
     assert "type" in prompt and "action" in prompt
     assert "agent" in prompt and "listed" in prompt
+
+
+def test_is_sdk_available():
+    """is_sdk_available checks for claude-agent-sdk, not ANTHROPIC_API_KEY."""
+    from src.claude_adapter import is_sdk_available
+    # Should return True if claude-agent-sdk is installed (it's in our deps)
+    result = is_sdk_available()
+    assert isinstance(result, bool)

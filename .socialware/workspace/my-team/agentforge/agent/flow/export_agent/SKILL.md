@@ -21,6 +21,23 @@ description: "Export Agent config to shareable package"
    - flow.yaml 自动生成
 4. 返回导出结果
 
+## How to Execute
+
+Use the export module directly:
+
+```bash
+uv run python -c "
+import asyncio
+from src.db import Database
+from src.crud.export import export_agent
+db = Database('$DB_PATH')
+asyncio.run(db.init())
+asyncio.run(export_agent(db, '$AGENT_ID', '$OUTPUT_DIR', format='$FORMAT'))
+"
+```
+
+Supported formats: gitagent, claude-code, codex, cursor, socialwares
+
 ## Structured Response
 
 - type: "deploy"

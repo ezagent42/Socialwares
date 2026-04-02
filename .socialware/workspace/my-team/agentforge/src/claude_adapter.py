@@ -1,21 +1,22 @@
-"""Claude SDK adapter — sends user messages to Claude Agent with SOUL.md + SKILL.md context."""
+"""Claude Agent SDK adapter — sends user messages to Claude Agent with SOUL.md + SKILL.md context.
+
+Uses claude-agent-sdk which leverages the local Claude Code CLI's OAuth authentication,
+so no ANTHROPIC_API_KEY is needed — users just need Claude Code installed and logged in.
+"""
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import AsyncIterator
 
 
+# Tool schemas — kept for reference and test validation.
+# The actual MCP tools are created dynamically by _create_mcp_tools().
 AGENT_TOOLS = [
     {
         "name": "list_agents",
         "description": "List all agents for the current user. Returns agent list with id, name, description, skills_count.",
-        "input_schema": {
-            "type": "object",
-            "properties": {},
-            "required": [],
-        },
+        "input_schema": {"type": "object", "properties": {}, "required": []},
     },
     {
         "name": "create_agent",
@@ -32,12 +33,10 @@ AGENT_TOOLS = [
     },
     {
         "name": "get_agent",
-        "description": "Get agent detail including all skills. Use this to view an agent's full configuration.",
+        "description": "Get agent detail including all skills.",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "agent_id": {"type": "string", "description": "Agent ID"},
-            },
+            "properties": {"agent_id": {"type": "string"}},
             "required": ["agent_id"],
         },
     },
@@ -46,9 +45,7 @@ AGENT_TOOLS = [
         "description": "Delete an agent and all its skills. This cannot be undone.",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "agent_id": {"type": "string", "description": "Agent ID"},
-            },
+            "properties": {"agent_id": {"type": "string"}},
             "required": ["agent_id"],
         },
     },
@@ -58,10 +55,10 @@ AGENT_TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "agent_id": {"type": "string", "description": "Agent ID to add skill to"},
-                "name": {"type": "string", "description": "Skill name"},
-                "description": {"type": "string", "description": "Short skill description"},
-                "skill_md": {"type": "string", "description": "Skill content in markdown"},
+                "agent_id": {"type": "string"},
+                "name": {"type": "string"},
+                "description": {"type": "string"},
+                "skill_md": {"type": "string"},
             },
             "required": ["agent_id", "name", "skill_md"],
         },
@@ -71,9 +68,7 @@ AGENT_TOOLS = [
         "description": "List all skills for an agent.",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "agent_id": {"type": "string", "description": "Agent ID"},
-            },
+            "properties": {"agent_id": {"type": "string"}},
             "required": ["agent_id"],
         },
     },
@@ -82,36 +77,28 @@ AGENT_TOOLS = [
         "description": "Delete a skill from an agent.",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "skill_id": {"type": "string", "description": "Skill ID to delete"},
-            },
+            "properties": {"skill_id": {"type": "string"}},
             "required": ["skill_id"],
         },
     },
     {
         "name": "export_agent",
-        "description": "Export an agent configuration as a downloadable zip in the specified format. Available formats: gitagent, claude-code, codex, cursor, socialwares.",
+        "description": "Export an agent configuration as a downloadable zip. Formats: gitagent, claude-code, codex, cursor, socialwares.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "agent_id": {"type": "string", "description": "Agent ID to export"},
-                "format": {
-                    "type": "string",
-                    "description": "Export format",
-                    "enum": ["gitagent", "claude-code", "codex", "cursor", "socialwares"],
-                },
+                "agent_id": {"type": "string"},
+                "format": {"type": "string", "enum": ["gitagent", "claude-code", "codex", "cursor", "socialwares"]},
             },
             "required": ["agent_id", "format"],
         },
     },
     {
         "name": "search_skills",
-        "description": "Search for existing skills by keyword. Searches local skills and built-in template skills.",
+        "description": "Search for existing skills by keyword.",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "Search keyword"},
-            },
+            "properties": {"query": {"type": "string"}},
             "required": ["query"],
         },
     },
@@ -120,9 +107,7 @@ AGENT_TOOLS = [
         "description": "Import an agent configuration from a directory path. Auto-detects format.",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "source_path": {"type": "string", "description": "Path to the agent config directory or zip file"},
-            },
+            "properties": {"source_path": {"type": "string"}},
             "required": ["source_path"],
         },
     },
@@ -190,7 +175,6 @@ async def execute_tool(tool_name: str, tool_input: dict, user_id: str, db) -> di
 
         elif tool_name == "import_agent":
             from src.crud.import_agent import import_agent
-            from pathlib import Path
             agent = await import_agent(db, user_id, Path(tool_input["source_path"]))
             return agent
 
@@ -202,11 +186,21 @@ async def execute_tool(tool_name: str, tool_input: dict, user_id: str, db) -> di
 
 
 def is_sdk_available() -> bool:
-    """Check if Claude SDK is available and configured."""
+    """Check if Claude Agent SDK is available AND the Claude Code CLI works."""
     try:
-        import anthropic  # noqa: F401
-        return bool(os.getenv("ANTHROPIC_API_KEY"))
-    except ImportError:
+        import claude_agent_sdk  # noqa: F401
+        import subprocess, os
+        sdk_dir = Path(claude_agent_sdk.__file__).parent
+        cli_name = "claude.exe" if os.name == "nt" else "claude"
+        cli_path = sdk_dir / "_bundled" / cli_name
+        if not cli_path.exists():
+            return False
+        result = subprocess.run(
+            [str(cli_path), "--version"],
+            capture_output=True, timeout=5,
+        )
+        return result.returncode == 0
+    except (ImportError, Exception):
         return False
 
 
@@ -263,43 +257,132 @@ When executing CRUD operations, use these values in CLI commands.
         for skill in config["skills"]:
             parts.append(f"### {skill['name']}\n\n{skill['content']}\n")
 
-    # Structured output format
+    # Structured output format (kept concise to avoid Windows CLI arg length limits)
     parts.append("""## Response Format
 
-After executing tool calls, compose a response for the user. When the response includes data that should be rendered as UI components, include a `json:structured` code block. The frontend uses `type` + `action` to select the component.
-
-### Supported structured types:
-
-| type | action | data shape | when to use |
-|------|--------|------------|-------------|
-| agent | listed | `{"agents": [...]}` | After list_agents — show agent cards |
-| agent | created | `{"id", "name", "description", "role_md", "skills": []}` | After create_agent |
-| agent | updated | same as created | After get_agent or update |
-| agent | deleted | `{"id", "name"}` | After delete_agent |
-| agent | confirm_required | `{"message", "confirm_label", "cancel_label"}` | Before destructive actions |
-| skill | created | `{"id", "agent_id", "name", "skill_md"}` | After create_skill |
-| skill | listed | `{"skills": [...]}` | After list_skills |
-| skill | deleted | `{"id", "name"}` | After delete_skill |
-| deploy | exported | `{"downloads": [{"name", "download_url", "format"}]}` | After export_agent |
-
-### Example response with structured data:
-
-Found 2 agent(s).
-
+Include a `json:structured` fenced block when tool results should render as UI. Format:
 ```json:structured
-{"type": "agent", "action": "listed", "data": {"agents": [{"id": "abc123", "name": "chatbot", "description": "A helpful chatbot", "is_example": false, "skills_count": 3}]}}
+{"type": "<type>", "action": "<action>", "data": {<tool result>}}
 ```
 
-### Important rules:
-- Always include structured data when a tool returns displayable results
-- The `json:structured` block must be valid JSON on a single logical block
-- Text before/after the block is shown as chat text
-- For delete operations, ask the user to confirm before calling delete_agent/delete_skill
-- When creating an agent, guide the user through providing: name, description, and role_md (identity)
-- Available export formats: gitagent, claude-code, codex, cursor, socialwares
+Types: agent(listed/created/updated/deleted/confirm_required), skill(created/listed/deleted), deploy(exported).
+For listed: wrap in {"agents":[...]} or {"skills":[...]}. For exported: {"downloads":[{"name","download_url","format"}]}.
+Confirm before delete. Export formats: gitagent, claude-code, codex, cursor, socialwares.
 """)
 
     return "\n\n".join(parts)
+
+
+_SDK_SYSTEM_PROMPT = """\
+You are AgentForge, an AI Agent configuration management assistant.
+You have MCP tools for CRUD operations on Agents and Skills. Use them to fulfill user requests.
+
+## Tool Workflows
+
+When creating an agent:
+- Ask for name, then description, then role_md (identity). If user gives a vague description like \
+"help me fill this in", generate a proper role_md based on the agent's name and purpose.
+
+When user asks to find/search a skill and add it:
+1. ALWAYS call search_skills first with the keyword
+2. If results found: show them, let user pick one, then use its skill_md to call create_skill
+3. If NO results found: tell the user nothing was found. Then generate a draft skill_md \
+yourself and SHOW IT TO THE USER for review. Only call create_skill after user confirms or \
+provides edits. NEVER create a skill without user confirmation.
+
+When user says "help me fill in/补充" or gives a vague description: generate a draft, \
+show it to the user, and wait for confirmation before saving. Do NOT store the user's \
+instruction text as content.
+
+## Response Format
+
+After tool calls, include a json:structured fenced block so the frontend renders UI:
+```json:structured
+{"type": "<type>", "action": "<action>", "data": {<tool result>}}
+```
+Types: agent(listed/created/updated/deleted), skill(created/listed/deleted), deploy(exported).
+For list results wrap as {"agents":[...]} or {"skills":[...]}.
+For export wrap as {"downloads":[{"name","download_url","format"}]}.
+Confirm with user before deleting. Export formats: gitagent, claude-code, codex, cursor, socialwares.
+Reply in the same language the user uses.
+"""
+
+
+def _create_mcp_tools(db, user_id: str) -> list:
+    """Create MCP tool functions bound to a specific db and user_id via closure."""
+    import asyncio
+    from claude_agent_sdk import tool
+
+    def _result(data: dict) -> dict:
+        return {"content": [{"type": "text", "text": json.dumps(data, ensure_ascii=False)}]}
+
+    def _run(coro):
+        """Run async CRUD in the current or new event loop."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop and loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                return pool.submit(asyncio.run, coro).result()
+        return asyncio.run(coro)
+
+    @tool("list_agents", "List all agents for the current user. Returns agent list with id, name, description, skills_count.", {})
+    async def list_agents_tool(args):
+        result = await execute_tool("list_agents", args, user_id, db)
+        return _result(result)
+
+    @tool("create_agent", "Create a new agent. Requires name and role_md (identity description in markdown).", {"name": str, "description": str, "role_md": str})
+    async def create_agent_tool(args):
+        result = await execute_tool("create_agent", args, user_id, db)
+        return _result(result)
+
+    @tool("get_agent", "Get agent detail including all skills. Use this to view an agent's full configuration.", {"agent_id": str})
+    async def get_agent_tool(args):
+        result = await execute_tool("get_agent", args, user_id, db)
+        return _result(result)
+
+    @tool("delete_agent", "Delete an agent and all its skills. This cannot be undone.", {"agent_id": str})
+    async def delete_agent_tool(args):
+        result = await execute_tool("delete_agent", args, user_id, db)
+        return _result(result)
+
+    @tool("create_skill", "Add a skill to an agent.", {"agent_id": str, "name": str, "description": str, "skill_md": str})
+    async def create_skill_tool(args):
+        result = await execute_tool("create_skill", args, user_id, db)
+        return _result(result)
+
+    @tool("list_skills", "List all skills for an agent.", {"agent_id": str})
+    async def list_skills_tool(args):
+        result = await execute_tool("list_skills", args, user_id, db)
+        return _result(result)
+
+    @tool("delete_skill", "Delete a skill from an agent.", {"skill_id": str})
+    async def delete_skill_tool(args):
+        result = await execute_tool("delete_skill", args, user_id, db)
+        return _result(result)
+
+    @tool("export_agent", "Export an agent config as a downloadable zip. Formats: gitagent, claude-code, codex, cursor, socialwares.", {"agent_id": str, "format": str})
+    async def export_agent_tool(args):
+        result = await execute_tool("export_agent", args, user_id, db)
+        return _result(result)
+
+    @tool("search_skills", "Search for existing skills by keyword. Searches local skills and built-in template skills.", {"query": str})
+    async def search_skills_tool(args):
+        result = await execute_tool("search_skills", args, user_id, db)
+        return _result(result)
+
+    @tool("import_agent", "Import an agent configuration from a directory path. Auto-detects format.", {"source_path": str})
+    async def import_agent_tool(args):
+        result = await execute_tool("import_agent", args, user_id, db)
+        return _result(result)
+
+    return [
+        list_agents_tool, create_agent_tool, get_agent_tool, delete_agent_tool,
+        create_skill_tool, list_skills_tool, delete_skill_tool,
+        export_agent_tool, search_skills_tool, import_agent_tool,
+    ]
 
 
 async def send_to_agent(
@@ -308,64 +391,63 @@ async def send_to_agent(
     history: list[dict] | None = None,
     db=None,
     user_id: str = "",
+    session: dict | None = None,
 ) -> AsyncIterator[str]:
-    """Send message to Claude Agent with tool use support.
+    """Send message to Claude Agent via claude-agent-sdk with MCP tool use.
 
-    If db and user_id are provided, enables tool use loop:
-    1. Send message + tools to Claude
-    2. If Claude returns tool_use, execute locally and send tool_result back
-    3. Repeat until Claude returns a final text response
+    Uses the local Claude Code CLI's OAuth authentication — no API key needed.
+    The SDK handles the tool use loop automatically.
+
+    Session persistence: stores `_sdk_session_id` in the session dict so
+    subsequent messages resume the same Agent conversation, preserving context
+    for multi-step flows (create wizard, etc.).
     """
-    import anthropic
+    from claude_agent_sdk import (
+        ClaudeSDKClient,
+        ClaudeAgentOptions,
+        AssistantMessage,
+        ResultMessage,
+        SystemMessage,
+        TextBlock,
+        create_sdk_mcp_server,
+    )
 
-    client = anthropic.AsyncAnthropic()
+    # Create MCP tools bound to this request's db + user_id
+    tools = _create_mcp_tools(db, user_id) if db else []
+    server = create_sdk_mcp_server("agentforge-tools", tools=tools) if tools else None
 
-    messages = []
-    if history:
-        for h in history[-10:]:
-            messages.append({"role": h["role"], "content": h["content"]})
-    messages.append({"role": "user", "content": message})
+    # Check for existing SDK session to resume
+    sdk_session_id = session.get("_sdk_session_id") if session else None
 
-    # Use tools only when db is available
-    tools = AGENT_TOOLS if db else None
+    opts_kwargs = {
+        "max_turns": 10,
+        "permission_mode": "bypassPermissions",
+    }
 
-    while True:
-        kwargs = {
-            "model": "claude-sonnet-4-20250514",
-            "max_tokens": 2048,
-            "system": system_prompt,
-            "messages": messages,
-        }
-        if tools:
-            kwargs["tools"] = tools
+    if sdk_session_id:
+        # Resume existing Agent conversation — preserves full context
+        opts_kwargs["resume"] = sdk_session_id
+    else:
+        # New conversation — set system prompt and MCP tools
+        opts_kwargs["system_prompt"] = system_prompt
 
-        response = await client.messages.create(**kwargs)
+    if server:
+        opts_kwargs["mcp_servers"] = {"agentforge": server}
 
-        # Check if response contains tool use
-        tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
+    opts = ClaudeAgentOptions(**opts_kwargs)
 
-        if not tool_use_blocks:
-            # Final text response — yield all text blocks
-            for block in response.content:
-                if block.type == "text":
-                    yield block.text
-            break
-
-        # Execute tools and build tool_result message
-        messages.append({"role": "assistant", "content": response.content})
-
-        tool_results = []
-        for tool_block in tool_use_blocks:
-            result = await execute_tool(tool_block.name, tool_block.input, user_id, db)
-            tool_results.append({
-                "type": "tool_result",
-                "tool_use_id": tool_block.id,
-                "content": json.dumps(result, ensure_ascii=False),
-            })
-
-        messages.append({"role": "user", "content": tool_results})
-
-        # Safety: max 5 tool-use rounds to prevent infinite loop
-        if len([m for m in messages if m["role"] == "user"]) > 7:
-            yield "Too many tool calls, stopping."
-            break
+    async with ClaudeSDKClient(options=opts) as client:
+        await client.query(message)
+        async for msg in client.receive_response():
+            # Capture session_id from init message for future resumption
+            if isinstance(msg, SystemMessage) and msg.subtype == "init":
+                new_session_id = msg.data.get("session_id") if msg.data else None
+                if new_session_id and session is not None:
+                    session["_sdk_session_id"] = new_session_id
+            elif isinstance(msg, ResultMessage):
+                if msg.result:
+                    yield msg.result
+            elif isinstance(msg, AssistantMessage):
+                for block in msg.content:
+                    if isinstance(block, TextBlock):
+                        yield block.text

@@ -35,6 +35,18 @@ description: "Add, edit, list, delete skills for an Agent"
 - type: "skill"
 - action: "created" | "updated" | "listed" | "deleted"
 
+## How to Execute
+
+Use the CRUD CLI via Bash tool:
+
+```bash
+# Create
+uv run python -m src.crud.cli create-skill --db "$DB_PATH" --agent-id "xxx" --name "skill_name" --skill-md "# Skill" --description "Desc"
+
+# List
+uv run python -m src.crud.cli list-skills --db "$DB_PATH" --agent-id "xxx"
+```
+
 ## Constraints
 
 - 技能名在同一 Agent 内唯一

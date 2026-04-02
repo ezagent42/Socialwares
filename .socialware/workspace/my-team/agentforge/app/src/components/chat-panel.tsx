@@ -7,11 +7,10 @@ import { MessageBubble } from "./message-bubble";
 const COMMANDS = [
   { slash: "/create-agent", desc: "Create a new Agent" },
   { slash: "/list-agents", desc: "View all your Agents" },
-  { slash: "/add-role", desc: "Add a role to an Agent" },
   { slash: "/add-skill", desc: "Add a skill to an Agent" },
-  { slash: "/edit-scope", desc: "Edit Agent capabilities" },
-  { slash: "/export-agent", desc: "Export Agent as zip" },
-  { slash: "/import-agent", desc: "Import shared config" },
+  { slash: "/find-skill", desc: "Search existing skills" },
+  { slash: "/export-agent", desc: "Export Agent (multi-format)" },
+  { slash: "/import-agent", desc: "Import Agent config" },
   { slash: "/delete-agent", desc: "Delete an Agent" },
 ];
 

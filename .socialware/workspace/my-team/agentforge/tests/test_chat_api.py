@@ -3,6 +3,13 @@ import asyncio
 import json
 
 
+@pytest.fixture(autouse=True)
+def _disable_sdk(monkeypatch):
+    """Force fallback path — these tests validate hardcoded handlers, not the SDK."""
+    import src.claude_adapter
+    monkeypatch.setattr(src.claude_adapter, "is_sdk_available", lambda: False)
+
+
 @pytest.fixture
 def db(tmp_path):
     from src.db import Database
@@ -202,13 +209,12 @@ def _structured(events):
 
 
 def test_slash_command_routes_to_sdk_when_available(monkeypatch):
-    """Slash commands should also go through SDK when API key is set."""
+    """Slash commands should also go through SDK when available."""
     from src.session import _should_use_sdk
 
     session = {"user_id": "u1"}
 
-    # Mock SDK as available
-    monkeypatch.setattr("src.session._should_use_sdk.__module__", "src.session")
+    # Mock SDK as available (no API key needed — uses local Claude Code auth)
     import src.claude_adapter
     monkeypatch.setattr(src.claude_adapter, "is_sdk_available", lambda: True)
 

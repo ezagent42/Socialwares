@@ -59,6 +59,10 @@ direct_actions:
     role: [default]
     description: "View and update an Agent's eval metrics"
 
+  - action: find_skill
+    role: [default]
+    description: "Search and discover existing skills"
+
   # === 导出/导入 ===
   - action: export_agent
     role: [default]

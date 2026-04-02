@@ -51,6 +51,24 @@ description: "Create, list, view, delete Agent configurations"
 - action: "created" | "listed" | "deleted"
 - data: { id, name, description, roles, skills }
 
+## How to Execute
+
+Use the CRUD CLI via Bash tool:
+
+```bash
+# Create
+uv run python -m src.crud.cli create-agent --db "$DB_PATH" --user-id "$USER_ID" --name "xxx" --role-md "# xxx"
+
+# List
+uv run python -m src.crud.cli list-agents --db "$DB_PATH" --user-id "$USER_ID"
+
+# Get
+uv run python -m src.crud.cli get-agent --db "$DB_PATH" --user-id "$USER_ID" --agent-id "xxx"
+
+# Delete
+uv run python -m src.crud.cli delete-agent --db "$DB_PATH" --user-id "$USER_ID" --agent-id "xxx"
+```
+
 ## Error Handling
 
 - 名称重复: "Agent 'task-manager' 已存在，请使用其他名称"
