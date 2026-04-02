@@ -7,8 +7,12 @@ import re
 import uuid
 from typing import AsyncIterator
 
+from pathlib import Path
+
 from src.db import Database
-from src.crud import agent_crud, role_crud, skill_crud, scope_crud, commitment_crud
+from src.crud import agent_crud, skill_crud
+from src.crud.find_skill import search_skills
+from src.response_parser import parse_agent_response
 
 
 class SessionManager:
@@ -51,6 +55,8 @@ class SessionManager:
         try:
             if ui_action:
                 response_text, structured = await _handle_ui_action(ui_action, user_id, db, session)
+            elif _should_use_sdk(message, session):
+                response_text, structured = await _handle_via_sdk(message, user_id, db, session)
             else:
                 response_text, structured = await _handle_natural_language(message, user_id, db, session)
         except Exception as e:
@@ -86,368 +92,91 @@ class SessionManager:
 
 
 # ============================================================
-# Create Agent wizard (multi-step)
+# Create Agent wizard (multi-step, 3 steps)
 # ============================================================
 
 async def _handle_create_wizard(wiz: dict, message: str, user_id: str, db: Database, session: dict) -> tuple[str, dict | None]:
-    """Handle multi-step Agent creation wizard."""
-    step = wiz.get("step")
     text = message.strip()
+    step = wiz.get("step")
 
-    # Allow cancel at any step
     if text.lower() in ["cancel", "取消", "/cancel"]:
         session.pop("_pending_create", None)
         return "Agent creation cancelled.", None
 
-    # --- Step 1: Name ---
+    # Step 1: Name
     if step == "name":
         if not text:
             return "Please enter a valid name.", None
         wiz["name"] = text
-        wiz["step"] = "model"
+        wiz["step"] = "role_md"
         return (
-            "**Step 2/7 — Model**\n\n"
-            "Which model should this Agent use?\n\n"
-            "1. **claude** — Claude (Anthropic)\n"
-            "2. **gemini** — Gemini (Google)\n"
-            "3. **kimi** — Kimi (Moonshot)\n"
-            "4. **codex** — Codex (OpenAI)\n\n"
-            "Type the model name or number:"
+            "**Step 2/3 — Identity Description**\n\n"
+            "Describe who this Agent is, what it does, and how it should respond.\n\n"
+            "Example:\n```\n# Code Reviewer\n\nYou are a code review assistant.\n\n"
+            "## Responsibilities\n- Review code for bugs and security issues\n- Suggest improvements\n\n"
+            "## Tone\n- Constructive and specific\n```\n\n"
+            "Type your description (Markdown):"
         ), None
 
-    # --- Step 2: Model ---
-    if step == "model":
-        model_map = {"1": "claude", "2": "gemini", "3": "kimi", "4": "codex"}
-        model = model_map.get(text, text.lower())
-        if model not in ("claude", "gemini", "kimi", "codex"):
-            return f"Unknown model '{text}'. Please choose: claude, gemini, kimi, or codex.", None
-        wiz["model"] = model
-        wiz["step"] = "scope"
-        return (
-            "**Step 3/7 — Scope (Capabilities)**\n\n"
-            "Describe what this Agent can do.\n"
-            "Include capabilities and boundaries.\n\n"
-            "Example:\n"
-            "```\n"
-            "Capabilities:\n"
-            "- Create and manage tasks\n"
-            "- Assign tasks to team members\n"
-            "- Track task status\n"
-            "\n"
-            "Boundaries:\n"
-            "- Only manage internal team tasks\n"
-            "- Cannot access external systems\n"
-            "```\n\n"
-            "Type your scope description (or **skip** to use default):"
-        ), None
-
-    # --- Step 3: Scope ---
-    if step == "scope":
+    # Step 2: Role MD
+    if step == "role_md":
         if text.lower() == "skip":
-            wiz["scope"] = f"# {wiz['name']}\n\n## Capabilities\n\n- (Add capabilities)\n\n## Boundaries\n\n- (Add boundaries)\n"
+            wiz["role_md"] = f"# {wiz['name']}\n\nAgent for {wiz['name']}.\n"
         else:
-            wiz["scope"] = f"# {wiz['name']}\n\n{text}\n"
-        wiz["step"] = "role_ask"
+            wiz["role_md"] = text
+        wiz["step"] = "skills"
         return (
-            "**Step 4/7 — Roles**\n\n"
-            "A `default` role has been created automatically.\n\n"
-            "Would you like to add more roles? (e.g. reviewer, admin)\n\n"
-            "Type a role name to add, or **done** to continue:"
+            "**Step 3/3 — Skills (optional)**\n\n"
+            "Add skills this Agent can use. Type a skill name, or **done** to finish:"
         ), None
 
-    # --- Step 4: Roles ---
-    if step == "role_ask":
-        if text.lower() in ["done", "skip", "完成", "跳过"]:
-            wiz["step"] = "skill_ask"
-            return (
-                "**Step 5/7 — Skills**\n\n"
-                "Skills define what actions the Agent can perform.\n\n"
-                "Type a skill name to add (e.g. `create_task`), or **done** to continue:"
-            ), None
-        # Add role
-        wiz["roles"].append({"name": text})
-        wiz["step"] = "role_desc"
-        wiz["_current_role"] = text
-        return (
-            f"Describe the **{text}** role.\n"
-            f"What are its responsibilities and permissions?\n\n"
-            f"Example: \"Reviews and approves submitted tasks\"\n\n"
-            f"Type description (or **skip** for default):"
-        ), None
-
-    if step == "role_desc":
-        role_name = wiz.pop("_current_role")
-        for r in wiz["roles"]:
-            if r["name"] == role_name:
-                if text.lower() == "skip":
-                    r["soul_md"] = f"# {role_name}\n\nRole for {wiz['name']}.\n\n## Identity\n\n- Role: {role_name}\n"
-                else:
-                    r["soul_md"] = f"# {role_name}\n\n{text}\n\n## Identity\n\n- Role: {role_name}\n"
-        wiz["step"] = "role_ask"
-        return (
-            f"Role **{role_name}** added.\n\n"
-            f"Add another role? Type a name, or **done** to continue:"
-        ), None
-
-    # --- Step 5: Skills ---
-    if step == "skill_ask":
-        if text.lower() in ["done", "skip", "完成", "跳过"]:
-            wiz["step"] = "commitment_ask"
-            return (
-                "**Step 6/7 — Commitments (Quality Standards)**\n\n"
-                "Commitments define quality expectations between roles.\n\n"
-                "Example: \"Reviewer completes review within 24h after submission\"\n\n"
-                "Type a commitment description, or **done** to continue:"
-            ), None
-        wiz["_current_skill"] = text
-        wiz["step"] = "skill_desc"
-        return (
-            f"Describe the **{text}** skill.\n\n"
-            f"1. When should it trigger?\n"
-            f"2. What does it do?\n\n"
-            f"Example: \"Triggered when user says 'create task'. Creates a new task with title and description.\"\n\n"
-            f"Type description (or **skip** for default):"
-        ), None
-
-    if step == "skill_desc":
-        skill_name = wiz.pop("_current_skill")
-        if text.lower() == "skip":
-            skill_md = f"---\nname: {skill_name}\ndescription: \"{skill_name}\"\n---\n\n# {skill_name}\n\n## Trigger\n\nUser requests {skill_name}.\n\n## Flow\n\n1. Execute {skill_name}\n2. Return result\n"
-            desc = skill_name
-        else:
-            skill_md = f"---\nname: {skill_name}\ndescription: \"{text[:80]}\"\n---\n\n# {skill_name}\n\n{text}\n"
-            desc = text[:80]
-        wiz["step"] = "skill_roles"
-        wiz["_current_skill_data"] = {"name": skill_name, "skill_md": skill_md, "description": desc}
-
-        all_roles = ["default"] + [r["name"] for r in wiz["roles"]]
-        if len(all_roles) == 1:
-            # Only default role, auto-assign
-            wiz["_current_skill_data"]["role_names"] = ["default"]
-            wiz["skills"].append(wiz.pop("_current_skill_data"))
-            wiz["step"] = "skill_ask"
-            return (
-                f"Skill **{skill_name}** added (assigned to: default).\n\n"
-                f"Add another skill? Type a name, or **done** to continue:"
-            ), None
-
-        roles_list = ", ".join(f"`{r}`" for r in all_roles)
-        return (
-            f"Which roles can use **{skill_name}**?\n\n"
-            f"Available roles: {roles_list}\n\n"
-            f"Type role names separated by commas (e.g. `default, reviewer`), or **all**:"
-        ), None
-
-    if step == "skill_roles":
-        skill_data = wiz.get("_current_skill_data", {})
-        skill_name = skill_data.get("name", "")
-        all_roles = ["default"] + [r["name"] for r in wiz["roles"]]
-
-        if text.lower() == "all":
-            skill_data["role_names"] = all_roles
-        else:
-            role_names = [r.strip() for r in text.split(",") if r.strip()]
-            # Validate
-            invalid = [r for r in role_names if r not in all_roles]
-            if invalid:
-                return f"Unknown role(s): {', '.join(invalid)}. Available: {', '.join(all_roles)}", None
-            skill_data["role_names"] = role_names if role_names else ["default"]
-
-        wiz["skills"].append(wiz.pop("_current_skill_data"))
-        wiz["step"] = "skill_ask"
-        assigned = ", ".join(skill_data["role_names"])
-        return (
-            f"Skill **{skill_name}** added (assigned to: {assigned}).\n\n"
-            f"Add another skill? Type a name, or **done** to continue:"
-        ), None
-
-    # --- Step 6: Commitments ---
-    if step == "commitment_ask":
+    # Step 3: Skills
+    if step == "skills":
         if text.lower() in ["done", "skip", "完成", "跳过"]:
             wiz["step"] = "confirm"
-            return _build_create_preview(wiz), None
-            # Note: goes straight to confirm (no preview step needed)
-        wiz["_current_commitment"] = text
-        wiz["step"] = "commitment_roles"
+            preview = (
+                f"**Confirm Creation**\n\n"
+                f"**Name:** {wiz['name']}\n"
+                f"**Identity:** {wiz['role_md'][:100]}{'...' if len(wiz['role_md']) > 100 else ''}\n"
+                f"**Skills:** {', '.join(s['name'] for s in wiz.get('skills_list', [])) or '(none)'}\n\n"
+                f"Type **create** to confirm or **cancel** to abort."
+            )
+            return preview, None
+        # Adding a skill
+        wiz.setdefault("_current_skill", None)
+        if wiz.get("_current_skill") is None:
+            wiz["_current_skill"] = text
+            return f"Describe the **{text}** skill (or **skip** for default):", None
+        else:
+            skill_name = wiz.pop("_current_skill")
+            if text.lower() == "skip":
+                skill_md = f"---\nname: {skill_name}\ndescription: \"{skill_name}\"\n---\n\n# {skill_name}\n\n## Trigger\n\nUser requests {skill_name}.\n\n## Flow\n\n1. Execute {skill_name}\n2. Return result\n"
+                desc = skill_name
+            else:
+                skill_md = f"---\nname: {skill_name}\ndescription: \"{text[:80]}\"\n---\n\n# {skill_name}\n\n{text}\n"
+                desc = text[:80]
+            wiz.setdefault("skills_list", []).append({"name": skill_name, "skill_md": skill_md, "description": desc})
+            return f"Skill **{skill_name}** added. Add another skill name, or **done** to finish:", None
 
-        all_roles = ["default"] + [r["name"] for r in wiz["roles"]]
-        if len(all_roles) == 1:
-            # Auto-assign from/to default
-            wiz["commitments"].append({
-                "condition": text,
-                "from_role": "default",
-                "to_role": "default",
-            })
-            wiz.pop("_current_commitment", None)
-            wiz["step"] = "commitment_ask"
-            return (
-                f"Commitment added.\n\n"
-                f"Add another commitment? Type description, or **done** to continue:"
-            ), None
-
-        roles_list = ", ".join(f"`{r}`" for r in all_roles)
-        return (
-            f"Who is responsible for this commitment?\n\n"
-            f"Format: `from_role → to_role`\n"
-            f"Example: `default → reviewer`\n\n"
-            f"Available roles: {roles_list}"
-        ), None
-
-    if step == "commitment_roles":
-        condition = wiz.pop("_current_commitment", "")
-        parts = [p.strip() for p in text.replace("→", "->").split("->")]
-        if len(parts) != 2:
-            return "Please use format: `from_role → to_role` (e.g. `default → reviewer`)", None
-        wiz["commitments"].append({
-            "condition": condition,
-            "from_role": parts[0],
-            "to_role": parts[1],
-        })
-        wiz["step"] = "commitment_ask"
-        return (
-            f"Commitment added: {parts[0]} → {parts[1]}\n\n"
-            f"Add another commitment? Type description, or **done** to continue:"
-        ), None
-
-    # --- Step 6 → 7 transition: show preview ---
-    if step == "preview":
-        wiz["step"] = "confirm"
-        preview = _build_create_preview(wiz)
-        return preview, None
-
-    # --- Step 7: Confirm ---
+    # Confirm
     if step == "confirm":
         if text.lower() in ["cancel", "取消", "no"]:
             session.pop("_pending_create", None)
             return "Agent creation cancelled.", None
         if text.lower() in ["create", "confirm", "yes", "确认", "创建"]:
-            return await _execute_create_wizard(wiz, user_id, db, session)
+            session.pop("_pending_create", None)
+            try:
+                agent = await agent_crud.create_agent(db, user_id, wiz["name"], "", wiz["role_md"])
+                for skill_data in wiz.get("skills_list", []):
+                    await skill_crud.create_skill(db, agent["id"], skill_data["name"], skill_data["skill_md"], skill_data["description"])
+                agent = await agent_crud.get_agent(db, user_id, agent["id"])
+                return f"Agent **{wiz['name']}** created successfully!", {"type": "agent", "action": "created", "data": agent}
+            except ValueError as e:
+                return str(e), None
         return "Type **create** to confirm or **cancel** to abort.", None
 
-    # Fallback
     session.pop("_pending_create", None)
-    return "Something went wrong. Please try /create-agent again.", None
-
-
-def _build_create_preview(wiz: dict) -> str:
-    """Build confirmation preview for the create wizard."""
-    lines = [
-        "**Step 7/7 — Confirm**\n",
-        f"**Name:** {wiz['name']}",
-        f"**Model:** {wiz['model']}",
-        f"**Scope:** {wiz['scope'][:100]}{'...' if len(wiz['scope']) > 100 else ''}",
-        f"**Roles:** default" + (", " + ", ".join(r["name"] for r in wiz["roles"]) if wiz["roles"] else ""),
-        f"**Skills:** " + (", ".join(s["name"] for s in wiz["skills"]) if wiz["skills"] else "(none)"),
-        f"**Commitments:** {len(wiz['commitments'])}",
-        "",
-        "Type **create** to confirm or **cancel** to abort.",
-    ]
-    return "\n".join(lines)
-
-
-async def _execute_create_wizard(wiz: dict, user_id: str, db: Database, session: dict) -> tuple[str, dict | None]:
-    """Execute the full create wizard — write all data to DB."""
-    session.pop("_pending_create", None)
-
-    name = wiz["name"]
-    model = wiz["model"]
-
-    # Create agent (auto-creates default role + scope + commitment)
-    try:
-        agent = await agent_crud.create_agent(db, user_id, name, "", model)
-    except ValueError as e:
-        return str(e), None
-
-    agent_id = agent["id"]
-
-    # Update scope with user-provided content
-    if wiz.get("scope"):
-        await scope_crud.update_scope(db, agent_id, wiz["scope"])
-
-    # Add extra roles
-    for role_data in wiz.get("roles", []):
-        soul_md = role_data.get("soul_md", f"# {role_data['name']}\n\nRole for {name}.\n")
-        await role_crud.create_role(db, agent_id, role_data["name"], soul_md)
-
-    # Add skills
-    for skill_data in wiz.get("skills", []):
-        # Resolve role names to role IDs
-        all_roles = await role_crud.list_roles(db, agent_id)
-        role_id_map = {r["name"]: r["id"] for r in all_roles}
-        role_ids = [role_id_map[rn] for rn in skill_data.get("role_names", ["default"]) if rn in role_id_map]
-        if not role_ids:
-            role_ids = [all_roles[0]["id"]]  # fallback to first role
-
-        await skill_crud.create_skill(
-            db, agent_id, skill_data["name"], skill_data["skill_md"],
-            role_ids, skill_data.get("description", "")
-        )
-
-    # Update commitment
-    if wiz.get("commitments"):
-        commit_lines = ["commitments:"]
-        for i, c in enumerate(wiz["commitments"], 1):
-            commit_lines.append(f"  C{i}:")
-            commit_lines.append(f"    from: {{ role: {c['from_role']}, action: '*' }}")
-            commit_lines.append(f"    to: {{ role: {c['to_role']}, action: '*' }}")
-            commit_lines.append(f"    condition: \"{c['condition']}\"")
-            commit_lines.append(f"    on_violation: null")
-        await commitment_crud.update_commitment(db, agent_id, "\n".join(commit_lines))
-
-    # Re-fetch full agent data
-    agent = await agent_crud.get_agent(db, user_id, agent_id)
-
-    role_count = len(agent.get("roles", []))
-    skill_count = len(agent.get("skills", []))
-    return (
-        f"Agent **{name}** created successfully!\n"
-        f"Model: {model} | Roles: {role_count} | Skills: {skill_count} | Commitments: {len(wiz.get('commitments', []))}"
-    ), {"type": "agent", "action": "created", "data": agent}
-
-
-# ============================================================
-# Add Role flow (multi-step)
-# ============================================================
-
-async def _handle_add_role_flow(flow: dict, message: str, user_id: str, db: Database, session: dict) -> tuple[str, dict | None]:
-    text = message.strip()
-    step = flow.get("step")
-
-    if text.lower() in ["cancel", "取消"]:
-        session.pop("_pending_add_role", None)
-        return "Cancelled.", None
-
-    if step == "agent":
-        agents = await agent_crud.list_agents(db, user_id)
-        match = next((a for a in agents if a["name"].lower() == text.lower() and not a.get("is_example")), None)
-        if not match:
-            names = ", ".join(f"`{a['name']}`" for a in agents if not a.get("is_example"))
-            return f"Agent '{text}' not found. Your agents: {names}", None
-        flow["agent_id"] = match["id"]
-        flow["agent_name"] = match["name"]
-        flow["step"] = "name"
-        return f"Adding role to **{match['name']}**.\n\nWhat should the role be named?", None
-
-    if step == "name":
-        flow["role_name"] = text
-        flow["step"] = "desc"
-        return f"Describe the **{text}** role.\nWhat are its responsibilities?\n\n(Type description or **skip** for default)", None
-
-    if step == "desc":
-        role_name = flow["role_name"]
-        agent_id = flow["agent_id"]
-        if text.lower() == "skip":
-            soul_md = f"# {role_name}\n\nRole for {flow['agent_name']}.\n\n## Identity\n\n- Role: {role_name}\n"
-        else:
-            soul_md = f"# {role_name}\n\n{text}\n\n## Identity\n\n- Role: {role_name}\n"
-        session.pop("_pending_add_role", None)
-        role = await role_crud.create_role(db, agent_id, role_name, soul_md)
-        return f"Role **{role_name}** added to {flow['agent_name']}.", {
-            "type": "role", "action": "created", "data": {**role, "agent_name": flow["agent_name"]}
-        }
-
-    session.pop("_pending_add_role", None)
-    return "Something went wrong. Try /add-role again.", None
+    return "Something went wrong. Try /create-agent again.", None
 
 
 # ============================================================
@@ -471,12 +200,66 @@ async def _handle_add_skill_flow(flow: dict, message: str, user_id: str, db: Dat
         flow["agent_id"] = match["id"]
         flow["agent_name"] = match["name"]
         flow["step"] = "name"
-        return f"Adding skill to **{match['name']}**.\n\nWhat should the skill be named?", None
+        return (
+            f"Adding skill to **{match['name']}**.\n\n"
+            f"How would you like to add a skill?\n"
+            f"  1. Type a skill name to create manually\n"
+            f"  2. Type **search <keyword>** to find existing skills\n"
+            f"  3. Type **url <url>** to import from URL"
+        ), None
 
     if step == "name":
+        # Option: search existing skills
+        if text.lower().startswith("search "):
+            query = text[7:].strip()
+            if not query:
+                return "Please provide a search keyword. Example: `search review`", None
+            results = await search_skills(db, user_id, query)
+            if not results:
+                return f"No skills found for '{query}'. Type a skill name to create manually, or `search <keyword>` to try again.", None
+            flow["search_results"] = results
+            flow["step"] = "search_select"
+            lines = [f"Found {len(results)} skill(s):\n"]
+            for i, r in enumerate(results, 1):
+                lines.append(f"  {i}. **{r['name']}** ({r['source']}) — {r['description'][:60]}")
+            lines.append(f"\nType a number to add, or **cancel**:")
+            return "\n".join(lines), None
+
+        # Option: import from URL
+        if text.lower().startswith("url "):
+            url = text[4:].strip()
+            if not url:
+                return "Please provide a URL. Example: `url https://example.com/SKILL.md`", None
+            try:
+                from src.crud.find_skill import import_skill_from_url
+                imported = await import_skill_from_url(url)
+                skill = await skill_crud.create_skill(db, flow["agent_id"], imported["name"], imported["skill_md"], imported["description"])
+                session.pop("_pending_add_skill", None)
+                return f"Skill **{imported['name']}** imported and added to {flow['agent_name']}.", {
+                    "type": "skill", "action": "created", "data": {**skill, "agent_name": flow["agent_name"]}
+                }
+            except Exception as e:
+                return f"Failed to import from URL: {e}\n\nType a skill name, `search <keyword>`, or `url <url>`:", None
+
         flow["skill_name"] = text
         flow["step"] = "desc"
         return f"Describe the **{text}** skill.\n\n1. When should it trigger?\n2. What does it do?\n\n(Type description or **skip** for default)", None
+
+    if step == "search_select":
+        try:
+            idx = int(text) - 1
+            results = flow.get("search_results", [])
+            if 0 <= idx < len(results):
+                selected = results[idx]
+                skill = await skill_crud.create_skill(db, flow["agent_id"], selected["name"], selected["skill_md"], selected["description"])
+                session.pop("_pending_add_skill", None)
+                return f"Skill **{selected['name']}** added to {flow['agent_name']}.", {
+                    "type": "skill", "action": "created", "data": {**skill, "agent_name": flow["agent_name"]}
+                }
+        except ValueError:
+            pass
+        session.pop("_pending_add_skill", None)
+        return "Invalid selection. Try /add-skill again.", None
 
     if step == "desc":
         skill_name = flow["skill_name"]
@@ -486,44 +269,9 @@ async def _handle_add_skill_flow(flow: dict, message: str, user_id: str, db: Dat
         else:
             skill_md = f"---\nname: {skill_name}\ndescription: \"{text[:80]}\"\n---\n\n# {skill_name}\n\n{text}\n"
             desc = text[:80]
-        flow["skill_md"] = skill_md
-        flow["desc"] = desc
-        flow["step"] = "roles"
-
-        # Get roles for this agent
-        roles = await role_crud.list_roles(db, flow["agent_id"])
-        flow["all_roles"] = roles
-        if len(roles) == 1:
-            # Auto-assign to only role
-            role_ids = [roles[0]["id"]]
-            session.pop("_pending_add_skill", None)
-            skill = await skill_crud.create_skill(db, flow["agent_id"], skill_name, skill_md, role_ids, desc)
-            return f"Skill **{skill_name}** added to {flow['agent_name']} (assigned to: {roles[0]['name']}).", {
-                "type": "skill", "action": "created", "data": {**skill, "agent_name": flow["agent_name"]}
-            }
-
-        roles_list = ", ".join(f"`{r['name']}`" for r in roles)
-        return f"Which roles can use **{skill_name}**?\n\nAvailable: {roles_list}\n\nType role names separated by commas, or **all**:", None
-
-    if step == "roles":
-        skill_name = flow["skill_name"]
-        all_roles = flow["all_roles"]
-        role_map = {r["name"]: r["id"] for r in all_roles}
-
-        if text.lower() == "all":
-            role_ids = [r["id"] for r in all_roles]
-            assigned = ", ".join(r["name"] for r in all_roles)
-        else:
-            names = [n.strip() for n in text.split(",") if n.strip()]
-            invalid = [n for n in names if n not in role_map]
-            if invalid:
-                return f"Unknown role(s): {', '.join(invalid)}. Available: {', '.join(role_map.keys())}", None
-            role_ids = [role_map[n] for n in names]
-            assigned = ", ".join(names)
-
         session.pop("_pending_add_skill", None)
-        skill = await skill_crud.create_skill(db, flow["agent_id"], skill_name, flow["skill_md"], role_ids, flow["desc"])
-        return f"Skill **{skill_name}** added to {flow['agent_name']} (assigned to: {assigned}).", {
+        skill = await skill_crud.create_skill(db, flow["agent_id"], skill_name, skill_md, desc)
+        return f"Skill **{skill_name}** added to {flow['agent_name']}.", {
             "type": "skill", "action": "created", "data": {**skill, "agent_name": flow["agent_name"]}
         }
 
@@ -532,37 +280,24 @@ async def _handle_add_skill_flow(flow: dict, message: str, user_id: str, db: Dat
 
 
 # ============================================================
-# Edit Scope flow
-# ============================================================
-
-async def _handle_edit_scope_flow(flow: dict, message: str, user_id: str, db: Database, session: dict) -> tuple[str, dict | None]:
-    text = message.strip()
-
-    if text.lower() in ["cancel", "取消"]:
-        session.pop("_pending_edit_scope", None)
-        return "Cancelled.", None
-
-    if flow.get("step") == "agent":
-        agents = await agent_crud.list_agents(db, user_id)
-        match = next((a for a in agents if a["name"].lower() == text.lower() and not a.get("is_example")), None)
-        if not match:
-            names = ", ".join(f"`{a['name']}`" for a in agents if not a.get("is_example"))
-            return f"Agent '{text}' not found. Your agents: {names}", None
-        # Return editing structured data for the scope
-        session.pop("_pending_edit_scope", None)
-        scope = await scope_crud.get_scope(db, match["id"])
-        return f"Editing scope for **{match['name']}**.", {
-            "type": "scope", "action": "editing",
-            "data": {"agent_id": match["id"], "agent_name": match["name"], "soul_md": scope["soul_md"]}
-        }
-
-    session.pop("_pending_edit_scope", None)
-    return "Something went wrong. Try /edit-scope again.", None
-
-
-# ============================================================
 # Export Agent flow
 # ============================================================
+
+_EXPORT_FORMATS = ["gitagent", "claude-code", "codex", "cursor", "socialwares"]
+_FORMAT_MENU = (
+    "Select export format:\n\n"
+    "1. **gitagent** — agent.yaml + SOUL.md + skills/ (推荐)\n"
+    "2. **claude-code** — CLAUDE.md + .claude/skills/\n"
+    "3. **codex** — AGENTS.md + .agents/skills/\n"
+    "4. **cursor** — .cursor/rules\n"
+    "5. **socialwares** — agent/role/ + flow/ + scope.md\n\n"
+    "Type the format name or number (1-5):"
+)
+
+_FORMAT_ALIASES = {
+    "1": "gitagent", "2": "claude-code", "3": "codex", "4": "cursor", "5": "socialwares",
+}
+
 
 async def _handle_export_agent_flow(flow: dict, message: str, user_id: str, db: Database, session: dict) -> tuple[str, dict | None]:
     text = message.strip()
@@ -577,8 +312,16 @@ async def _handle_export_agent_flow(flow: dict, message: str, user_id: str, db: 
         if not match:
             names = ", ".join(f"`{a['name']}`" for a in agents)
             return f"Agent '{text}' not found. Available: {names}", None
+        flow["agent"] = match
+        flow["step"] = "format"
+        return _FORMAT_MENU, None
+
+    if flow.get("step") == "format":
+        fmt = _FORMAT_ALIASES.get(text, text.lower())
+        if fmt not in _EXPORT_FORMATS:
+            return f"Unknown format '{text}'. Please enter a number 1-5 or format name.", None
         session.pop("_pending_export_agent", None)
-        return _build_export_response([match])
+        return _build_export_response([flow["agent"]], fmt)
 
     session.pop("_pending_export_agent", None)
     return "Something went wrong. Try /export-agent again.", None
@@ -603,13 +346,53 @@ async def _handle_delete_agent_flow(flow: dict, message: str, user_id: str, db: 
             return f"Agent '{text}' not found. Your agents: {names}", None
         session.pop("_pending_delete_agent", None)
         session["_pending_action"] = {"entity": "agent", "action": "delete", "targets": [match]}
-        return f"Are you sure you want to delete Agent **{match['name']}**? This will remove all roles, skills, and configurations.", {
+        return f"Are you sure you want to delete Agent **{match['name']}**? This will remove all skills and configurations.", {
             "type": "agent", "action": "confirm_required",
             "data": {"message": f"Delete Agent '{match['name']}'? This cannot be undone.", "confirm_label": "Delete", "cancel_label": "Cancel"},
         }
 
     session.pop("_pending_delete_agent", None)
     return "Something went wrong. Try /delete-agent again.", None
+
+
+# ============================================================
+# Find Skill flow (multi-step)
+# ============================================================
+
+async def _handle_find_skill_flow(flow: dict, message: str, user_id: str, db: Database, session: dict) -> tuple[str, dict | None]:
+    text = message.strip()
+    if text.lower() in ["cancel", "取消"]:
+        session.pop("_pending_find_skill", None)
+        return "Cancelled.", None
+
+    if flow["step"] == "query":
+        results = await search_skills(db, user_id, text)
+        if not results:
+            session.pop("_pending_find_skill", None)
+            return f"No skills found for '{text}'. Try a different keyword.", None
+        flow["results"] = results
+        flow["step"] = "select"
+        lines = [f"Found {len(results)} skill(s):\n"]
+        for i, r in enumerate(results, 1):
+            lines.append(f"  {i}. **{r['name']}** ({r['source']}) — {r['description'][:60]}")
+        lines.append(f"\nType a number to view details, or **cancel**:")
+        return "\n".join(lines), {"type": "skill", "action": "listed", "data": {"query": text, "results": results}}
+
+    if flow["step"] == "select":
+        try:
+            idx = int(text) - 1
+            results = flow["results"]
+            if 0 <= idx < len(results):
+                selected = results[idx]
+                session.pop("_pending_find_skill", None)
+                return f"**{selected['name']}**\n\nSource: {selected['source']}\n\n```\n{selected['skill_md'][:500]}\n```\n\nUse `/add-skill` to add this to an Agent.", None
+        except ValueError:
+            pass
+        session.pop("_pending_find_skill", None)
+        return "Invalid selection. Try /find-skill again.", None
+
+    session.pop("_pending_find_skill", None)
+    return "Something went wrong. Try /find-skill again.", None
 
 
 # ============================================================
@@ -625,16 +408,6 @@ async def _handle_ui_action(ui_action: dict, user_id: str, db: Database, session
 
     # Confirm/cancel dialog
     if entity == "_dialog":
-        # Check pending export first
-        pending_export = session.get("_pending_export")
-        if action == "confirm" and pending_export:
-            session.pop("_pending_export", None)
-            return await _handle_export(pending_export["targets"], user_id, db)
-        elif pending_export:
-            session.pop("_pending_export", None)
-            return "Export cancelled.", None
-
-        # Then check pending delete/other actions
         pending = session.get("_pending_action")
         if action == "confirm" and pending:
             session.pop("_pending_action", None)
@@ -692,14 +465,6 @@ async def _execute_pending(pending: dict, user_id: str, db: Database) -> tuple[s
         names = ", ".join(r["name"] for r in results)
         return f"Deleted {len(results)} agents: {names}.", {"type": "agent", "action": "deleted", "data": {"deleted": results}}
 
-    if entity == "role":
-        for t in targets:
-            try:
-                await role_crud.delete_role(db, t["id"])
-            except ValueError as e:
-                return str(e), None
-        return f"Role deleted.", {"type": "role", "action": "deleted", "data": targets[0]}
-
     if entity == "skill":
         for t in targets:
             await skill_crud.delete_skill(db, t["id"])
@@ -713,7 +478,7 @@ async def _handle_detail(entity: str, target: dict, user_id: str, db: Database) 
     if entity == "agent":
         try:
             agent = await agent_crud.get_agent(db, user_id, target["id"])
-            # Enrich skills with full skill_md and role names
+            # Enrich skills with full skill_md
             conn = await db.connect()
             try:
                 enriched_skills = []
@@ -721,22 +486,8 @@ async def _handle_detail(entity: str, target: dict, user_id: str, db: Database) 
                     cursor = await conn.execute("SELECT skill_md FROM skills WHERE id = ?", (s["id"],))
                     row = await cursor.fetchone()
                     skill_md = row[0] if row else ""
-                    # Get role names for this skill
-                    rc = await conn.execute(
-                        "SELECT r.name FROM skill_roles sr JOIN roles r ON sr.role_id = r.id WHERE sr.skill_id = ?",
-                        (s["id"],)
-                    )
-                    role_names = [r[0] for r in await rc.fetchall()]
-                    enriched_skills.append({**s, "skill_md": skill_md, "roles": role_names})
+                    enriched_skills.append({**s, "skill_md": skill_md})
                 agent["skills"] = enriched_skills
-
-                # Enrich roles with full soul_md
-                enriched_roles = []
-                for r in agent.get("roles", []):
-                    cursor = await conn.execute("SELECT soul_md FROM roles WHERE id = ?", (r["id"],))
-                    row = await cursor.fetchone()
-                    enriched_roles.append({**r, "soul_md": row[0] if row else ""})
-                agent["roles"] = enriched_roles
             finally:
                 await conn.close()
 
@@ -746,82 +497,79 @@ async def _handle_detail(entity: str, target: dict, user_id: str, db: Database) 
     return f"Detail view for {entity} is not yet supported.", None
 
 
-def _build_export_response(targets: list) -> tuple[str, dict | None]:
-    """Build export response with download links."""
+def _build_export_response(targets: list, fmt: str = "gitagent") -> tuple[str, dict | None]:
+    """Build export response with download links for the given format."""
     downloads = []
     for t in targets:
         downloads.append({
             "id": t.get("id", ""),
             "name": t.get("name", ""),
-            "download_url": f"/api/export/{t['id']}",
+            "format": fmt,
+            "download_url": f"/api/export/{t['id']}?format={fmt}",
         })
 
     if len(downloads) == 1:
         d = downloads[0]
-        return f"Agent '{d['name']}' is ready for download.", {
+        return f"Agent **{d['name']}** ({fmt}) is ready for download.", {
             "type": "deploy", "action": "exported",
-            "data": {"agent_name": d["name"], "download_url": d["download_url"], "downloads": downloads},
+            "data": {"agent_name": d["name"], "format": fmt, "download_url": d["download_url"], "downloads": downloads},
         }
     names = ", ".join(d["name"] for d in downloads)
-    return f"{len(downloads)} agents ready for download: {names}", {
+    return f"{len(downloads)} agents ready for download ({fmt}): {names}", {
         "type": "deploy", "action": "exported",
-        "data": {"downloads": downloads},
+        "data": {"format": fmt, "downloads": downloads},
     }
 
 
 async def _handle_edit(entity: str, target: dict, user_id: str, db: Database) -> tuple[str, dict | None]:
     """Handle edit action — return current content for editor."""
-    if entity == "role":
-        roles = await role_crud.list_roles(db, target.get("agent_id", ""))
-        for r in roles:
-            if r.get("id") == target["id"] or r.get("name") == target.get("name"):
-                # Need full soul_md, re-fetch
-                conn = await db.connect()
-                try:
-                    cursor = await conn.execute("SELECT id, agent_id, name, soul_md FROM roles WHERE id = ?", (target["id"],))
-                    row = await cursor.fetchone()
-                    if row:
-                        return f"Editing role: {row[2]}", {"type": "role", "action": "editing", "data": {
-                            "id": row[0], "agent_id": row[1], "name": row[2], "soul_md": row[3],
-                            "agent_name": target.get("agent_name", ""),
-                        }}
-                finally:
-                    await conn.close()
+    if entity == "agent":
+        agent_id = target.get("id", "")
+        try:
+            agent = await agent_crud.get_agent(db, user_id, agent_id)
+            return f"Editing agent: {agent['name']}", {"type": "agent", "action": "editing", "data": agent}
+        except ValueError as e:
+            return str(e), None
 
-    if entity == "scope":
-        agent_id = target.get("agent_id") or target.get("id", "")
-        scope = await scope_crud.get_scope(db, agent_id)
-        return f"Editing scope", {"type": "scope", "action": "editing", "data": {
-            "agent_id": agent_id, "soul_md": scope["soul_md"],
-            "agent_name": target.get("agent_name", target.get("name", "")),
-        }}
-
-    if entity == "commitment":
-        agent_id = target.get("agent_id") or target.get("id", "")
-        commit = await commitment_crud.get_commitment(db, agent_id)
-        return f"Editing commitment", {"type": "commitment", "action": "editing", "data": {
-            "agent_id": agent_id, "commitment_yaml": commit["commitment_yaml"],
-            "agent_name": target.get("agent_name", target.get("name", "")),
-        }}
+    if entity == "skill":
+        conn = await db.connect()
+        try:
+            cursor = await conn.execute("SELECT id, agent_id, name, description, skill_md FROM skills WHERE id = ?", (target["id"],))
+            row = await cursor.fetchone()
+            if row:
+                return f"Editing skill: {row[2]}", {"type": "skill", "action": "editing", "data": {
+                    "id": row[0], "agent_id": row[1], "name": row[2], "description": row[3], "skill_md": row[4],
+                    "agent_name": target.get("agent_name", ""),
+                }}
+        finally:
+            await conn.close()
 
     return f"Edit for {entity} not yet supported.", None
 
 
 async def _handle_update(entity: str, target: dict, context: dict, user_id: str, db: Database) -> tuple[str, dict | None]:
     """Handle update action from editor save."""
-    if entity == "role" and "soul_md" in context:
-        result = await role_crud.update_role(db, target["id"], context["soul_md"])
-        return f"Role '{result['name']}' updated.", {"type": "role", "action": "updated", "data": result}
+    if entity == "agent" and "role_md" in context:
+        agent_id = target.get("id", "")
+        conn = await db.connect()
+        try:
+            await conn.execute("UPDATE agents SET role_md = ? WHERE id = ?", (context["role_md"], agent_id))
+            await conn.commit()
+        finally:
+            await conn.close()
+        agent = await agent_crud.get_agent(db, user_id, agent_id)
+        return f"Agent '{agent['name']}' updated.", {"type": "agent", "action": "updated", "data": agent}
 
-    if entity == "scope" and "soul_md" in context:
-        agent_id = target.get("agent_id") or target.get("id", "")
-        result = await scope_crud.update_scope(db, agent_id, context["soul_md"])
-        return "Scope updated.", {"type": "scope", "action": "updated", "data": result}
-
-    if entity == "commitment" and "commitment_yaml" in context:
-        agent_id = target.get("agent_id") or target.get("id", "")
-        result = await commitment_crud.update_commitment(db, agent_id, context["commitment_yaml"])
-        return "Commitment updated.", {"type": "commitment", "action": "updated", "data": result}
+    if entity == "skill" and "skill_md" in context:
+        conn = await db.connect()
+        try:
+            await conn.execute("UPDATE skills SET skill_md = ? WHERE id = ?", (context["skill_md"], target["id"]))
+            if "description" in context:
+                await conn.execute("UPDATE skills SET description = ? WHERE id = ?", (context["description"], target["id"]))
+            await conn.commit()
+        finally:
+            await conn.close()
+        return "Skill updated.", {"type": "skill", "action": "updated", "data": target}
 
     return f"Update for {entity} not supported.", None
 
@@ -839,20 +587,10 @@ async def _handle_natural_language(message: str, user_id: str, db: Database, ses
     if pending_create:
         return await _handle_create_wizard(pending_create, message, user_id, db, session)
 
-    # --- Pending add-role flow ---
-    pending_add_role = session.get("_pending_add_role")
-    if pending_add_role:
-        return await _handle_add_role_flow(pending_add_role, message, user_id, db, session)
-
     # --- Pending add-skill flow ---
     pending_add_skill = session.get("_pending_add_skill")
     if pending_add_skill:
         return await _handle_add_skill_flow(pending_add_skill, message, user_id, db, session)
-
-    # --- Pending edit-scope flow ---
-    pending_edit_scope = session.get("_pending_edit_scope")
-    if pending_edit_scope:
-        return await _handle_edit_scope_flow(pending_edit_scope, message, user_id, db, session)
 
     # --- Pending export-agent flow ---
     pending_export = session.get("_pending_export_agent")
@@ -864,10 +602,15 @@ async def _handle_natural_language(message: str, user_id: str, db: Database, ses
     if pending_delete:
         return await _handle_delete_agent_flow(pending_delete, message, user_id, db, session)
 
+    # --- Pending find-skill flow ---
+    pending_find = session.get("_pending_find_skill")
+    if pending_find:
+        return await _handle_find_skill_flow(pending_find, message, user_id, db, session)
+
     # --- Slash commands (from command palette) ---
     if lower == "/create-agent":
-        session["_pending_create"] = {"step": "name", "roles": [], "skills": [], "commitments": []}
-        return "**Step 1/7 — Agent Name**\n\nWhat would you like to name your Agent?", None
+        session["_pending_create"] = {"step": "name", "skills_list": []}
+        return "**Step 1/3 — Agent Name**\n\nWhat would you like to name your Agent?", None
     if lower == "/list-agents":
         agents = await agent_crud.list_agents(db, user_id)
         if not agents:
@@ -877,14 +620,6 @@ async def _handle_natural_language(message: str, user_id: str, db: Database, ses
         return f"Found {len(agents)} agent(s).", {
             "type": "agent", "action": "listed", "data": {"agents": agents}
         }
-    if lower == "/add-role":
-        session["_pending_add_role"] = {"step": "agent"}
-        agents = await agent_crud.list_agents(db, user_id)
-        if not agents:
-            session.pop("_pending_add_role", None)
-            return "No agents found. Create one first with /create-agent.", None
-        names = ", ".join(f"`{a['name']}`" for a in agents if not a.get("is_example"))
-        return f"Which Agent should I add a role to?\n\nYour agents: {names}", None
     if lower == "/add-skill":
         session["_pending_add_skill"] = {"step": "agent"}
         agents = await agent_crud.list_agents(db, user_id)
@@ -893,14 +628,6 @@ async def _handle_natural_language(message: str, user_id: str, db: Database, ses
             return "No agents found. Create one first with /create-agent.", None
         names = ", ".join(f"`{a['name']}`" for a in agents if not a.get("is_example"))
         return f"Which Agent should I add a skill to?\n\nYour agents: {names}", None
-    if lower == "/edit-scope":
-        session["_pending_edit_scope"] = {"step": "agent"}
-        agents = await agent_crud.list_agents(db, user_id)
-        names = ", ".join(f"`{a['name']}`" for a in agents if not a.get("is_example"))
-        if not names:
-            session.pop("_pending_edit_scope", None)
-            return "No agents found. Create one first with /create-agent.", None
-        return f"Which Agent's scope would you like to edit?\n\nYour agents: {names}", None
     if lower == "/export-agent":
         session["_pending_export_agent"] = {"step": "agent"}
         agents = await agent_crud.list_agents(db, user_id)
@@ -919,28 +646,21 @@ async def _handle_natural_language(message: str, user_id: str, db: Database, ses
             session.pop("_pending_delete_agent", None)
             return "No agents found.", None
         return f"Which Agent would you like to delete?\n\nYour agents: {names}", None
+    if lower == "/find-skill":
+        session["_pending_find_skill"] = {"step": "query"}
+        return "What kind of skill are you looking for?\n\nType a keyword to search:", None
 
     # --- Create Agent (natural language) → enter wizard ---
     if _match_intent(lower, ["创建", "create", "新建", "new"]) and _match_intent(lower, ["agent", "智能体"]):
         name = _extract_name(message)
-        wiz = {"step": "name", "roles": [], "skills": [], "commitments": []}
+        wiz = {"step": "name", "skills_list": []}
         if name:
-            # Pre-fill name, go to step 2
             wiz["name"] = name
-            wiz["step"] = "model"
+            wiz["step"] = "role_md"
             session["_pending_create"] = wiz
-            return (
-                f"Creating Agent **{name}**.\n\n"
-                "**Step 2/7 — Model**\n\n"
-                "Which model should this Agent use?\n\n"
-                "1. **claude** — Claude (Anthropic)\n"
-                "2. **gemini** — Gemini (Google)\n"
-                "3. **kimi** — Kimi (Moonshot)\n"
-                "4. **codex** — Codex (OpenAI)\n\n"
-                "Type the model name or number:"
-            ), None
+            return f"Creating Agent **{name}**.\n\n**Step 2/3 — Identity Description**\n\nDescribe who this Agent is:", None
         session["_pending_create"] = wiz
-        return "**Step 1/7 — Agent Name**\n\nWhat would you like to name your Agent?", None
+        return "**Step 1/3 — Agent Name**\n\nWhat would you like to name your Agent?", None
 
     # --- List Agents ---
     if _match_intent(lower, ["列出", "list", "查看所有", "show all", "所有"]) and _match_intent(lower, ["agent", "智能体"]):
@@ -964,7 +684,7 @@ async def _handle_natural_language(message: str, user_id: str, db: Database, ses
         if not match:
             return f"Agent '{name}' not found.", None
         session["_pending_action"] = {"entity": "agent", "action": "delete", "targets": [match]}
-        return f"Are you sure you want to delete Agent '{name}'? This will remove all roles, skills, and configurations.", {
+        return f"Are you sure you want to delete Agent '{name}'? This will remove all skills and configurations.", {
             "type": "agent", "action": "confirm_required",
             "data": {"message": f"Delete Agent '{name}'? This cannot be undone.", "confirm_label": "Delete", "cancel_label": "Cancel"},
         }
@@ -990,27 +710,12 @@ async def _handle_natural_language(message: str, user_id: str, db: Database, ses
         match = next((a for a in agents if a["name"].lower() == name.lower()), None)
         if not match:
             return f"Agent '{name}' not found.", None
-        return _build_export_response([match])
+        session["_pending_export_agent"] = {"step": "format", "agent": match}
+        return _FORMAT_MENU, None
 
     # --- Import Agent ---
     if _match_intent(lower, ["导入", "import"]):
         return "Import requires a file path. Usage: '导入 /path/to/agent-config'", None
-
-    # --- Add Role (natural language) ---
-    if _match_intent(lower, ["添加", "add", "加", "新增"]) and _match_intent(lower, ["角色", "role"]):
-        # Try to extract agent name from message like "给 task-manager 加个 reviewer 角色"
-        agent_name = _extract_agent_name_from_context(message)
-        if agent_name:
-            agents = await agent_crud.list_agents(db, user_id)
-            match = next((a for a in agents if a["name"].lower() == agent_name.lower() and not a.get("is_example")), None)
-            if match:
-                session["_pending_add_role"] = {"step": "name", "agent_id": match["id"], "agent_name": match["name"]}
-                return f"Adding role to **{match['name']}**.\n\nWhat should the role be named?", None
-        # Fallback: start guided flow
-        session["_pending_add_role"] = {"step": "agent"}
-        agents = await agent_crud.list_agents(db, user_id)
-        names = ", ".join(f"`{a['name']}`" for a in agents if not a.get("is_example"))
-        return f"Which Agent should I add a role to?\n\nYour agents: {names}", None
 
     # --- Add Skill (natural language) ---
     if _match_intent(lower, ["添加", "add", "加", "新增"]) and _match_intent(lower, ["技能", "skill"]):
@@ -1032,23 +737,11 @@ async def _handle_natural_language(message: str, user_id: str, db: Database, ses
 
     # --- Confirm/cancel (text-based) ---
     if lower.strip() in ["确认", "confirm", "yes", "是"]:
-        # Check pending export
-        pending_export = session.get("_pending_export")
-        if pending_export:
-            session.pop("_pending_export", None)
-            return await _handle_export(pending_export["targets"], user_id, db)
-        # Check pending delete
         pending = session.get("_pending_action")
         if pending:
             session.pop("_pending_action", None)
             return await _execute_pending(pending, user_id, db)
         return "No pending operation to confirm.", None
-
-    # --- User typed a path for pending export ---
-    pending_export = session.get("_pending_export")
-    if pending_export and (message.strip().startswith(("/", "./", "~", "C:", "D:")) or "/" in message or "\\" in message):
-        session.pop("_pending_export", None)
-        return await _handle_export(pending_export["targets"], user_id, db, message.strip())
 
     if lower.strip() in ["取消", "cancel", "no", "否"]:
         session.pop("_pending_action", None)
@@ -1056,6 +749,51 @@ async def _handle_natural_language(message: str, user_id: str, db: Database, ses
 
     # --- Fallback ---
     return f"I can help you manage Agent configurations. Try:\n- 创建一个 <name> Agent\n- 列出所有 Agent\n- 查看 <name> 的详情\n- 导出 <name>\n- 删除 <name>", None
+
+
+# ============================================================
+# Claude SDK integration
+# ============================================================
+
+_RUNTIME_DIR = Path(__file__).parent.parent / ".runtime" / "agents" / "default"
+
+_PENDING_KEYS = (
+    "_pending_create", "_pending_add_skill", "_pending_export_agent",
+    "_pending_delete_agent", "_pending_find_skill", "_pending_action",
+)
+
+
+def _should_use_sdk(message: str, session: dict) -> bool:
+    """Determine if message should be routed to Claude SDK Agent."""
+    from src.claude_adapter import is_sdk_available
+
+    if not is_sdk_available():
+        return False
+
+    # Don't use SDK if there's a pending multi-step flow
+    # (this is for fallback flows only — SDK handles its own multi-turn)
+    for key in _PENDING_KEYS:
+        if session.get(key):
+            return False
+
+    return True
+
+
+async def _handle_via_sdk(message: str, user_id: str, db: Database, session: dict) -> tuple[str, dict | None]:
+    """Route message to Claude Agent via SDK with tool use."""
+    from src.claude_adapter import build_system_prompt, send_to_agent
+
+    system_prompt = build_system_prompt(_RUNTIME_DIR, user_id, str(db.db_path))
+
+    full_response = ""
+    async for chunk in send_to_agent(
+        message, system_prompt, session.get("history"),
+        db=db, user_id=user_id,
+    ):
+        full_response += chunk
+
+    clean_text, structured = parse_agent_response(full_response)
+    return clean_text, structured
 
 
 # ============================================================

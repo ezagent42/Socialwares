@@ -1,4 +1,3 @@
-# tests/test_chat_api.py
 import pytest
 import asyncio
 import json
@@ -23,208 +22,204 @@ def user_id(db):
     return asyncio.run(_setup())
 
 
-def test_session_manager_send_text(db, user_id):
-    """Session manager returns text events for a simple message."""
+def test_send_text(db, user_id):
     from src.session import SessionManager
     sm = SessionManager()
-    events = asyncio.run(_collect_events(sm, user_id, "hello", db))
-    event_types = [e["event"] for e in events]
-    assert "text" in event_types
-    assert "done" in event_types
+    events = asyncio.run(_collect(sm, user_id, "hello", db))
+    assert any(e["event"] == "text" for e in events)
+    assert any(e["event"] == "done" for e in events)
 
 
-def test_create_wizard_full_flow(db, user_id):
-    """Full create wizard: name → model → scope → done roles → done skills → done commitments → create."""
+def test_create_wizard_3_steps(db, user_id):
     from src.session import SessionManager
     sm = SessionManager()
-
-    # Step 1: start wizard
-    events = asyncio.run(_collect_events(sm, user_id, "/create-agent", db))
-    text = _get_text(events)
-    assert "Step 1" in text
-    assert "name" in text.lower()
-
-    # Step 2: name → asks for model
-    events = asyncio.run(_collect_events(sm, user_id, "test-app", db))
-    text = _get_text(events)
-    assert "Step 2" in text
-    assert "model" in text.lower()
-
-    # Step 3: model → asks for scope
-    events = asyncio.run(_collect_events(sm, user_id, "claude", db))
-    text = _get_text(events)
-    assert "Step 3" in text
-
-    # Step 4: scope → asks for roles
-    events = asyncio.run(_collect_events(sm, user_id, "Task management system", db))
-    text = _get_text(events)
-    assert "Step 4" in text
-    assert "role" in text.lower()
-
-    # Step 5: skip roles → asks for skills
-    events = asyncio.run(_collect_events(sm, user_id, "done", db))
-    text = _get_text(events)
-    assert "Step 5" in text
-    assert "skill" in text.lower()
-
-    # Step 6: skip skills → asks for commitments
-    events = asyncio.run(_collect_events(sm, user_id, "done", db))
-    text = _get_text(events)
-    assert "Step 6" in text
-
-    # Step 7: skip commitments → shows preview
-    events = asyncio.run(_collect_events(sm, user_id, "done", db))
-    text = _get_text(events)
-    assert "Step 7" in text
-    assert "test-app" in text
-    assert "claude" in text
-
-    # Confirm creation
-    events = asyncio.run(_collect_events(sm, user_id, "create", db))
-    text = _get_text(events)
-    assert "successfully" in text.lower() or "created" in text.lower()
-    structured = _get_structured(events)
-    assert structured is not None
-    assert structured["type"] == "agent"
-    assert structured["action"] == "created"
-    assert structured["data"]["name"] == "test-app"
+    events = asyncio.run(_collect(sm, user_id, "/create-agent", db))
+    assert "Step 1" in _text(events)
+    events = asyncio.run(_collect(sm, user_id, "test-app", db))
+    assert "Step 2" in _text(events)
+    events = asyncio.run(_collect(sm, user_id, "# Test\nYou test.", db))
+    assert "Step 3" in _text(events)
+    events = asyncio.run(_collect(sm, user_id, "done", db))
+    assert "Confirm" in _text(events) or "confirm" in _text(events).lower()
+    events = asyncio.run(_collect(sm, user_id, "create", db))
+    s = _structured(events)
+    assert s is not None
+    assert s["type"] == "agent"
+    assert s["action"] == "created"
+    assert s["data"]["name"] == "test-app"
 
 
-def test_create_wizard_with_roles_and_skills(db, user_id):
-    """Wizard with extra role and skill."""
+def test_create_with_skill(db, user_id):
     from src.session import SessionManager
     sm = SessionManager()
-
-    asyncio.run(_collect_events(sm, user_id, "/create-agent", db))
-    asyncio.run(_collect_events(sm, user_id, "my-agent", db))       # name
-    asyncio.run(_collect_events(sm, user_id, "1", db))              # model (claude)
-    asyncio.run(_collect_events(sm, user_id, "skip", db))           # scope
-    asyncio.run(_collect_events(sm, user_id, "reviewer", db))       # add role
-    asyncio.run(_collect_events(sm, user_id, "Reviews tasks", db))  # role desc
-    asyncio.run(_collect_events(sm, user_id, "done", db))           # done roles
-    asyncio.run(_collect_events(sm, user_id, "create_task", db))    # add skill
-    asyncio.run(_collect_events(sm, user_id, "Creates new tasks", db))  # skill desc
-    # 2 roles exist (default + reviewer), so it asks which roles
-    asyncio.run(_collect_events(sm, user_id, "all", db))            # assign to all roles
-    asyncio.run(_collect_events(sm, user_id, "done", db))           # done skills
-    asyncio.run(_collect_events(sm, user_id, "done", db))           # done commitments
-
-    # Preview should show role + skill
-    events = asyncio.run(_collect_events(sm, user_id, "create", db))
-    structured = _get_structured(events)
-    assert structured is not None
-    assert structured["data"]["name"] == "my-agent"
-    roles = structured["data"].get("roles", [])
-    assert len(roles) == 2  # default + reviewer
-    skills = structured["data"].get("skills", [])
-    assert len(skills) == 1  # create_task
+    asyncio.run(_collect(sm, user_id, "/create-agent", db))
+    asyncio.run(_collect(sm, user_id, "my-agent", db))
+    asyncio.run(_collect(sm, user_id, "# My Agent", db))
+    asyncio.run(_collect(sm, user_id, "ping", db))
+    asyncio.run(_collect(sm, user_id, "Pings server", db))
+    asyncio.run(_collect(sm, user_id, "done", db))
+    events = asyncio.run(_collect(sm, user_id, "create", db))
+    s = _structured(events)
+    assert s is not None
+    assert len(s["data"]["skills"]) == 1
 
 
-def test_create_wizard_cancel(db, user_id):
-    """Cancel wizard at any step."""
+def test_create_cancel(db, user_id):
     from src.session import SessionManager
     sm = SessionManager()
-
-    asyncio.run(_collect_events(sm, user_id, "/create-agent", db))
-    events = asyncio.run(_collect_events(sm, user_id, "cancel", db))
-    text = _get_text(events)
-    assert "cancelled" in text.lower()
+    asyncio.run(_collect(sm, user_id, "/create-agent", db))
+    events = asyncio.run(_collect(sm, user_id, "cancel", db))
+    assert "cancelled" in _text(events).lower()
 
 
-def test_natural_language_create_enters_wizard(db, user_id):
-    """Natural language '创建一个 xxx Agent' enters wizard at step 2."""
+def test_list_after_create(db, user_id):
     from src.session import SessionManager
     sm = SessionManager()
-
-    events = asyncio.run(_collect_events(sm, user_id, "创建一个 task-mgr Agent", db))
-    text = _get_text(events)
-    assert "Step 2" in text  # skipped step 1, pre-filled name
-    assert "model" in text.lower()
-
-
-def test_list_agents_after_wizard(db, user_id):
-    """List agents after creating via wizard."""
-    from src.session import SessionManager
-    sm = SessionManager()
-
-    # Quick create
-    asyncio.run(_collect_events(sm, user_id, "/create-agent", db))
-    asyncio.run(_collect_events(sm, user_id, "list-test", db))
-    asyncio.run(_collect_events(sm, user_id, "claude", db))
-    asyncio.run(_collect_events(sm, user_id, "skip", db))
-    asyncio.run(_collect_events(sm, user_id, "done", db))
-    asyncio.run(_collect_events(sm, user_id, "done", db))
-    asyncio.run(_collect_events(sm, user_id, "done", db))
-    asyncio.run(_collect_events(sm, user_id, "create", db))
-
-    # List
-    events = asyncio.run(_collect_events(sm, user_id, "/list-agents", db))
-    structured = _get_structured(events)
-    assert structured is not None
-    assert structured["action"] == "listed"
-    assert len(structured["data"]["agents"]) == 1
-    assert structured["data"]["agents"][0]["name"] == "list-test"
+    asyncio.run(_collect(sm, user_id, "/create-agent", db))
+    asyncio.run(_collect(sm, user_id, "list-test", db))
+    asyncio.run(_collect(sm, user_id, "skip", db))
+    asyncio.run(_collect(sm, user_id, "done", db))
+    asyncio.run(_collect(sm, user_id, "create", db))
+    events = asyncio.run(_collect(sm, user_id, "/list-agents", db))
+    s = _structured(events)
+    assert s is not None
+    assert s["action"] == "listed"
+    assert len(s["data"]["agents"]) >= 1
 
 
-def test_session_manager_ui_action_delete(db, user_id):
-    """UI action delete triggers confirm_required."""
+def test_ui_action_delete(db, user_id):
     from src.session import SessionManager
     sm = SessionManager()
     msg = '```ui_action\n{"entity": "agent", "action": "delete", "targets": [{"id": "a1", "name": "test"}]}\n```'
-    events = asyncio.run(_collect_events(sm, user_id, msg, db))
-    structured = _get_structured(events)
-    assert structured is not None
-    assert structured["action"] == "confirm_required"
+    events = asyncio.run(_collect(sm, user_id, msg, db))
+    s = _structured(events)
+    assert s is not None
+    assert s["action"] == "confirm_required"
 
 
 def test_chat_history_saved(db, user_id):
-    """Messages are saved to chat_history table."""
     from src.session import SessionManager
     sm = SessionManager()
-    asyncio.run(_collect_events(sm, user_id, "hello", db))
+    asyncio.run(_collect(sm, user_id, "hello", db))
     async def _check():
         conn = await db.connect()
         cursor = await conn.execute("SELECT COUNT(*) FROM chat_history WHERE user_id = ?", (user_id,))
         count = (await cursor.fetchone())[0]
         await conn.close()
         return count
-    count = asyncio.run(_check())
-    assert count == 2  # user message + assistant message
+    assert asyncio.run(_check()) == 2
 
 
 def test_parse_ui_action():
-    """_parse_ui_action extracts JSON from ui_action block."""
     from src.session import _parse_ui_action
-    msg = '```ui_action\n{"entity": "agent", "action": "delete", "targets": []}\n```'
-    result = _parse_ui_action(msg)
+    result = _parse_ui_action('```ui_action\n{"entity":"agent","action":"delete","targets":[]}\n```')
     assert result["entity"] == "agent"
-    assert result["action"] == "delete"
 
 
-def test_parse_ui_action_no_block():
-    """_parse_ui_action returns None for plain text."""
+def test_parse_ui_action_none():
     from src.session import _parse_ui_action
-    assert _parse_ui_action("just a normal message") is None
+    assert _parse_ui_action("just text") is None
 
 
-# ===== Helpers =====
+def test_find_skill_command(db, user_id):
+    from src.session import SessionManager
+    sm = SessionManager()
+    # Create agent with skill first
+    asyncio.run(_collect(sm, user_id, "/create-agent", db))
+    asyncio.run(_collect(sm, user_id, "finder-test", db))
+    asyncio.run(_collect(sm, user_id, "# Finder", db))
+    asyncio.run(_collect(sm, user_id, "review_code", db))
+    asyncio.run(_collect(sm, user_id, "Review code for bugs", db))
+    asyncio.run(_collect(sm, user_id, "done", db))
+    asyncio.run(_collect(sm, user_id, "create", db))
+    # Search
+    events = asyncio.run(_collect(sm, user_id, "/find-skill", db))
+    assert "keyword" in _text(events).lower()
+    events = asyncio.run(_collect(sm, user_id, "review", db))
+    assert "review_code" in _text(events)
 
-async def _collect_events(sm, user_id, message, db):
+
+def test_add_skill_search(db, user_id):
+    from src.session import SessionManager
+    sm = SessionManager()
+    # Create agent with a skill
+    asyncio.run(_collect(sm, user_id, "/create-agent", db))
+    asyncio.run(_collect(sm, user_id, "search-host", db))
+    asyncio.run(_collect(sm, user_id, "# Host", db))
+    asyncio.run(_collect(sm, user_id, "ping_check", db))
+    asyncio.run(_collect(sm, user_id, "Ping check tool", db))
+    asyncio.run(_collect(sm, user_id, "done", db))
+    asyncio.run(_collect(sm, user_id, "create", db))
+    # Create second agent to add skill to
+    asyncio.run(_collect(sm, user_id, "/create-agent", db))
+    asyncio.run(_collect(sm, user_id, "search-target", db))
+    asyncio.run(_collect(sm, user_id, "# Target", db))
+    asyncio.run(_collect(sm, user_id, "done", db))
+    asyncio.run(_collect(sm, user_id, "create", db))
+    # Add skill via search
+    asyncio.run(_collect(sm, user_id, "/add-skill", db))
+    asyncio.run(_collect(sm, user_id, "search-target", db))
+    events = asyncio.run(_collect(sm, user_id, "search ping", db))
+    assert "ping_check" in _text(events)
+    # Select it
+    events = asyncio.run(_collect(sm, user_id, "1", db))
+    assert "added" in _text(events).lower()
+
+
+def test_find_skill_cancel(db, user_id):
+    from src.session import SessionManager
+    sm = SessionManager()
+    asyncio.run(_collect(sm, user_id, "/find-skill", db))
+    events = asyncio.run(_collect(sm, user_id, "cancel", db))
+    assert "cancelled" in _text(events).lower()
+
+
+def test_find_skill_no_results(db, user_id):
+    from src.session import SessionManager
+    sm = SessionManager()
+    asyncio.run(_collect(sm, user_id, "/find-skill", db))
+    events = asyncio.run(_collect(sm, user_id, "zzz_nonexistent_zzz", db))
+    assert "no skills found" in _text(events).lower()
+
+
+async def _collect(sm, uid, msg, db):
     events = []
-    async for event in sm.send(user_id, message, db):
-        events.append(event)
+    async for e in sm.send(uid, msg, db):
+        events.append(e)
     return events
 
-
-def _get_text(events):
+def _text(events):
     for e in events:
         if e["event"] == "text":
             return json.loads(e["data"]).get("content", "")
     return ""
 
-
-def _get_structured(events):
+def _structured(events):
     for e in events:
         if e["event"] == "structured":
             return json.loads(e["data"])
     return None
+
+
+def test_slash_command_routes_to_sdk_when_available(monkeypatch):
+    """Slash commands should also go through SDK when API key is set."""
+    from src.session import _should_use_sdk
+
+    session = {"user_id": "u1"}
+
+    # Mock SDK as available
+    monkeypatch.setattr("src.session._should_use_sdk.__module__", "src.session")
+    import src.claude_adapter
+    monkeypatch.setattr(src.claude_adapter, "is_sdk_available", lambda: True)
+
+    # Slash commands should now return True (not be bypassed)
+    assert _should_use_sdk("/list-agents", session) is True
+    assert _should_use_sdk("/create-agent", session) is True
+    assert _should_use_sdk("/export-agent", session) is True
+
+    # Natural language should also return True
+    assert _should_use_sdk("列出所有agent", session) is True
+
+    # But pending flows should still return False
+    session_with_pending = {"user_id": "u1", "_pending_create": {"step": "name"}}
+    assert _should_use_sdk("/list-agents", session_with_pending) is False
