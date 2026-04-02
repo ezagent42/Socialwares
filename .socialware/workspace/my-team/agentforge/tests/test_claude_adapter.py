@@ -1,5 +1,8 @@
+import asyncio
+
 import pytest
-from src.claude_adapter import AGENT_TOOLS
+from src.claude_adapter import AGENT_TOOLS, execute_tool
+from src.db import Database
 
 
 def test_agent_tools_defined():
@@ -16,3 +19,45 @@ def test_agent_tools_defined():
         assert "description" in tool
         assert "input_schema" in tool
         assert tool["input_schema"]["type"] == "object"
+
+
+@pytest.fixture
+def db(tmp_path):
+    database = Database(tmp_path / "test.db")
+    asyncio.run(database.init())
+    return database
+
+
+@pytest.fixture
+def user_id(db):
+    async def _setup():
+        conn = await db.connect()
+        await conn.execute("INSERT INTO users (id, github_id, github_login) VALUES ('u1', 1, 'tester')")
+        await conn.commit()
+        await conn.close()
+        return "u1"
+    return asyncio.run(_setup())
+
+
+def test_execute_tool_list_agents(db, user_id):
+    result = asyncio.run(execute_tool("list_agents", {}, user_id, db))
+    assert isinstance(result, dict)
+    assert "agents" in result
+
+
+def test_execute_tool_create_and_list(db, user_id):
+    create_result = asyncio.run(execute_tool("create_agent", {
+        "name": "test-bot",
+        "description": "A test agent",
+        "role_md": "# Test Bot\nYou are a test bot.",
+    }, user_id, db))
+    assert create_result["name"] == "test-bot"
+
+    list_result = asyncio.run(execute_tool("list_agents", {}, user_id, db))
+    assert any(a["name"] == "test-bot" for a in list_result["agents"])
+
+
+def test_execute_tool_unknown():
+    """Unknown tool should return error dict."""
+    result = asyncio.run(execute_tool("unknown_tool", {}, "u1", None))
+    assert "error" in result

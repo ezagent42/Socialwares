@@ -128,6 +128,78 @@ AGENT_TOOLS = [
 ]
 
 
+async def execute_tool(tool_name: str, tool_input: dict, user_id: str, db) -> dict:
+    """Execute a CRUD tool and return the result as a dict."""
+    from src.crud import agent_crud, skill_crud
+    from src.crud.find_skill import search_skills
+    from src.crud.export import export_agent_zip
+
+    try:
+        if tool_name == "list_agents":
+            agents = await agent_crud.list_agents(db, user_id)
+            return {"agents": agents}
+
+        elif tool_name == "create_agent":
+            agent = await agent_crud.create_agent(
+                db, user_id,
+                tool_input["name"],
+                tool_input.get("description", ""),
+                tool_input["role_md"],
+            )
+            return agent
+
+        elif tool_name == "get_agent":
+            agent = await agent_crud.get_agent(db, user_id, tool_input["agent_id"])
+            return agent
+
+        elif tool_name == "delete_agent":
+            result = await agent_crud.delete_agent(db, user_id, tool_input["agent_id"])
+            return result
+
+        elif tool_name == "create_skill":
+            skill = await skill_crud.create_skill(
+                db, tool_input["agent_id"],
+                tool_input["name"],
+                tool_input["skill_md"],
+                tool_input.get("description", ""),
+            )
+            return skill
+
+        elif tool_name == "list_skills":
+            skills = await skill_crud.list_skills(db, tool_input["agent_id"])
+            return {"skills": skills}
+
+        elif tool_name == "delete_skill":
+            result = await skill_crud.delete_skill(db, tool_input["skill_id"])
+            return result
+
+        elif tool_name == "export_agent":
+            zip_path, agent_name = await export_agent_zip(
+                db, tool_input["agent_id"], format=tool_input["format"],
+            )
+            return {
+                "agent_name": agent_name,
+                "format": tool_input["format"],
+                "download_url": f"/api/export/{tool_input['agent_id']}?format={tool_input['format']}",
+            }
+
+        elif tool_name == "search_skills":
+            results = await search_skills(db, user_id, tool_input["query"])
+            return {"results": results}
+
+        elif tool_name == "import_agent":
+            from src.crud.import_agent import import_agent
+            from pathlib import Path
+            agent = await import_agent(db, user_id, Path(tool_input["source_path"]))
+            return agent
+
+        else:
+            return {"error": f"Unknown tool: {tool_name}"}
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
 def is_sdk_available() -> bool:
     """Check if Claude SDK is available and configured."""
     try:
