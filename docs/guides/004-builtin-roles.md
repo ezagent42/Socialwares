@@ -8,7 +8,7 @@ The default template provides three roles:
 |------|---------|--------|
 | `default` | Business logic | `check_health` (user-defined skills) |
 | `dev` | App development | `inspect`, `setup_claude`, `dev_define`, `dev_build`, `dev_release` |
-| `evolver` | Quality analysis | `evolve_structure_check`, `evolve_api_check`, `evolve_session_diagnose`, `evolve_improve`, `evolve_auto` |
+| `evolver` | Quality analysis | `inspect`, `evolve_structure_check`, `evolve_api_check`, `evolve_session_diagnose`, `evolve_improve`, `evolve_auto` |
 
 All three are ordinary roles — the compiler treats them identically. `dev` and `evolver` skills are **built into the framework** and symlinked at deploy time; they update automatically when you upgrade the framework.
 

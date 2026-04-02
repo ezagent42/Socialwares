@@ -96,13 +96,13 @@ Socialwares supports multiple LLM backends through adapters:
 |---------|------------|-----------|-------|
 | `claude` (default) | `SOUL.md` | `.claude/skills/` | `.claude/hooks/` |
 | `codex` | `AGENTS.md` | `.agents/skills/` | `.codex/hooks/` |
-| `kimicode` | `AGENTS.md` | `.agents/skills/` | (none) |
+| `kimi` | `AGENTS.md` | `.agents/skills/` | (none) |
 
 Configure the default adapter in `pyproject.toml`:
 
 ```toml
 [tool.socialwares]
-adapter = "claude"        # or "codex", "kimicode"
+adapter = "claude"        # or "codex", "kimi"
 agent_dir = "agent"       # default; change to use a different directory
 ```
 
@@ -146,6 +146,6 @@ socialwares assign alice-support --role default --channel "#support"
 | Command | What it does | Starts what |
 |---------|-------------|-------------|
 | `start` | Creates Agent locally | Adapter process (Claude Code, etc.) |
-| `install` | Deploys App to channel | FastAPI backend |
+| `install` | Clones repo + compiles | Nothing — only clones + deploys |
 | `assign` | Configures existing Agent | Nothing — only merges config + symlinks |
-| `uninstall` | Removes App | Stops backend, cleans symlinks |
+| `uninstall` | Removes App files + symlinks | Nothing — only cleans files |

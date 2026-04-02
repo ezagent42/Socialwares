@@ -81,7 +81,7 @@ Edit the content files under `agent/` (role descriptions, SKILL.md, etc.).
 
 ```bash
 socialwares deploy                    # compile four primitives → .runtime/
-uvicorn src.api:api --port 8001       # start backend
+uvicorn src.api:app --port 8001       # start backend
 socialwares start --role default      # start agent
 ```
 

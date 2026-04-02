@@ -193,7 +193,7 @@ The default adapter is `claude` (Claude Code). Override in `pyproject.toml`:
 
 ```toml
 [tool.socialwares]
-adapter = "claude"     # or "codex", "kimicode"
+adapter = "claude"     # or "codex", "kimi"
 api_port = 8001
 agent_dir = "agent"    # default; change to use a different directory
 ```

@@ -87,6 +87,13 @@ cp -r ../old-workspace/agent/flow/check_health agent/flow/check_health
 # 其他自定义 skill 同理
 ```
 
+**如果旧项目修改过内置 skill**（如 `evolve_structure_check` 的脚本），用 `eject` 将内置 skill 复制到项目中再覆盖：
+
+```bash
+socialwares eject evolve_structure_check
+# 然后将旧项目的修改合并到 agent/flow/evolve_structure_check/
+```
+
 ### 第四步：编写 socialware.py
 
 旧版的 `flow.yaml` 和 `commitment.yaml` 是手写的，新版需要转为 `socialware.py` 声明：
@@ -123,7 +130,7 @@ flow.states("draft", "submitted", "reviewed")
 flow.transition("draft", "submit", "submitted", role=["default"])
 
 # 注册 dev 和 evolver 的内置 action（模板已包含，照抄即可）
-app.action("inspect",     role=["dev"])
+app.action("inspect",     role=["dev", "evolver"])
 app.action("setup_claude", role=["dev"])
 app.action("dev_define",  role=["dev"])
 app.action("dev_build",   role=["dev"])
@@ -155,7 +162,7 @@ socialwares deploy
 
 # 检查
 ls .runtime/agents/                    # default/  dev/  evolver/
-ls -la agent/flow/evolve_structure_check  # 应是 symlink → 框架包
+ls -la .runtime/agents/evolver/.claude/skills/  # 内置 skill 应是 symlink → 框架包
 ls .runtime/agents/default/.claude/hooks/ # 应有 .py 文件
 ```
 
