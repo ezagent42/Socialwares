@@ -1,1 +1,1 @@
-"""LLM 适配器。"""
+"""LLM adapters."""

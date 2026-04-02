@@ -1,6 +1,6 @@
-"""Agent 启动器 — 本地启动 agent（TUI / SDK / tmux 多角色）。
+"""Agent runner — launch agents locally (TUI / SDK / tmux multi-role).
 
-对应现有 start.sh + start_agent.py 的 Python 重写。
+Python rewrite of the existing start.sh + start_agent.py.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from socialwares.compiler import ADAPTERS
 
 
 class Runner:
-    """启动编译好的 agent。"""
+    """Launch a compiled agent."""
 
     def __init__(
         self,
@@ -28,36 +28,36 @@ class Runner:
 
         if not self.runtime_dir.is_dir():
             raise FileNotFoundError(
-                f".runtime/ 不存在。先运行 'socialwares deploy'。"
+                f".runtime/ does not exist. Run 'socialwares deploy' first."
             )
 
     def _get_adapter_launcher(self) -> Path:
-        """找到适配器的 launcher 脚本（优先 .py，兼容 .sh）。"""
+        """Find the adapter's launcher script (prefer .py, fall back to .sh)."""
         import socialwares.adapters
         adapters_pkg = Path(socialwares.adapters.__file__).parent
         adapter_name = "kimicode" if self.adapter == "kimi" else self.adapter
-        # 优先 Python launcher
+        # Prefer Python launcher
         launcher = adapters_pkg / adapter_name / "launch.py"
         if launcher.is_file():
             return launcher
-        # 兼容旧的 shell.sh
+        # Fall back to legacy shell.sh
         shell = adapters_pkg / adapter_name / "shell.sh"
         if shell.is_file():
             return shell
-        raise FileNotFoundError(f"适配器 launcher 不存在: {adapters_pkg / adapter_name}")
+        raise FileNotFoundError(f"Adapter launcher not found: {adapters_pkg / adapter_name}")
 
     def _role_dir(self, role: str) -> Path:
-        """获取 role 的 runtime 目录。"""
+        """Get the runtime directory for a role."""
         d = self.runtime_dir / "agents" / role
         if not d.is_dir():
             available = [p.name for p in (self.runtime_dir / "agents").iterdir() if p.is_dir()]
             raise FileNotFoundError(
-                f"角色 '{role}' 不存在。可用角色: {', '.join(available)}"
+                f"Role '{role}' does not exist. Available roles: {', '.join(available)}"
             )
         return d
 
     def start(self, role: str) -> None:
-        """启动单个 role 的 agent（TUI 模式，exec 替换当前进程）。"""
+        """Start a single role's agent (TUI mode, exec replaces current process)."""
         role_dir = self._role_dir(role)
         launcher = self._get_adapter_launcher()
 
@@ -71,13 +71,13 @@ class Runner:
             os.execv(str(launcher), [str(launcher), str(role_dir)])
 
     def start_multi(self, roles: list[str]) -> None:
-        """多角色启动（tmux 多窗格）。"""
+        """Multi-role startup (tmux multi-pane)."""
         if not shutil.which("tmux"):
             print("Error: tmux is required for multi-role mode.")
             print("Install: sudo apt install tmux")
             sys.exit(1)
 
-        # 校验所有 role 存在
+        # Validate that all roles exist
         for role in roles:
             self._role_dir(role)
 
@@ -109,15 +109,15 @@ class Runner:
         os.execvp("tmux", ["tmux", "attach", "-t", session])
 
     def run_sdk(self, role: str, prompt: str) -> None:
-        """SDK 模式：发送 prompt 并收集结果。"""
+        """SDK mode: send a prompt and collect results."""
         role_dir = self._role_dir(role)
 
-        # 动态加载适配器
+        # Dynamically load adapter
         import importlib
         import socialwares.adapters
         adapters_pkg = Path(socialwares.adapters.__file__).parent
 
-        # 添加 adapters 目录到 path
+        # Add adapters directory to path
         sys.path.insert(0, str(adapters_pkg))
         adapter_name = "kimicode" if self.adapter == "kimi" else self.adapter
         sys.path.insert(0, str(adapters_pkg / adapter_name))
@@ -127,7 +127,7 @@ class Runner:
 
         mod = importlib.import_module(f"socialwares.adapters.{adapter_name}.sdk")
 
-        # 找到适配器类
+        # Find the adapter class
         adapter_cls = None
         for attr_name in dir(mod):
             attr = getattr(mod, attr_name)
@@ -147,7 +147,7 @@ class Runner:
         asyncio.run(self._run_sdk_async(adapter, prompt, role, adapter_name))
 
     async def _run_sdk_async(self, adapter, prompt: str, role: str, adapter_name: str) -> None:
-        """SDK 异步执行。"""
+        """SDK async execution."""
         from socialwares.adapters.base import save_session, is_noise
 
         ws_root = self.project_dir

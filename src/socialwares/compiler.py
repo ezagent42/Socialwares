@@ -1,9 +1,9 @@
-"""编译器 — 四原语 + App 声明 → .runtime/
+"""Compiler — four primitives + App declaration → .runtime/
 
-将 socialware.py 中的 App 对象 + agent/ 目录下的内容文件
-编译为 .runtime/（每个 role 一个 agent 目录）。
+Compiles the App object from socialware.py together with the content files
+under agent/ into .runtime/ (one agent directory per role).
 
-对应现有 deploy.sh 的 Python 重写。
+Python rewrite of the existing deploy.sh.
 """
 
 from __future__ import annotations
@@ -21,14 +21,14 @@ import yaml
 from socialwares.app import App
 
 
-# ── 适配器配置 ──
+# ── Adapter configuration ──
 
 @dataclass
 class AdapterConfig:
-    """适配器特定的目录/文件约定。"""
+    """Adapter-specific directory/file conventions."""
 
     skills_subdir: str
-    hooks_dir: str  # 空字符串表示不支持 hooks
+    hooks_dir: str  # empty string means hooks are not supported
     prompt_file: str
 
 
@@ -51,24 +51,24 @@ ADAPTERS: dict[str, AdapterConfig] = {
 }
 
 
-# ── 编译结果 ──
+# ── Compile result ──
 
 @dataclass
 class CompileResult:
-    """编译结果摘要。"""
+    """Summary of a compilation result."""
 
     roles: dict[str, int] = field(default_factory=dict)  # role_name → skill_count
     output_dir: str = ""
     adapter: str = ""
 
 
-# ── 编译器 ──
+# ── Compiler ──
 
 class Compiler:
-    """四原语编译器。
+    """Four-primitives compiler.
 
-    输入：App 对象（关系定义）+ agent/ 目录（内容文件）
-    输出：.runtime/（每个 role 的 SOUL.md + skills + hooks）
+    Input:  App object (relationship definitions) + agent/ directory (content files)
+    Output: .runtime/ (SOUL.md + skills + hooks for each role)
     """
 
     def __init__(
@@ -92,7 +92,7 @@ class Compiler:
         self.adapter_config = ADAPTERS[adapter]
 
     def compile(self, output_dir: str | Path | None = None) -> CompileResult:
-        """主编译流程：四原语 → .runtime/"""
+        """Main compilation pipeline: four primitives → .runtime/"""
         self.output = Path(output_dir) if output_dir else self.project_dir / ".runtime"
         self.output = self.output.resolve()
 
@@ -101,7 +101,6 @@ class Compiler:
         self._create_data_dirs()
         self._clean_removed_roles()
         self._sync_inline_content()
-        self._link_builtin_skills()
         self._validate_flow()
 
         for role_name in self.app.roles:
@@ -114,10 +113,10 @@ class Compiler:
 
         return result
 
-    # ── 1. 数据目录 ──
+    # ── 1. Data directories ──
 
     def _create_data_dirs(self) -> None:
-        """创建 .runtime/data/ 子目录。"""
+        """Create .runtime/data/ subdirectories."""
         for subdir in [
             "data/Files",
             "data/Sqlite",
@@ -129,10 +128,10 @@ class Compiler:
         ]:
             (self.output / subdir).mkdir(parents=True, exist_ok=True)
 
-    # ── 2. 清理已删除的 role ──
+    # ── 2. Clean up removed roles ──
 
     def _clean_removed_roles(self) -> None:
-        """删除 .runtime/agents/ 中不再存在的 role 目录。"""
+        """Remove role directories in .runtime/agents/ that no longer exist."""
         agents_dir = self.output / "agents"
         if not agents_dir.exists():
             return
@@ -140,12 +139,12 @@ class Compiler:
             if old_dir.is_dir() and old_dir.name not in self.app.roles:
                 shutil.rmtree(old_dir)
 
-    # ── 2b. Inline role → 生成文件 ──
+    # ── 2b. Inline role → generate files ──
 
     def _sync_inline_content(self) -> None:
-        """如果四原语用 inline 定义，自动生成对应文件。
+        """Auto-generate corresponding files when four primitives are defined inline.
 
-        保持 agent/ 目录完整性。文件已存在则跳过（不覆盖）。
+        Maintains agent/ directory integrity. Skips (does not overwrite) existing files.
         """
         # Scope
         scope_dir = self.agent_dir / "scope"
@@ -162,10 +161,10 @@ class Compiler:
             if not role_file.is_file():
                 role_file.write_text(role_def.content, encoding="utf-8")
 
-    # ── 3. Flow 校验 ──
+    # ── 3. Flow validation ──
 
     def _validate_flow(self) -> None:
-        """校验每个 action 都有对应的 SKILL.md（项目或框架内置）。"""
+        """Validate that every action has a corresponding SKILL.md (project or framework built-in)."""
         errors: list[str] = []
 
         all_actions: set[str] = set(self.app.actions.keys())
@@ -183,12 +182,12 @@ class Compiler:
         if errors:
             raise ValueError("Flow validation failed:\n" + "\n".join(f"  - {e}" for e in errors))
 
-    # ── 4. 编译单个 role ──
+    # ── 4. Compile a single role ──
 
     def _compile_role(self, role_name: str) -> int:
-        """编译一个 role：Scope+Role→SOUL.md, Flow→skills symlink + workflow 注入, Hooks。
+        """Compile one role: Scope+Role→SOUL.md, Flow→skills symlink + workflow injection, Hooks.
 
-        返回 skill 数量。
+        Returns the skill count.
         """
         cfg = self.adapter_config
         role_dir = self.output / "agents" / role_name
@@ -197,7 +196,7 @@ class Compiler:
         # workspace root marker
         (role_dir / ".workspace_root").write_text(str(self.project_dir))
 
-        # 清除旧的适配器产物（幂等：切换适配器后不残留）
+        # Clear old adapter artifacts (idempotent: no stale files after switching adapters)
         for old_prompt in ("SOUL.md", "AGENTS.md"):
             old_file = role_dir / old_prompt
             if old_file.is_file():
@@ -214,9 +213,9 @@ class Compiler:
         # ── Flow → skills symlink ──
         skill_count = self._link_skills(role_name, role_dir)
 
-        # ── Commitment + Flow 参考文件 ──
-        # commitment 和 flow 作为编译产物生成到 .runtime/ 根，同时复制到每个 role
-        # （evolve scripts 需要读取）
+        # ── Commitment + Flow reference files ──
+        # commitment and flow are generated as compile artifacts at the .runtime/ root
+        # and also copied to each role directory (needed by evolve scripts)
 
         # ── Hooks ──
         if cfg.hooks_dir:
@@ -227,7 +226,7 @@ class Compiler:
     # ── Scope + Role → SOUL.md ──
 
     def _build_soul(self, role_name: str) -> str:
-        """合并 scope + role 描述 + workflow 注入 → SOUL.md 内容。"""
+        """Merge scope + role description + workflow injection → SOUL.md content."""
         parts: list[str] = []
 
         # Scope
@@ -238,25 +237,25 @@ class Compiler:
         role_def = self.app.roles[role_name]
         parts.append(role_def.content)
 
-        # Flow → workflow 注入
+        # Flow → workflow injection
         workflow_text = self._serialize_workflows(role_name)
         if workflow_text:
             parts.append(workflow_text)
 
-        # Backend 配置注入
+        # Backend configuration injection
         api_port = self.config.get("api_port", 8001)
         parts.append(f"\n---\n\n## Backend\n\nAPI: http://localhost:{api_port}\n")
 
         return "\n".join(parts)
 
     def _serialize_workflows(self, role_name: str) -> str:
-        """将 App 中定义的状态机序列化为 Markdown 文本，注入到 SOUL.md。"""
+        """Serialize the state machines defined in the App to Markdown text for injection into SOUL.md."""
         if not self.app.flows:
             return ""
 
         lines = ["\n---\n", "## Workflows"]
         for flow in self.app.flows:
-            # 只注入该 role 参与的 flow
+            # Only inject flows that involve this role
             role_involved = any(role_name in t.role for t in flow.transitions)
             if not role_involved:
                 continue
@@ -272,29 +271,6 @@ class Compiler:
             return ""
         return "\n".join(lines)
 
-    def _link_builtin_skills(self) -> None:
-        """Symlink built-in skills into project agent/flow/ so scripts are reachable."""
-        flow_dir = self.agent_dir / "flow"
-        flow_dir.mkdir(parents=True, exist_ok=True)
-
-        # Collect all actions that need skills
-        all_actions: set[str] = set(self.app.actions.keys())
-        for f in self.app.flows:
-            for t in f.transitions:
-                all_actions.add(t.action)
-
-        for action_name in all_actions:
-            project_skill = flow_dir / action_name
-            if project_skill.is_symlink():
-                # Re-create symlink (may point to old location)
-                project_skill.unlink()
-            elif project_skill.exists():
-                continue  # User has their own — don't override
-            builtin_skill = self._builtin_flow_dir / action_name
-            if builtin_skill.is_dir():
-                target = os.path.relpath(builtin_skill, flow_dir)
-                project_skill.symlink_to(target)
-
     def _find_skill_dir(self, action_name: str) -> Path | None:
         """Find skill directory: project agent/flow/ first, then framework built-in."""
         project_skill = self.agent_dir / "flow" / action_name
@@ -308,7 +284,7 @@ class Compiler:
     # ── Flow → skills symlink ──
 
     def _link_skills(self, role_name: str, role_dir: Path) -> int:
-        """为 role symlink 其 action 对应的 skill 目录。"""
+        """Symlink the skill directory for each action belonging to this role."""
         cfg = self.adapter_config
         skills_dir = role_dir / cfg.skills_subdir
         skills_dir.mkdir(parents=True, exist_ok=True)
@@ -333,11 +309,11 @@ class Compiler:
 
         return skill_count
 
-    # ── Flow → flow.yaml（编译产物）──
+    # ── Flow → flow.yaml (compile artifact) ──
 
     def _generate_flow_yaml(self) -> None:
-        """从 App 对象序列化生成 flow.yaml。"""
-        # 区分 direct actions 和 flow transitions 中的 actions
+        """Serialize and generate flow.yaml from the App object."""
+        # Distinguish between direct actions and actions within flow transitions
         transition_actions: set[str] = set()
         for f in self.app.flows:
             for t in f.transitions:
@@ -372,15 +348,15 @@ class Compiler:
         with flow_path.open("w", encoding="utf-8") as fh:
             yaml.dump(data, fh, default_flow_style=False, allow_unicode=True)
 
-        # 也复制到每个 role 目录（evolve scripts 需要）
+        # Also copy to each role directory (needed by evolve scripts)
         for role_name in self.app.roles:
             dest = self.output / "agents" / role_name / "flow.yaml"
             shutil.copy2(flow_path, dest)
 
-    # ── Commitment → commitment.yaml（编译产物）──
+    # ── Commitment → commitment.yaml (compile artifact) ──
 
     def _generate_commitment_yaml(self) -> None:
-        """从 App 对象序列化生成 commitment.yaml。"""
+        """Serialize and generate commitment.yaml from the App object."""
         if not self.app.commitments:
             return
 
@@ -408,10 +384,10 @@ class Compiler:
             dest = self.output / "agents" / role_name / "commitment.yaml"
             shutil.copy2(commit_path, dest)
 
-    # ── Hooks 生成 ──
+    # ── Hooks generation ──
 
     def _generate_hooks(self, role_name: str, role_dir: Path) -> None:
-        """生成适配器相关的 hook 脚本和配置。"""
+        """Generate adapter-specific hook scripts and configuration."""
         cfg = self.adapter_config
         hooks_dir = role_dir / cfg.hooks_dir
         hooks_dir.mkdir(parents=True, exist_ok=True)
@@ -426,7 +402,7 @@ class Compiler:
         log_tool.write_text(self._hook_script("tool_call"), encoding="utf-8")
         log_tool.chmod(log_tool.stat().st_mode | stat.S_IEXEC)
 
-        # 注册 hooks（适配器特定格式）
+        # Register hooks (adapter-specific format)
         if self.adapter == "claude":
             settings_dir = role_dir / ".claude"
             settings_dir.mkdir(parents=True, exist_ok=True)
@@ -465,7 +441,7 @@ class Compiler:
             )
 
     def _hook_script(self, event_type: str) -> str:
-        """生成 hook Python 脚本内容（跨平台）。"""
+        """Generate hook Python script content (cross-platform)."""
         if event_type == "user_prompt":
             extract = (
                 "entry = {\n"
@@ -525,7 +501,7 @@ with open(log_file, "a", encoding="utf-8") as f:
     # ── Manifest ──
 
     def _generate_manifest(self) -> None:
-        """生成 compile_manifest.yaml。"""
+        """Generate compile_manifest.yaml."""
         manifest = {
             "app": self.app.name,
             "compiled_at": datetime.now(timezone.utc).isoformat(),

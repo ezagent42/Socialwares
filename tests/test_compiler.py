@@ -1,4 +1,4 @@
-"""编译器测试。"""
+"""Compiler tests."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ from socialwares.compiler import Compiler, CompileResult
 
 
 def _make_project(tmp_path: Path) -> tuple[App, Path]:
-    """创建一个最小的测试项目结构 + App 对象。"""
-    # agent/ 目录
+    """Create a minimal test project structure + App object."""
+    # agent/ directory
     agent = tmp_path / "agent"
     (agent / "role").mkdir(parents=True)
     (agent / "scope").mkdir(parents=True)
@@ -24,7 +24,7 @@ def _make_project(tmp_path: Path) -> tuple[App, Path]:
     (agent / "flow" / "evolve_structure_check" / "scripts").mkdir(parents=True)
     (agent / "flow" / "evolve_structure_check" / "references").mkdir(parents=True)
 
-    # 内容文件
+    # Content files
     (agent / "scope" / "scope.md").write_text("# Scope\nTask management app")
     (agent / "role" / "default.md").write_text("# Default\nYou manage tasks.")
     (agent / "role" / "reviewer.md").write_text("# Reviewer\nYou review tasks.")
@@ -37,7 +37,7 @@ def _make_project(tmp_path: Path) -> tuple[App, Path]:
         "# check script"
     )
 
-    # App 对象
+    # App object
     app = App("test-app", description="Test")
     app.scope(file=str(agent / "scope" / "scope.md"))
     app.role("default", file=str(agent / "role" / "default.md"))
@@ -65,7 +65,7 @@ def _make_project(tmp_path: Path) -> tuple[App, Path]:
     return app, tmp_path
 
 
-# 需要 submit_task 的 SKILL.md（flow transition 引用了它）
+# Need submit_task's SKILL.md (referenced by flow transition)
 def _add_submit_task(tmp_path: Path) -> None:
     skill_dir = tmp_path / "agent" / "flow" / "submit_task"
     skill_dir.mkdir(parents=True, exist_ok=True)
@@ -126,7 +126,7 @@ class TestScopeAndRole:
         _add_submit_task(project)
         Compiler(app, project_dir=project).compile()
         evolver_soul = (project / ".runtime" / "agents" / "evolver" / "SOUL.md").read_text()
-        # evolver 不参与 task_lifecycle flow
+        # evolver does not participate in the task_lifecycle flow
         assert "## Workflows" not in evolver_soul
 
 
@@ -157,17 +157,68 @@ class TestFlowSkills:
         resolved = link.resolve()
         assert resolved == (project / "agent" / "flow" / "check_health").resolve()
 
+    def test_builtin_skill_resolves_to_framework_template(self, tmp_path: Path) -> None:
+        """When a skill is not in agent/flow/, the symlink should resolve to the
+        framework built-in template path via _find_skill_dir() fallback."""
+        app = App("test-builtin", description="Test")
+        app.scope("test scope")
+        app.role("evolver", "Evolver role")
+        # evolve_structure_check is a built-in skill — not in agent/flow/
+        app.action("evolve_structure_check", role=["evolver"])
+
+        project = tmp_path / "proj"
+        (project / "agent" / "scope").mkdir(parents=True)
+        (project / "agent" / "role").mkdir(parents=True)
+        (project / "agent" / "flow").mkdir(parents=True)
+        (project / "agent" / "scope" / "scope.md").write_text("test scope")
+        (project / "agent" / "role" / "evolver.md").write_text("Evolver role")
+        # Do NOT create agent/flow/evolve_structure_check/
+
+        compiler = Compiler(app, project_dir=project)
+        compiler.compile()
+
+        evolver_skills = project / ".runtime" / "agents" / "evolver" / ".claude" / "skills"
+        link = evolver_skills / "evolve_structure_check"
+        assert link.is_symlink()
+        resolved = link.resolve()
+        # Should resolve to framework template, not agent/flow/
+        assert not str(resolved).startswith(str(project / "agent" / "flow"))
+        builtin_dir = Path(__file__).resolve().parent.parent / "src" / "socialwares" / "templates" / "agent" / "flow" / "evolve_structure_check"
+        assert resolved == builtin_dir.resolve()
+
+    def test_no_builtin_symlinks_in_agent_flow(self, tmp_path: Path) -> None:
+        """After compile, agent/flow/ should NOT contain symlinks to built-in skills.
+        Built-in skills are linked directly from .runtime to framework templates."""
+        app = App("test-no-builtin", description="Test")
+        app.scope("test scope")
+        app.role("evolver", "Evolver role")
+        app.action("evolve_structure_check", role=["evolver"])
+
+        project = tmp_path / "proj"
+        (project / "agent" / "scope").mkdir(parents=True)
+        (project / "agent" / "role").mkdir(parents=True)
+        (project / "agent" / "flow").mkdir(parents=True)
+        (project / "agent" / "scope" / "scope.md").write_text("test scope")
+        (project / "agent" / "role" / "evolver.md").write_text("Evolver role")
+
+        Compiler(app, project_dir=project).compile()
+
+        # agent/flow/ should have no symlinks for built-in skills
+        flow_dir = project / "agent" / "flow"
+        for item in flow_dir.iterdir():
+            assert not item.is_symlink(), f"agent/flow/{item.name} should not be a symlink"
+
 
 class TestFlowValidation:
     def test_missing_skill_dir_raises(self, tmp_path: Path) -> None:
         app, project = _make_project(tmp_path)
-        # 不创建 submit_task 目录 → 校验应该失败
+        # Do not create submit_task directory -> validation should fail
         with pytest.raises(ValueError, match="submit_task"):
             Compiler(app, project_dir=project).compile()
 
     def test_missing_skill_md_raises(self, tmp_path: Path) -> None:
         app, project = _make_project(tmp_path)
-        # 创建目录但不创建 SKILL.md
+        # Create directory but not SKILL.md
         (project / "agent" / "flow" / "submit_task").mkdir(parents=True)
         with pytest.raises(ValueError, match="SKILL.md"):
             Compiler(app, project_dir=project).compile()
@@ -191,7 +242,7 @@ class TestGenerateFlowYaml:
         direct_names = [a["action"] for a in data["direct_actions"]]
         assert "check_health" in direct_names
         assert "create_task" in direct_names
-        # submit_task 和 review_task 在 flow transitions 中，不应在 direct_actions
+        # submit_task and review_task are in flow transitions, should not be in direct_actions
         assert "submit_task" not in direct_names
 
     def test_flow_yaml_has_transitions(self, tmp_path: Path) -> None:
@@ -297,10 +348,10 @@ class TestHooks:
         _add_submit_task(project)
         Compiler(app, project_dir=project, adapter="kimi").compile()
         role_dir = project / ".runtime" / "agents" / "default"
-        # kimi 没有 hooks
+        # kimi has no hooks
         assert not (role_dir / ".claude").exists()
         assert not (role_dir / ".codex").exists()
-        # 但有 AGENTS.md
+        # but has AGENTS.md
         assert (role_dir / "AGENTS.md").is_file()
 
 
@@ -341,5 +392,5 @@ class TestLoader:
 
         sw_file = tmp_path / "socialware.py"
         sw_file.write_text("x = 42\n")
-        with pytest.raises(ValueError, match="未找到"):
+        with pytest.raises(ValueError, match="not found"):
             load_app(sw_file)

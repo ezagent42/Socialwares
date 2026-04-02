@@ -20,12 +20,12 @@ import yaml
 
 
 def _find_yaml(agent_dir: Path, name: str, runtime_dir: Path | None = None) -> Path | None:
-    """查找 yaml 文件：优先 .runtime/，其次 agent/ 下。"""
+    """Find yaml file: prefer .runtime/, fall back to agent/."""
     if runtime_dir:
         p = runtime_dir / name
         if p.exists():
             return p
-    # 旧路径兼容
+    # Legacy path compatibility
     old_paths = {
         "flow.yaml": agent_dir / "flow" / "flow.yaml",
         "commitment.yaml": agent_dir / "commitment" / "commitment.yaml",
@@ -34,8 +34,24 @@ def _find_yaml(agent_dir: Path, name: str, runtime_dir: Path | None = None) -> P
     return p if p and p.exists() else None
 
 
-# 全局 runtime_dir，在 main 中设置
+# Global runtime_dir, set in main
 _runtime_dir: Path | None = None
+
+
+def _find_skill_dir(agent_dir: Path, action_name: str) -> Path | None:
+    """Find skill directory: project agent/flow/ first, then framework built-in."""
+    project_skill = agent_dir / "flow" / action_name
+    if project_skill.is_dir():
+        return project_skill
+    # Fall back to framework built-in
+    try:
+        import socialwares
+        builtin = Path(socialwares.__file__).parent / "templates" / "agent" / "flow" / action_name
+        if builtin.is_dir():
+            return builtin
+    except ImportError:
+        pass
+    return None
 
 
 def check_flow_skills(agent_dir: Path) -> list[str]:
@@ -53,19 +69,19 @@ def check_flow_skills(agent_dir: Path) -> list[str]:
     for action in data.get("direct_actions", []):
         name = action.get("action", "")
         actions.add(name)
-        skill_dir = agent_dir / "flow" / name
-        if not skill_dir.exists():
-            issues.append(f"MISSING SKILL: action '{name}' has no directory agent/flow/{name}/")
+        skill_dir = _find_skill_dir(agent_dir, name)
+        if skill_dir is None:
+            issues.append(f"MISSING SKILL: action '{name}' has no directory in project or framework")
         elif not (skill_dir / "SKILL.md").exists():
-            issues.append(f"MISSING SKILL.md: agent/flow/{name}/ exists but has no SKILL.md")
+            issues.append(f"MISSING SKILL.md: {skill_dir.name}/ exists but has no SKILL.md")
 
     for flow_name, flow in (data.get("flows") or {}).items():
         if isinstance(flow, dict):
             for t in flow.get("transitions", []):
                 name = t.get("action", "")
                 actions.add(name)
-                skill_dir = agent_dir / "flow" / name
-                if not skill_dir.exists():
+                skill_dir = _find_skill_dir(agent_dir, name)
+                if skill_dir is None:
                     issues.append(f"MISSING SKILL: transition action '{name}' (flow {flow_name}) has no directory")
 
     return issues
@@ -201,7 +217,7 @@ def check_flow_graph(agent_dir: Path) -> list[str]:
         name = fdata.get("name", fname)
         transitions = fdata.get("transitions", [])
 
-        # 支持显式 states 列表或从 transitions 推断
+        # Support explicit states list or infer from transitions
         explicit_states = fdata.get("states", [])
         if explicit_states:
             states = set(explicit_states)

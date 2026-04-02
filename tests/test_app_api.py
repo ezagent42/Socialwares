@@ -1,4 +1,4 @@
-"""App 声明式 API 测试。"""
+"""Tests for the App declarative API."""
 
 from __future__ import annotations
 
@@ -27,12 +27,12 @@ class TestAppBasic:
 
     def test_scope_both_raises(self) -> None:
         app = App("test")
-        with pytest.raises(ValueError, match="不能同时指定"):
+        with pytest.raises(ValueError, match="Cannot specify both"):
             app.scope("inline", file="some/path.md")
 
     def test_scope_neither_raises(self) -> None:
         app = App("test")
-        with pytest.raises(ValueError, match="必须指定"):
+        with pytest.raises(ValueError, match="Must specify either"):
             app.scope()
 
 
@@ -113,7 +113,7 @@ class TestFlow:
         app.action("check_health", role=["default"])
         flow = app.flow("lifecycle", resource="task")
         flow.transition("draft", "submit_task", "submitted", role=["default"])
-        # submit_task 来自 flow transition，也应该出现在 actions_for_role
+        # submit_task comes from flow transition, should appear in actions_for_role
         role_actions = app.actions_for_role("default")
         assert "check_health" in role_actions
         assert "submit_task" in role_actions
@@ -149,10 +149,10 @@ class TestCommitment:
 
 
 class TestFullApp:
-    """完整 App 声明测试，模拟 socialware.py 的用法。"""
+    """Full App declaration test, simulating socialware.py usage."""
 
     def test_full_declaration(self, tmp_path) -> None:
-        # 准备文件
+        # Prepare files
         (tmp_path / "scope.md").write_text("Task management scope")
         (tmp_path / "default.md").write_text("Default agent role")
         (tmp_path / "reviewer.md").write_text("Reviewer role")
@@ -185,21 +185,21 @@ class TestFullApp:
             on_violation=("reviewer", "remind_review"),
         )
 
-        # 验证
+        # Verify
         assert app.scope_content == "Task management scope"
         assert len(app.roles) == 3
         assert len(app.actions) == 5
         assert len(app.flows) == 1
         assert len(app.commitments) == 1
 
-        # default 角色的 actions: check_health, create_task + flow 中的 submit_task, close_task
+        # default role actions: check_health, create_task + submit_task, close_task from flow
         default_actions = app.actions_for_role("default")
         assert "check_health" in default_actions
         assert "create_task" in default_actions
         assert "submit_task" in default_actions
         assert "close_task" in default_actions
 
-        # evolver 角色的 actions
+        # evolver role actions
         evolver_actions = app.actions_for_role("evolver")
         assert "evolve_structure_check" in evolver_actions
         assert "evolve_improve" in evolver_actions

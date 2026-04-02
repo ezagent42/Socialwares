@@ -38,12 +38,11 @@ ls                          # socialware.py  agent  src  app  pyproject.toml
 ls agent/role/              # default.md  dev.md  evolver.md
 ls agent/scope/             # scope.md
 ls agent/commitment/        # README.md
-ls agent/flow/              # check_health  dev_define  dev_build  dev_release
-                            # inspect  setup_claude
-                            # evolve_structure_check  evolve_api_check  evolve_session_diagnose
-                            # evolve_improve  evolve_auto
+ls agent/flow/              # check_health (only user skills)
+                            # Built-in skills (dev_*/evolve_*/inspect/setup_claude) are NOT here.
+                            # They are resolved directly from the framework at deploy time.
 # skill 规范：每个目录都有 SKILL.md + scripts/ + references/
-ls agent/flow/dev_define/   # SKILL.md  scripts/  references/
+ls agent/flow/check_health/ # SKILL.md  scripts/  references/
 ```
 
 ### 1.2 模板渲染
@@ -62,6 +61,40 @@ grep 'name = "task-review"' pyproject.toml       # 应匹配
 cd ..
 socialwares new task-review   # Error: task-review/ already exists
 cd task-review
+```
+
+### 1.4 new --from（从已有项目创建）
+
+```bash
+cd ..
+socialwares new my-fork --from ./task-review
+cd my-fork
+
+grep 'App("my-fork")' socialware.py          # App name replaced
+grep 'name = "my-fork"' pyproject.toml       # pyproject name replaced
+ls agent/flow/                               # check_health (user skills preserved)
+ls .git/ 2>/dev/null                         # should not exist (.git removed)
+cd ../task-review
+```
+
+### 1.5 eject（自定义内置 skill）
+
+```bash
+# Eject a built-in skill for customization
+socialwares eject evolve_structure_check
+ls agent/flow/evolve_structure_check/        # SKILL.md  scripts/  references/
+test ! -L agent/flow/evolve_structure_check  # should be a real directory, not symlink
+
+# Deploy uses the ejected version
+socialwares deploy
+ls -la .runtime/agents/evolver/.claude/skills/evolve_structure_check
+# should resolve to agent/flow/evolve_structure_check (project), not framework
+
+# Error on duplicate eject
+socialwares eject evolve_structure_check     # Error: already exists
+
+# Clean up for subsequent tests
+rm -rf agent/flow/evolve_structure_check
 ```
 
 ---
@@ -187,7 +220,6 @@ ls .runtime/agents/evolver/.claude/skills/
 grep -c -- "---" .runtime/agents/default/SOUL.md    # 至少 3 个分隔符
 grep "Workflows" .runtime/agents/default/SOUL.md     # 应存在
 grep "submit_task" .runtime/agents/default/SOUL.md   # 应存在
-grep "localhost:8001" .runtime/agents/default/SOUL.md # Backend 端口注入
 
 # reviewer: scope + role (由 dev_define 创建的 file= 方式)
 cat .runtime/agents/reviewer/SOUL.md | head -20       # 应有 reviewer 角色描述
@@ -322,8 +354,8 @@ socialwares start --role default,reviewer,evolver
 socialwares start --role default --prompt "check health"
 # 应输出 health check 结果
 
-ls .runtime/data/sessions/
-# 应有 session_*.json 文件
+ls .runtime/data/prompts/
+# 应有 current.jsonl（无 session_id 时）或 {session_id}.jsonl 文件
 ```
 
 ---
@@ -445,27 +477,71 @@ ls .socialware/workspace/test/apps/task-review/.runtime/agents/
 # default  dev  reviewer  evolver
 ```
 
-### 6.2 assign
+### 6.2 assign — single role per agent
 
 ```bash
+# Two agents, each gets one role
 socialwares assign alice-support  --role default  --channel "#test"
 socialwares assign bob-reviewer   --role reviewer --channel "#test"
-socialwares assign alice-evolver  --role evolver  --channel "#test"
 
-# 验证 agent workspace
+# Verify alice's workspace
 ls .socialware/workspace/test/agents/alice-support/
 # SOUL.md  flow.yaml  commitment.yaml  .claude/
 
-# settings.local.json merge（hooks 追加）
-cat .socialware/workspace/test/agents/alice-support/.claude/settings.local.json
-# 应有 hooks.UserPromptSubmit 和 hooks.PreToolUse
+# SOUL.md has source markers
+grep "socialware:task-review:default" .socialware/workspace/test/agents/alice-support/SOUL.md
+# <!-- socialware:task-review:default -->
 
-# skills 逐个 symlink
-ls -la .socialware/workspace/test/agents/alice-support/.claude/skills/
-# check_health -> .../default/.claude/skills/check_health
+# skills match the role
+ls .socialware/workspace/test/agents/alice-support/.claude/skills/
+# check_health  create_task  submit_task  close_task  (default role actions)
+
+# bob has different skills
+ls .socialware/workspace/test/agents/bob-reviewer/.claude/skills/
+# review_task  list_tasks  (reviewer role actions)
 ```
 
-### 6.3 uninstall
+### 6.3 assign — multiple roles to same agent
+
+```bash
+# alice also gets evolver role
+socialwares assign alice-support --role evolver --channel "#test"
+
+# SOUL.md now has TWO blocks (default + evolver)
+grep -c "socialware:task-review:" .socialware/workspace/test/agents/alice-support/SOUL.md
+# 2 (one for default, one for evolver)
+
+grep "socialware:task-review:default" .socialware/workspace/test/agents/alice-support/SOUL.md   # exists
+grep "socialware:task-review:evolver" .socialware/workspace/test/agents/alice-support/SOUL.md   # exists
+
+# skills are merged (default + evolver)
+ls .socialware/workspace/test/agents/alice-support/.claude/skills/
+# check_health  create_task  submit_task  close_task
+# evolve_structure_check  evolve_api_check  evolve_session_diagnose  evolve_improve  evolve_auto
+
+# hooks present (from both assigns, deduplicated by deep merge)
+cat .socialware/workspace/test/agents/alice-support/.claude/settings.local.json
+# hooks.UserPromptSubmit and hooks.PreToolUse should exist
+
+# flow.yaml and commitment.yaml deep-merged
+cat .socialware/workspace/test/agents/alice-support/flow.yaml
+# Should contain direct_actions + flows from both roles
+```
+
+### 6.4 assign — idempotency
+
+```bash
+# Re-assign same role — result should be identical
+socialwares assign alice-support --role default --channel "#test"
+
+# Still exactly 2 blocks (not 3)
+grep -c "socialware:task-review:" .socialware/workspace/test/agents/alice-support/SOUL.md
+# 2
+
+# SOUL.md content unchanged (marker-based replacement, not append)
+```
+
+### 6.5 uninstall
 
 ```bash
 socialwares uninstall task-review --channel "#test"
@@ -474,7 +550,10 @@ socialwares uninstall task-review --channel "#test"
 socialwares list
 # No apps installed.
 
-ls .socialware/workspace/test/agents/alice-support/SOUL.md 2>/dev/null  # 不应存在
+# Agent workspace cleaned
+ls .socialware/workspace/test/agents/alice-support/SOUL.md 2>/dev/null    # should not exist
+ls .socialware/workspace/test/agents/alice-support/.claude/skills/ 2>/dev/null  # should be empty or not exist
+ls .socialware/workspace/test/agents/bob-reviewer/SOUL.md 2>/dev/null     # should not exist
 ```
 
 ---
@@ -545,9 +624,11 @@ socialwares deploy
 ## 测试完成检查清单
 
 **Phase 1: 创建**
-- [ ] `socialwares new` 生成完整项目（3 内置角色、5 dev skill、5 evolve skill）
+- [ ] `socialwares new` 生成完整项目（agent/flow/ 只有 check_health，无内置 skill）
 - [ ] 模板渲染正确（APP_NAME 替换、skill 注册）
 - [ ] 重复创建被阻止
+- [ ] `new --from` 克隆项目、替换名称、删 .git/
+- [ ] `eject` 复制内置 skill 到项目、deploy 优先用 ejected 版本
 
 **Phase 2: 定义**
 - [ ] dev_define 逐步引导（每步一个原语，确认后继续）
@@ -581,8 +662,12 @@ socialwares deploy
 
 **Phase 6: 部署**
 - [ ] install 到 .socialware/workspace/{channel}/apps/
-- [ ] assign 注入文件（JSON merge + skills 逐个 symlink）
-- [ ] uninstall 清理
+- [ ] assign single role: SOUL.md 有 source marker, skills 匹配角色
+- [ ] assign multi-role to same agent: SOUL.md 有多个 block, skills 合并
+- [ ] assign idempotency: 重复 assign 同一 role 不重复追加
+- [ ] flow.yaml + commitment.yaml deep merge
+- [ ] settings.local.json deep merge (hooks)
+- [ ] uninstall 清理所有 agent workspace
 
 **Phase 7: 构建**
 - [ ] uv build 成功

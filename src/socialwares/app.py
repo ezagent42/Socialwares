@@ -1,6 +1,6 @@
-"""App 声明式 API — 定义 Socialware App 的结构和关系。
+"""App declarative API — defines the structure and relationships of a Socialware App.
 
-用法:
+Usage:
     from socialwares import App
 
     app = App("task-review")
@@ -20,7 +20,7 @@ from pathlib import Path
 
 @dataclass
 class ActionDef:
-    """action → role 映射。"""
+    """action → role mapping."""
 
     name: str
     roles: list[str]
@@ -28,7 +28,7 @@ class ActionDef:
 
 @dataclass
 class TransitionDef:
-    """状态机转移定义。"""
+    """State machine transition definition."""
 
     from_state: str
     action: str
@@ -38,7 +38,7 @@ class TransitionDef:
 
 @dataclass
 class CommitmentDef:
-    """约束定义。"""
+    """Commitment (constraint) definition."""
 
     name: str
     from_: tuple[str, str]  # (role, action)
@@ -48,7 +48,7 @@ class CommitmentDef:
 
 
 class Flow:
-    """状态机定义。通过 App.flow() 创建。"""
+    """State machine definition. Created via App.flow()."""
 
     def __init__(self, name: str, resource: str) -> None:
         self.name = name
@@ -57,7 +57,7 @@ class Flow:
         self.transitions: list[TransitionDef] = []
 
     def states(self, *names: str) -> None:
-        """注册状态列表。"""
+        """Register the list of states."""
         self._states.extend(names)
 
     def transition(
@@ -68,7 +68,7 @@ class Flow:
         *,
         role: list[str],
     ) -> None:
-        """添加一条状态转移。"""
+        """Add a single state transition."""
         self.transitions.append(
             TransitionDef(
                 from_state=from_state,
@@ -87,33 +87,33 @@ def _load_content(
     content: str | None,
     file: str | None,
 ) -> str:
-    """从 inline string 或文件路径加载内容。"""
+    """Load content from an inline string or a file path."""
     if content is not None and file is not None:
-        raise ValueError("不能同时指定 content 和 file")
+        raise ValueError("Cannot specify both content and file")
     if file is not None:
         return Path(file).read_text(encoding="utf-8")
     if content is not None:
         return content
-    raise ValueError("必须指定 content 或 file")
+    raise ValueError("Must specify either content or file")
 
 
 @dataclass
 class RoleDef:
-    """角色定义。"""
+    """Role definition."""
 
     name: str
     content: str
 
 
 class App:
-    """Socialware App 声明式定义。
+    """Declarative definition of a Socialware App.
 
-    一个 App 实例包含四原语的关系定义:
-    - scope: 能力边界
-    - role: 角色描述
-    - action: action → role 映射
-    - flow: 状态机
-    - commitment: 约束
+    An App instance contains the relationship definitions for the four primitives:
+    - scope: capability boundary
+    - role: role descriptions
+    - action: action → role mapping
+    - flow: state machine
+    - commitment: constraints
     """
 
     def __init__(self, name: str, description: str = "") -> None:
@@ -133,7 +133,7 @@ class App:
         *,
         file: str | None = None,
     ) -> None:
-        """定义 Scope（能力边界）。"""
+        """Define the Scope (capability boundary)."""
         self._scope_content = _load_content(content, file)
 
     @property
@@ -149,7 +149,7 @@ class App:
         *,
         file: str | None = None,
     ) -> None:
-        """定义 Role（角色描述）。"""
+        """Define a Role (role description)."""
         loaded = _load_content(content, file)
         self._roles[name] = RoleDef(name=name, content=loaded)
 
@@ -157,13 +157,13 @@ class App:
     def roles(self) -> dict[str, RoleDef]:
         return dict(self._roles)
 
-    # ── Action（Flow 的一部分）──
+    # ── Action (part of Flow) ──
 
     def action(self, name: str, *, role: list[str]) -> None:
-        """注册 action → role 映射。
+        """Register an action → role mapping.
 
-        action 名对应 agent/flow/{name}/SKILL.md 目录。
-        编译时校验目录和 SKILL.md 是否存在。
+        The action name corresponds to the agent/flow/{name}/SKILL.md directory.
+        The directory and SKILL.md are validated at compile time.
         """
         self._actions[name] = ActionDef(name=name, roles=list(role))
 
@@ -171,10 +171,10 @@ class App:
     def actions(self) -> dict[str, ActionDef]:
         return dict(self._actions)
 
-    # ── Flow（状态机）──
+    # ── Flow (state machine) ──
 
     def flow(self, name: str, *, resource: str) -> Flow:
-        """创建并注册一个状态机。"""
+        """Create and register a state machine."""
         f = Flow(name=name, resource=resource)
         self._flows.append(f)
         return f
@@ -194,7 +194,7 @@ class App:
         condition: str,
         on_violation: tuple[str, str] | None = None,
     ) -> None:
-        """定义 Commitment（约束）。"""
+        """Define a Commitment (constraint)."""
         self._commitments.append(
             CommitmentDef(
                 name=name,
@@ -209,12 +209,12 @@ class App:
     def commitments(self) -> list[CommitmentDef]:
         return list(self._commitments)
 
-    # ── 辅助方法 ──
+    # ── Helper methods ──
 
     def actions_for_role(self, role_name: str) -> list[str]:
-        """返回分配给某个 role 的所有 action 名。"""
+        """Return all action names assigned to a given role."""
         result = [a.name for a in self._actions.values() if role_name in a.roles]
-        # 也包括 flow transition 中的 action
+        # Also include actions from flow transitions
         for f in self._flows:
             for t in f.transitions:
                 if role_name in t.role and t.action not in result:

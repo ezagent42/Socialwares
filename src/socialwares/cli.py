@@ -1,4 +1,4 @@
-"""CLI — socialwares new / deploy / start / install / assign / uninstall。"""
+"""CLI — socialwares new / deploy / start / install / assign / uninstall."""
 
 from __future__ import annotations
 
@@ -15,18 +15,18 @@ import click
 
 
 def _workspace_root() -> Path:
-    """返回 .socialware/workspace/ 目录。"""
+    """Return the .socialware/workspace/ directory."""
     return Path.cwd() / ".socialware" / "workspace"
 
 
 def _channel_dir(channel: str) -> Path:
-    """返回频道目录。去掉 # 前缀。"""
+    """Return the channel directory. Strips the # prefix."""
     name = channel.lstrip("#")
     return _workspace_root() / name
 
 
 def _load_config(project_dir: Path) -> dict:
-    """从 pyproject.toml 读取 [tool.socialwares] 配置。"""
+    """Read [tool.socialwares] configuration from pyproject.toml."""
     toml_path = project_dir / "pyproject.toml"
     if not toml_path.is_file():
         return {}
@@ -41,15 +41,69 @@ def _load_config(project_dir: Path) -> dict:
 
 @click.group()
 def main() -> None:
-    """Socialwares — 构建 Socialware App 的框架。"""
+    """Socialwares — framework for building Socialware Apps."""
 
 
 # ── socialwares new ──
 
+def _new_from_source(name: str, source: str) -> None:
+    """Create project by cloning from git URL or copying from local path."""
+    target = Path(name)
+    if target.exists():
+        click.echo(f"Error: {name}/ already exists")
+        raise SystemExit(1)
+
+    # Clone or copy
+    if source.endswith(".git") or source.startswith("git@") or source.startswith("git+"):
+        subprocess.run(["git", "clone", source, name], check=True)
+    else:
+        src_path = Path(source)
+        if not src_path.is_dir():
+            click.echo(f"Error: {source} is not a directory")
+            raise SystemExit(1)
+        shutil.copytree(src_path, target, symlinks=True, ignore=shutil.ignore_patterns(
+            ".runtime", "__pycache__", ".git", "*.pyc",
+        ))
+
+    # Remove .git/ from cloned repo (start fresh)
+    git_dir = target / ".git"
+    if git_dir.is_dir():
+        shutil.rmtree(git_dir)
+
+    # Remove stale symlinks in agent/flow/ (broken built-in skill symlinks)
+    flow_dir = target / "agent" / "flow"
+    if flow_dir.is_dir():
+        for item in flow_dir.iterdir():
+            if item.is_symlink():
+                item.unlink()
+
+    # Detect old app name from socialware.py
+    sw_file = target / "socialware.py"
+    if sw_file.is_file():
+        content = sw_file.read_text(encoding="utf-8")
+        # Replace App("old-name") with App("new-name")
+        content = re.sub(r'App\(["\']([^"\']+)["\']\)', f'App("{name}")', content)
+        sw_file.write_text(content, encoding="utf-8")
+
+    # Update pyproject.toml name
+    toml_file = target / "pyproject.toml"
+    if toml_file.is_file():
+        content = toml_file.read_text(encoding="utf-8")
+        content = re.sub(r'^name\s*=\s*"[^"]*"', f'name = "{name}"', content, flags=re.MULTILINE)
+        toml_file.write_text(content, encoding="utf-8")
+
+    click.echo(f"Created {name}/ from {source}")
+
+
 @main.command()
 @click.argument("name")
-def new(name: str) -> None:
-    """创建新项目。"""
+@click.option("--from", "source", default=None, help="Git URL or local path to clone from")
+def new(name: str, source: str | None) -> None:
+    """Create a new project."""
+    if source:
+        _new_from_source(name, source)
+        return
+
     target = Path.cwd() / name
     if target.exists():
         click.echo(f"Error: {target} already exists.")
@@ -79,7 +133,7 @@ def new(name: str) -> None:
 
     shutil.copytree(templates_dir, target, ignore=_ignore_builtin_skills)
 
-    # 渲染占位符
+    # Render placeholders
     for fname in ("socialware.py", "pyproject.toml"):
         fpath = target / fname
         if fpath.is_file():
@@ -98,7 +152,7 @@ def new(name: str) -> None:
 @main.command()
 @click.option("--adapter", default=None, help="LLM adapter (claude/codex/kimi)")
 def deploy(adapter: str | None) -> None:
-    """编译四原语 → .runtime/"""
+    """Compile four primitives to .runtime/"""
     project_dir = Path.cwd()
     config = _load_config(project_dir)
     adapter = adapter or config.get("adapter", "claude")
@@ -127,6 +181,33 @@ def deploy(adapter: str | None) -> None:
     click.echo(f"  Output: {result.output_dir}")
 
 
+# ── socialwares eject ──
+
+@main.command()
+@click.argument("skill_name")
+def eject(skill_name: str) -> None:
+    """Copy a built-in skill to agent/flow/ for customization."""
+    builtin_dir = Path(__file__).parent / "templates" / "agent" / "flow" / skill_name
+    if not builtin_dir.is_dir():
+        click.echo(f"Error: '{skill_name}' is not a built-in skill")
+        raise SystemExit(1)
+
+    config = _load_config(Path.cwd())
+    agent_dir = Path(config.get("agent_dir", "agent"))
+    target = agent_dir / "flow" / skill_name
+
+    if target.exists() and not target.is_symlink():
+        click.echo(f"Error: {target} already exists (not a symlink). Remove it first to re-eject.")
+        raise SystemExit(1)
+
+    if target.is_symlink():
+        target.unlink()
+
+    shutil.copytree(builtin_dir, target)
+    click.echo(f"Ejected '{skill_name}' to {target}/")
+    click.echo(f"You can now customize it. Run 'socialwares deploy' to apply changes.")
+
+
 # ── socialwares start ──
 
 @main.command()
@@ -135,7 +216,7 @@ def deploy(adapter: str | None) -> None:
 @click.option("--prompt", default=None, help="Prompt for SDK mode")
 @click.option("--run-all", is_flag=True, help="Run all evolve checks (CI mode)")
 def start(role: str, adapter: str | None, prompt: str | None, run_all: bool) -> None:
-    """启动 agent（本地开发）。"""
+    """Start an agent (local development)."""
     project_dir = Path.cwd()
     config = _load_config(project_dir)
     adapter = adapter or config.get("adapter", "claude")
@@ -162,19 +243,19 @@ def start(role: str, adapter: str | None, prompt: str | None, run_all: bool) -> 
 @click.option("--channel", required=True, help="IRC channel to install to")
 @click.option("--path", "install_path", default=None, help="Override install directory")
 def install(source: str, channel: str, install_path: str | None) -> None:
-    """安装 App 到 IRC 频道（git clone + deploy）。"""
+    """Install an App to an IRC channel (git clone + deploy)."""
     app_name = source.rstrip("/").split("/")[-1]
     if app_name.endswith(".git"):
         app_name = app_name[:-4]
 
-    # 安装到 .socialware/workspace/{channel}/apps/{app}/
+    # Install to .socialware/workspace/{channel}/apps/{app}/
     if install_path:
         app_dir = Path(install_path)
     else:
         app_dir = _channel_dir(channel) / "apps" / app_name
 
     if app_dir.exists():
-        # 目录存在但 installs.json 没记录 → 残留，清掉重装
+        # Directory exists but not recorded in installs.json — stale, clean up and reinstall
         if _find_install_by_channel(channel) is None:
             click.echo(f"Cleaning up stale directory {app_dir}...")
             shutil.rmtree(app_dir)
@@ -225,8 +306,8 @@ def install(source: str, channel: str, install_path: str | None) -> None:
 @click.option("--channel", required=True, help="IRC channel")
 @click.option("--agent-path", default=None, help="Override agent workspace directory")
 def assign(agent_name: str, role: str, channel: str, agent_path: str | None) -> None:
-    """给 IRC 频道中的 agent 分配 role。"""
-    # 找到 app
+    """Assign a role to an agent in an IRC channel."""
+    # Find the app
     info = _find_install_by_channel(channel)
     if info is None:
         click.echo(f"Error: no app installed to channel {channel}")
@@ -241,7 +322,7 @@ def assign(agent_name: str, role: str, channel: str, agent_path: str | None) -> 
         click.echo(f"Error: role '{role}' not found. Available: {', '.join(available)}")
         raise SystemExit(1)
 
-    # agent workspace 路径
+    # Agent workspace path
     if agent_path:
         workspace = Path(agent_path)
         workspace.mkdir(parents=True, exist_ok=True)
@@ -286,7 +367,8 @@ def assign(agent_name: str, role: str, channel: str, agent_path: str | None) -> 
                 dst_link.unlink()
             elif dst_link.exists():
                 continue  # User's own skill — don't override
-            dst_link.symlink_to(skill_link.resolve())
+            target = os.path.relpath(skill_link.resolve(), dst_link.parent)
+            dst_link.symlink_to(target)
 
     # ── settings.local.json: deep merge (idempotent) ──
     sw_settings_path = role_dir / ".claude" / "settings.local.json"
@@ -310,9 +392,9 @@ def assign(agent_name: str, role: str, channel: str, agent_path: str | None) -> 
         new_data = yaml.safe_load(src.read_text(encoding="utf-8")) or {}
         if dst.is_file():
             existing_data = yaml.safe_load(dst.read_text(encoding="utf-8")) or {}
-            _deep_merge(existing_data, new_data)
+            merged = _deep_merge(existing_data, new_data)
             with dst.open("w", encoding="utf-8") as f:
-                yaml.dump(existing_data, f, default_flow_style=False, allow_unicode=True)
+                yaml.dump(merged, f, default_flow_style=False, allow_unicode=True)
         else:
             shutil.copy2(src, dst)
 
@@ -328,13 +410,13 @@ def assign(agent_name: str, role: str, channel: str, agent_path: str | None) -> 
 @click.argument("app_name")
 @click.option("--channel", required=True, help="IRC channel")
 def uninstall(app_name: str, channel: str) -> None:
-    """卸载 App。"""
+    """Uninstall an App."""
     info = _find_install_by_channel(channel)
     if info is None or info["app_name"] != app_name:
         click.echo(f"Error: {app_name} not installed to {channel}")
         raise SystemExit(1)
 
-    # 清理 assignments
+    # Clean up assignments
     assignments = _load_assignments()
     to_remove = [a for a in assignments if a["app_name"] == app_name and a["channel"] == channel]
     for a in to_remove:
@@ -343,7 +425,7 @@ def uninstall(app_name: str, channel: str) -> None:
             f = workspace / fname
             if f.is_file():
                 f.unlink()
-        # 清理注入的 skill symlinks（只删 symlink，不删实际目录）
+        # Clean up injected skill symlinks (only remove symlinks, not actual directories)
         skills_dir = workspace / ".claude" / "skills"
         if skills_dir.is_dir():
             for item in skills_dir.iterdir():
@@ -360,7 +442,7 @@ def uninstall(app_name: str, channel: str) -> None:
 
 @main.command(name="list")
 def list_apps() -> None:
-    """列出已安装的 App。"""
+    """List installed Apps."""
     installs = _load_installs()
     if not installs:
         click.echo("No apps installed.")
@@ -371,26 +453,26 @@ def list_apps() -> None:
         click.echo(f"    Path: {info['app_dir']}")
 
 
-# ── 内部辅助函数 ──
+# ── Internal helper functions ──
 
 def _get_agent_workspace(agent_name: str, channel: str) -> Path:
-    """获取 agent 的 workspace 路径。
+    """Get the workspace path for an agent.
 
-    优先级：
-    1. zchat agents.json（真实环境）
-    2. .socialware/workspace/{channel}/agents/{agent}（本地）
+    Priority:
+    1. zchat agents.json (production environment)
+    2. .socialware/workspace/{channel}/agents/{agent} (local)
     """
-    # 尝试读取真实 zchat state
+    # Try to read the actual zchat state
     state_file = Path.home() / ".local" / "state" / "zchat" / "agents.json"
     if state_file.is_file():
         agents = json.loads(state_file.read_text())
         if agent_name in agents and "workspace" in agents[agent_name]:
             return Path(agents[agent_name]["workspace"])
 
-    # 本地 workspace
+    # Local workspace
     workspace = _channel_dir(channel) / "agents" / agent_name
     workspace.mkdir(parents=True, exist_ok=True)
-    # 确保 .claude 目录存在
+    # Ensure .claude directory exists
     claude_dir = workspace / ".claude"
     claude_dir.mkdir(exist_ok=True)
     settings = claude_dir / "settings.local.json"
@@ -400,7 +482,7 @@ def _get_agent_workspace(agent_name: str, channel: str) -> Path:
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
-    """深度合并两个 dict。override 的值覆盖 base，但 dict 类型递归合并。"""
+    """Deep merge two dicts. Values in override replace base, but dict values are merged recursively."""
     result = dict(base)
     for key, value in override.items():
         if key in result and isinstance(result[key], dict) and isinstance(value, dict):
@@ -410,7 +492,7 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return result
 
 
-# ── 安装信息持久化 ──
+# ── Installation info persistence ──
 
 def _installs_file() -> Path:
     p = _workspace_root() / "installs.json"

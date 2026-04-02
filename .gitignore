@@ -3,9 +3,12 @@
 
 # Temp docs
 docs/temp/
+docs/reports/
+docs/archive/
+docs/discuss/
 
 # Socialwares local state
-.socialwares/
+.socialware/
 
 # Python
 __pycache__/
@@ -42,7 +45,6 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
-# Legacy
-agent/flow/evolve_api_check/last_eval_results.json
-task-review
-.socialware/workspace/
+# E2E test artifacts
+task-review/
+my-fork/

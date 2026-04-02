@@ -4,12 +4,12 @@
 Reads eval_cases.yaml, makes HTTP requests, compares responses.
 Outputs pass/fail per case and overall score.
 
-The --base-url is configurable; it defaults to http://localhost:8001
-but should be set to match your app's actual deployment URL/port.
+The --base-url defaults to http://localhost:{APP_PORT} where APP_PORT
+is read from the environment (default 8001). Override with --base-url.
 
 Usage:
     uv run run_eval.py --cases eval_cases.yaml --base-url http://localhost:8001
-    uv run run_eval.py --cases eval_cases.yaml  # default: http://localhost:8001
+    uv run run_eval.py --cases eval_cases.yaml  # reads APP_PORT env var
 """
 from __future__ import annotations
 
@@ -104,7 +104,7 @@ def run_case(case: dict, base_url: str) -> dict:
 
 
 def _coverage_suggestions(flow_yaml_path: str, eval_cases: list[dict]) -> list[dict]:
-    """检查 eval cases 对 flow.yaml 中 action 的覆盖率，返回未覆盖 action 的 suggestions。"""
+    """Check eval case coverage of actions in flow.yaml, return suggestions for uncovered actions."""
     flow_path = Path(flow_yaml_path)
     if not flow_path.exists():
         return []
@@ -112,7 +112,7 @@ def _coverage_suggestions(flow_yaml_path: str, eval_cases: list[dict]) -> list[d
     with open(flow_path) as f:
         flow_data = yaml.safe_load(f) or {}
 
-    # 收集所有非 evolve 的 action
+    # Collect all non-evolve actions
     all_actions = set()
     for action in flow_data.get("direct_actions", []):
         name = action.get("action", "")
@@ -125,13 +125,13 @@ def _coverage_suggestions(flow_yaml_path: str, eval_cases: list[dict]) -> list[d
                 if not name.startswith("evolve_"):
                     all_actions.add(name)
 
-    # 收集 eval cases 中覆盖的 action（从 description 或 endpoint 推断）
+    # Collect actions covered by eval cases (inferred from description or endpoint)
     covered = set()
     for case in eval_cases:
         desc = case.get("description", "").lower()
         endpoint = case.get("endpoint", "").lower()
         for action in all_actions:
-            # 简单匹配：action 名出现在 description 或 endpoint 中
+            # Simple matching: action name appears in description or endpoint
             action_words = action.replace("_", " ").replace("-", " ")
             if action_words in desc or action in endpoint or action.replace("_", "/") in endpoint:
                 covered.add(action)
@@ -155,16 +155,27 @@ def _skill_api_mismatch(agent_flow_dir: str, base_url: str) -> list[dict]:
     """Check API paths in SKILL.md against actual backend routes."""
     import re
     flow_dir = Path(agent_flow_dir)
-    if not flow_dir.is_dir():
-        return []
+
+    # Collect skill directories from both project and framework built-in
+    skill_dirs: list[Path] = []
+    if flow_dir.is_dir():
+        skill_dirs.extend(d for d in flow_dir.iterdir() if d.is_dir())
+    try:
+        import socialwares
+        builtin_flow = Path(socialwares.__file__).parent / "templates" / "agent" / "flow"
+        if builtin_flow.is_dir():
+            project_names = {d.name for d in skill_dirs}
+            for d in builtin_flow.iterdir():
+                if d.is_dir() and d.name not in project_names:
+                    skill_dirs.append(d)
+    except ImportError:
+        pass
 
     # Extract API paths from all SKILL.md files
     api_pattern = re.compile(r'(GET|POST|PUT|DELETE|PATCH)\s+(/\S+)')
     skill_apis: dict[str, list[tuple[str, str]]] = {}  # action → [(method, path)]
 
-    for skill_dir in flow_dir.iterdir():
-        if not skill_dir.is_dir():
-            continue
+    for skill_dir in skill_dirs:
         skill_md = skill_dir / "SKILL.md"
         if not skill_md.is_file():
             continue

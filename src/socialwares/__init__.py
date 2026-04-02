@@ -1,4 +1,4 @@
-"""Socialwares — 构建可安装到 IRC 频道的 Socialware App 的 Python 框架。"""
+"""Socialwares — a Python framework for building Socialware Apps installable to IRC channels."""
 
 from socialwares.app import App, Flow
 
