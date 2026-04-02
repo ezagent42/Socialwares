@@ -71,3 +71,11 @@ def test_send_to_agent_has_tools_param():
     params = list(sig.parameters.keys())
     assert "db" in params
     assert "user_id" in params
+
+
+def test_system_prompt_includes_structured_format(tmp_path):
+    from src.claude_adapter import build_system_prompt
+    prompt = build_system_prompt(tmp_path, "u1", "test.db")
+    assert "json:structured" in prompt
+    assert "type" in prompt and "action" in prompt
+    assert "agent" in prompt and "listed" in prompt

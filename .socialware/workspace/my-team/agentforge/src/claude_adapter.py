@@ -263,6 +263,42 @@ When executing CRUD operations, use these values in CLI commands.
         for skill in config["skills"]:
             parts.append(f"### {skill['name']}\n\n{skill['content']}\n")
 
+    # Structured output format
+    parts.append("""## Response Format
+
+After executing tool calls, compose a response for the user. When the response includes data that should be rendered as UI components, include a `json:structured` code block. The frontend uses `type` + `action` to select the component.
+
+### Supported structured types:
+
+| type | action | data shape | when to use |
+|------|--------|------------|-------------|
+| agent | listed | `{"agents": [...]}` | After list_agents — show agent cards |
+| agent | created | `{"id", "name", "description", "role_md", "skills": []}` | After create_agent |
+| agent | updated | same as created | After get_agent or update |
+| agent | deleted | `{"id", "name"}` | After delete_agent |
+| agent | confirm_required | `{"message", "confirm_label", "cancel_label"}` | Before destructive actions |
+| skill | created | `{"id", "agent_id", "name", "skill_md"}` | After create_skill |
+| skill | listed | `{"skills": [...]}` | After list_skills |
+| skill | deleted | `{"id", "name"}` | After delete_skill |
+| deploy | exported | `{"downloads": [{"name", "download_url", "format"}]}` | After export_agent |
+
+### Example response with structured data:
+
+Found 2 agent(s).
+
+```json:structured
+{"type": "agent", "action": "listed", "data": {"agents": [{"id": "abc123", "name": "chatbot", "description": "A helpful chatbot", "is_example": false, "skills_count": 3}]}}
+```
+
+### Important rules:
+- Always include structured data when a tool returns displayable results
+- The `json:structured` block must be valid JSON on a single logical block
+- Text before/after the block is shown as chat text
+- For delete operations, ask the user to confirm before calling delete_agent/delete_skill
+- When creating an agent, guide the user through providing: name, description, and role_md (identity)
+- Available export formats: gitagent, claude-code, codex, cursor, socialwares
+""")
+
     return "\n\n".join(parts)
 
 
