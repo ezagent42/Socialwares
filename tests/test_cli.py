@@ -248,6 +248,52 @@ def _make_git_repo(tmp_path: Path) -> Path:
     return repo
 
 
+def _make_monorepo(tmp_path: Path) -> tuple[Path, list[str]]:
+    """Create a monorepo with two socialware apps as subdirectories.
+
+    Returns (repo_path, [app_name1, app_name2]).
+    """
+    import subprocess
+
+    repo = tmp_path / "socialware-apps"
+    app_names = ["task-review", "code-reviewer"]
+
+    for name in app_names:
+        app = repo / name
+        (app / "agent" / "role").mkdir(parents=True)
+        (app / "agent" / "scope").mkdir(parents=True)
+        (app / "agent" / "flow" / "check_health").mkdir(parents=True)
+        (app / "agent" / "flow" / "check_health" / "SKILL.md").write_text("# Check Health")
+        (app / "agent" / "scope" / "scope.md").write_text("# Scope")
+        (app / "agent" / "role" / "default.md").write_text("# Default")
+        (app / "socialware.py").write_text(
+            'from socialwares import App\n'
+            f'app = App("{name}")\n'
+            'app.scope(file="agent/scope/scope.md")\n'
+            'app.role("default", file="agent/role/default.md")\n'
+            'app.action("check_health", role=["default"])\n'
+        )
+        (app / "pyproject.toml").write_text(
+            f'[project]\nname = "{name}"\nversion = "0.1.0"\n\n[tool.socialwares]\n'
+        )
+
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"],
+        cwd=repo, check=True, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        cwd=repo, check=True, capture_output=True,
+    )
+    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "init monorepo"],
+        cwd=repo, check=True, capture_output=True,
+    )
+    return repo, app_names
+
+
 class TestInstall:
     """Tests for the `socialwares install` CLI command."""
 
@@ -341,6 +387,65 @@ class TestInstall:
         installs = json.loads((workspace / "installs.json").read_text())
         assert len(installs) == 1
         assert installs[0]["app_dir"] == str(custom_dir)
+
+    def test_install_with_subdir(self, runner, tmp_path, monkeypatch) -> None:
+        """install with --subdir extracts a subdirectory from a monorepo."""
+        repo, app_names = _make_monorepo(tmp_path)
+        workspace = tmp_path / "workspace"
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr("socialwares.cli._workspace_root", lambda: workspace)
+
+        result = runner.invoke(
+            main,
+            ["install", str(repo), "--channel", "#general", "--subdir", "task-review"],
+        )
+        assert result.exit_code == 0, result.output
+
+        # App name derived from subdir, not repo name
+        app_dir = workspace / "general" / "apps" / "task-review"
+        assert app_dir.is_dir()
+        assert (app_dir / ".runtime").is_dir()
+        assert (app_dir / "socialware.py").is_file()
+
+        installs = json.loads((workspace / "installs.json").read_text())
+        assert len(installs) == 1
+        assert installs[0]["app_name"] == "task-review"
+
+    def test_install_with_subdir_not_found(self, runner, tmp_path, monkeypatch) -> None:
+        """install with --subdir fails if subdirectory doesn't exist."""
+        repo, _ = _make_monorepo(tmp_path)
+        workspace = tmp_path / "workspace"
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr("socialwares.cli._workspace_root", lambda: workspace)
+
+        result = runner.invoke(
+            main,
+            ["install", str(repo), "--channel", "#general", "--subdir", "nonexistent"],
+        )
+        assert result.exit_code != 0
+        assert "not found" in result.output
+
+    def test_install_multiple_apps_from_monorepo(self, runner, tmp_path, monkeypatch) -> None:
+        """install two apps from the same monorepo to the same channel."""
+        repo, app_names = _make_monorepo(tmp_path)
+        workspace = tmp_path / "workspace"
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr("socialwares.cli._workspace_root", lambda: workspace)
+
+        for name in app_names:
+            result = runner.invoke(
+                main,
+                ["install", str(repo), "--channel", "#general", "--subdir", name],
+            )
+            assert result.exit_code == 0, result.output
+
+        installs = json.loads((workspace / "installs.json").read_text())
+        assert len(installs) == 2
+        assert {i["app_name"] for i in installs} == set(app_names)
+
+        for name in app_names:
+            app_dir = workspace / "general" / "apps" / name
+            assert (app_dir / ".runtime").is_dir()
 
 
 class TestUninstall:

@@ -153,8 +153,11 @@ Your App is now installable via its git URL.
 On another machine (with an IRC channel infrastructure):
 
 ```bash
-# Install the App to a channel (default: .socialware/workspace/{channel}/apps/{app}/)
+# Install from a standalone repo
 socialwares install git@github.com:yourorg/task-review.git --channel "#support"
+
+# Install from a monorepo subdirectory
+socialwares install git@github.com:yourorg/socialware-apps.git --channel "#support" --subdir task-review
 
 # Or install to a custom path
 socialwares install git@github.com:yourorg/task-review.git --channel "#support" --path /opt/agents/task-review
@@ -169,8 +172,8 @@ socialwares list
 
 ### What `install` does:
 
-1. `git clone` the repo to `.socialware/workspace/{channel}/apps/{app}/`
-2. Run `socialwares deploy` inside the cloned directory
+1. `git clone` the repo to `.socialware/workspace/{channel}/apps/{app}/` (with `--subdir`, clones then extracts the subdirectory)
+2. Run `socialwares deploy` inside the app directory
 3. Record the installation in `installs.json`
 
 ### What `assign` does:

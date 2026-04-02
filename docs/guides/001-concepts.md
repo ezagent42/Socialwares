@@ -117,7 +117,7 @@ Override per-launch: `socialwares start --role default --adapter codex`
 | `socialwares deploy` | Compile four primitives → `.runtime/` |
 | `socialwares start --role <role>` | Launch Agent locally (TUI / tmux / SDK) |
 | `socialwares eject <skill>` | Copy a built-in skill to project for customization |
-| `socialwares install <git-url> --channel <ch> [--path <dir>]` | Install App to an IRC channel |
+| `socialwares install <git-url> --channel <ch> [--subdir <dir>] [--path <dir>]` | Install App to an IRC channel |
 | `socialwares assign <agent> --role <role> --channel <ch>` | Assign role to an existing Agent |
 | `socialwares uninstall <app> --channel <ch>` | Uninstall App from channel |
 | `socialwares list` | List installed Apps |

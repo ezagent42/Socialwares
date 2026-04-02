@@ -95,10 +95,13 @@ socialwares start --role evolver      # start evolver
 ## Installing into an IRC Channel
 
 ```bash
-# install (default path: .socialware/workspace/{channel}/apps/{app}/)
+# install from a standalone repo
 socialwares install git@github.com:xxx/my-app.git --channel "#support"
 
-# or install to a custom path
+# install from a monorepo subdirectory
+socialwares install git@github.com:xxx/socialware-apps.git --channel "#support" --subdir task-review
+
+# install to a custom path
 socialwares install git@github.com:xxx/my-app.git --channel "#support" --path /opt/agents/my-app
 
 # assign roles
@@ -134,7 +137,7 @@ A regular role with 5 built-in evolve actions (structure_check / api_check / ses
 | `socialwares deploy` | Compile four primitives → `.runtime/` |
 | `socialwares start --role <role>` | Start agent |
 | `socialwares eject <skill>` | Copy a built-in skill to project for customization |
-| `socialwares install <url> --channel <ch> [--path <dir>]` | Install to channel |
+| `socialwares install <url> --channel <ch> [--subdir <dir>] [--path <dir>]` | Install to channel |
 | `socialwares assign <agent> --role <role> --channel <ch>` | Assign role |
 | `socialwares uninstall <app> --channel <ch>` | Uninstall |
 | `socialwares list` | View installed apps |

@@ -242,11 +242,16 @@ def start(role: str, adapter: str | None, prompt: str | None, run_all: bool) -> 
 @click.argument("source")
 @click.option("--channel", required=True, help="IRC channel to install to")
 @click.option("--path", "install_path", default=None, help="Override install directory")
-def install(source: str, channel: str, install_path: str | None) -> None:
+@click.option("--subdir", default=None, help="Subdirectory within the repo containing the App")
+def install(source: str, channel: str, install_path: str | None, subdir: str | None) -> None:
     """Install an App to an IRC channel (git clone + deploy)."""
-    app_name = source.rstrip("/").split("/")[-1]
-    if app_name.endswith(".git"):
-        app_name = app_name[:-4]
+    # Determine app name: from --subdir if given, otherwise from source URL
+    if subdir:
+        app_name = subdir.rstrip("/").split("/")[-1]
+    else:
+        app_name = source.rstrip("/").split("/")[-1]
+        if app_name.endswith(".git"):
+            app_name = app_name[:-4]
 
     # Install to .socialware/workspace/{channel}/apps/{app}/
     if install_path:
@@ -264,9 +269,26 @@ def install(source: str, channel: str, install_path: str | None) -> None:
             click.echo(f"Use 'socialwares uninstall {app_name} --channel {channel}' first.")
             raise SystemExit(1)
 
-    click.echo(f"Cloning {source}...")
-    app_dir.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["git", "clone", source, str(app_dir)], check=True)
+    # Clone the repo
+    if subdir:
+        # Clone to a temp location, then move the subdirectory
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            clone_dir = Path(tmp) / "repo"
+            click.echo(f"Cloning {source}...")
+            subprocess.run(["git", "clone", source, str(clone_dir)], check=True)
+
+            src_dir = clone_dir / subdir
+            if not src_dir.is_dir():
+                click.echo(f"Error: subdirectory '{subdir}' not found in cloned repo.")
+                raise SystemExit(1)
+
+            app_dir.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(src_dir, app_dir)
+    else:
+        click.echo(f"Cloning {source}...")
+        app_dir.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["git", "clone", source, str(app_dir)], check=True)
 
     # deploy
     config = _load_config(app_dir)
