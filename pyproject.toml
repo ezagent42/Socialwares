@@ -1,6 +1,6 @@
 [project]
 name = "socialwares"
-version = "0.2.0"
+version = "0.3.2"
 description = "Framework for building Socialware Apps"
 requires-python = ">=3.12"
 dependencies = [
@@ -13,7 +13,7 @@ socialwares = "socialwares.cli:main"
 
 [project.optional-dependencies]
 server = ["fastapi>=0.115.0", "uvicorn>=0.32.0"]
-claude = ["claude-agent-sdk>=0.1.16"]
+claude = ["claude-agent-sdk>=0.1.21"]
 codex = ["openai-agents>=0.10.0"]
 
 [build-system]

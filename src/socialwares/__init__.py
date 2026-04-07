@@ -3,4 +3,4 @@
 from socialwares.app import App, Flow
 
 __all__ = ["App", "Flow"]
-__version__ = "0.2.0"
+__version__ = "0.3.2"

@@ -1,6 +1,7 @@
 """Agent runner — launch agents locally (TUI / SDK / tmux multi-role).
 
 Python rewrite of the existing start.sh + start_agent.py.
+v0.3.0: Consumes MessageEvent from adapters.
 """
 
 from __future__ import annotations
@@ -147,24 +148,32 @@ class Runner:
         asyncio.run(self._run_sdk_async(adapter, prompt, role, adapter_name))
 
     async def _run_sdk_async(self, adapter, prompt: str, role: str, adapter_name: str) -> None:
-        """SDK async execution."""
-        from socialwares.adapters.base import save_session, is_noise
+        """SDK async execution — consumes MessageEvent from adapter."""
+        from socialwares.adapters.base import save_session, serialize, EventKind
 
         ws_root = self.project_dir
-        messages = []
+        messages: list[dict] = []
 
         print(f"[SDK] Sending prompt to {role} via {adapter_name}...")
         print()
 
         try:
-            async for message in adapter.launch_sdk(prompt):
-                msg = message if isinstance(message, dict) else {"_type": "raw", "content": str(message)}
-                if is_noise(msg):
-                    continue
-                messages.append(msg)
-                content = msg.get("content", "") or msg.get("result", "")
-                if isinstance(content, str) and content:
-                    print(content)
+            async for event in adapter.launch_sdk(prompt):
+                # Record raw event for session persistence
+                messages.append(serialize(event))
+
+                # Print based on event kind
+                if event.kind == EventKind.TEXT_DELTA and event.content:
+                    print(event.content, end="", flush=True)
+                elif event.kind == EventKind.TOOL_START:
+                    print(f"\n[tool] {event.tool_name}", flush=True)
+                elif event.kind == EventKind.SUBAGENT_START:
+                    print(f"\n[subagent] {event.tool_name}", flush=True)
+                elif event.kind == EventKind.SESSION_END:
+                    print(f"\n[session] {event.session_id}", flush=True)
+                elif event.kind == EventKind.ERROR:
+                    print(f"\n[error] {event.content}", flush=True)
+
         except NotImplementedError as e:
             print(f"[SDK] Error: {e}")
             return

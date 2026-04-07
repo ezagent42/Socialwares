@@ -2,16 +2,22 @@
 
 Each adapter reads a deployed role directory (.runtime/agents/{role}/)
 and launches the agent using the platform's CLI (TUI) or SDK (programmatic).
+
+v0.3.0: Added MessageEvent / EventKind for platform-agnostic streaming.
 """
 from __future__ import annotations
 
 import abc
 import json
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from enum import Enum
 from pathlib import Path
 from typing import Any, AsyncIterator
 
+
+# --- Serialization (preserved for session recording) ---
 
 def serialize(obj: Any) -> Any:
     """Recursively serialize SDK message objects to JSON-safe dicts.
@@ -35,6 +41,8 @@ def serialize(obj: Any) -> Any:
     return str(obj)
 
 
+# --- Role configuration ---
+
 @dataclass
 class RoleConfig:
     """Deployed role configuration."""
@@ -54,14 +62,14 @@ class RoleConfig:
         for prompt_file in ["SOUL.md", "AGENTS.md"]:
             path = role_dir / prompt_file
             if path.exists():
-                soul = path.read_text()
+                soul = path.read_text(encoding="utf-8")
                 break
 
         # Read workspace root
         workspace_root = role_dir.parent.parent.parent  # default fallback
         ws_file = role_dir / ".workspace_root"
         if ws_file.exists():
-            workspace_root = Path(ws_file.read_text().strip())
+            workspace_root = Path(ws_file.read_text(encoding="utf-8").strip())
 
         # Find skills dir (adapter-specific)
         skills_dir = role_dir / ".claude" / "skills"
@@ -77,7 +85,51 @@ class RoleConfig:
         )
 
 
-# Message types to skip when recording sessions — system noise, not conversation content
+# --- Unified message model (v0.3.0) ---
+
+class EventKind(str, Enum):
+    """Platform-agnostic message event types.
+
+    Adapters map platform-specific messages to these kinds.
+    Consumers (CLI Runner, WebSocket SessionManager) dispatch on kind
+    without knowing which LLM platform is behind it.
+    """
+
+    # Content
+    TEXT_DELTA      = "text_delta"       # Incremental text chunk
+    # Tool lifecycle
+    TOOL_START      = "tool_start"       # Tool invocation begins
+    TOOL_RESULT     = "tool_result"      # Tool execution result
+    # Sub-agent (Claude Agent tool)
+    SUBAGENT_START  = "subagent_start"   # Sub-agent dispatched
+    SUBAGENT_RESULT = "subagent_result"  # Sub-agent completed
+    # Session lifecycle
+    TURN_START      = "turn_start"       # A turn of reasoning begins
+    TURN_END        = "turn_end"         # A turn of reasoning ends
+    SESSION_END     = "session_end"      # Session complete (carries session_id)
+    # System
+    ERROR           = "error"            # Error occurred
+
+
+@dataclass
+class MessageEvent:
+    """Platform-agnostic message event.
+
+    All adapters yield MessageEvent from launch_sdk().
+    The `raw` field preserves the original SDK object for platform-specific access.
+    """
+    kind: EventKind
+    content: str = ""
+    tool_name: str = ""
+    tool_input: dict[str, Any] = field(default_factory=dict)
+    tool_output: str = ""
+    session_id: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    raw: Any = None
+
+
+# --- Noise filtering (preserved for session recording) ---
+
 _SKIP_TYPES = ("ratelimit", "hook", "init", "system")
 
 
@@ -92,6 +144,8 @@ def is_noise(msg: dict) -> bool:
     combined = msg_type + subtype
     return any(skip in combined for skip in _SKIP_TYPES)
 
+
+# --- Session persistence ---
 
 def save_session(workspace_root: Path, role: str, adapter: str, messages: list[dict]) -> Path:
     """Save a complete SDK session to .runtime/data/sessions/.
@@ -120,6 +174,23 @@ def save_session(workspace_root: Path, role: str, adapter: str, messages: list[d
     return session_file
 
 
+# --- Proxy env helper ---
+
+def proxy_env() -> dict[str, str]:
+    """Full environment with proxy vars ensured for SDK subprocess.
+
+    The SDK subprocess needs the complete environment (PATH, API keys, etc.)
+    plus proxy vars for networks that require them (e.g. China).
+    """
+    env = dict(os.environ)
+    # Windows UTF-8 fix
+    if os.name == "nt":
+        env["PYTHONUTF8"] = "1"
+    return env
+
+
+# --- Base adapter ---
+
 class BaseAdapter(abc.ABC):
     """Abstract base class for agent platform adapters."""
 
@@ -132,13 +203,23 @@ class BaseAdapter(abc.ABC):
         ...
 
     @abc.abstractmethod
-    async def launch_sdk(self, prompt: str) -> AsyncIterator[Any]:
-        """Launch agent programmatically via SDK (production).
+    async def launch_sdk(
+        self,
+        prompt: str,
+        *,
+        session_id: str | None = None,
+        max_turns: int | None = None,
+    ) -> AsyncIterator[MessageEvent]:
+        """Launch agent programmatically via SDK.
 
-        Yields raw message objects from the platform SDK.
-        Caller is responsible for consuming and saving.
+        Yields MessageEvent instances (platform-agnostic).
+        Callers dispatch on event.kind without knowing which LLM is behind it.
+
+        Args:
+            prompt: User message.
+            session_id: Resume a previous conversation (platform support varies).
+            max_turns: Safety limit on tool-use loops.
         """
         ...
-        # Make it a generator
         if False:
-            yield
+            yield  # type: ignore
