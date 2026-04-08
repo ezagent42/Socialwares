@@ -1,0 +1,45 @@
+# API eval cases — direct HTTP checks for backend endpoints.
+# Used by: run_eval.py
+# Run: uv run run_eval.py --cases eval_cases.yaml --base-url <APP_BASE_URL>
+
+api_checks:
+  # P1: Health
+  - description: "Health check returns ok"
+    method: GET
+    endpoint: /health
+    expected_status: 200
+    expected_body: '{"status":"ok"}'
+
+  # P2: Task CRUD
+  - description: "Create task returns 200"
+    method: POST
+    endpoint: /tasks
+    body: '{"title":"eval-test","description":"eval test task"}'
+    expected_status: 200
+
+  - description: "List tasks returns 200"
+    method: GET
+    endpoint: /tasks
+    expected_status: 200
+
+  - description: "List tasks with status filter returns 200"
+    method: GET
+    endpoint: /tasks?status=draft
+    expected_status: 200
+
+  # P2: Error handling — nonexistent task
+  - description: "Submit nonexistent task returns 404"
+    method: POST
+    endpoint: /tasks/nonexistent/submit
+    expected_status: 404
+
+  - description: "Review nonexistent task returns 404"
+    method: POST
+    endpoint: /tasks/nonexistent/review
+    body: '{"action":"approved","reason":"test"}'
+    expected_status: 404
+
+  - description: "Close nonexistent task returns 404"
+    method: POST
+    endpoint: /tasks/nonexistent/close
+    expected_status: 404

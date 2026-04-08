@@ -1,1 +1,0 @@
-"""Socialware App backend."""

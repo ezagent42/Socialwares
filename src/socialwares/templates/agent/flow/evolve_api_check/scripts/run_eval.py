@@ -1,0 +1,287 @@
+#!/usr/bin/env python3
+"""Run eval cases against a live Socialware App.
+
+Reads eval_cases.yaml, makes HTTP requests, compares responses.
+Outputs pass/fail per case and overall score.
+
+The --base-url defaults to http://localhost:{APP_PORT} where APP_PORT
+is read from the environment (default 8001). Override with --base-url.
+
+Usage:
+    uv run run_eval.py --cases eval_cases.yaml --base-url http://localhost:8001
+    uv run run_eval.py --cases eval_cases.yaml  # reads APP_PORT env var
+"""
+from __future__ import annotations
+
+import os
+
+import argparse
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+import yaml
+
+
+def load_cases(path: Path) -> list[dict]:
+    """Load API eval cases from YAML file."""
+    with open(path) as f:
+        data = yaml.safe_load(f) or {}
+
+    api_checks = data.get("api_checks", [])
+    # Backward compatible
+    if "cases" in data and not api_checks:
+        api_checks = data["cases"]
+
+    return api_checks
+
+
+def run_case(case: dict, base_url: str) -> dict:
+    """Run a single eval case. Returns result dict."""
+    method = case.get("method", "GET").upper()
+    endpoint = case.get("endpoint", "/")
+    url = f"{base_url}{endpoint}"
+    headers = case.get("headers", {})
+    headers.setdefault("Content-Type", "application/json")
+    body = case.get("body")
+    if isinstance(body, str):
+        body = body.encode()
+    elif isinstance(body, dict):
+        body = json.dumps(body).encode()
+
+    try:
+        req = Request(url, data=body, headers=headers, method=method)
+        with urlopen(req, timeout=10) as resp:
+            status = resp.status
+            resp_body = resp.read().decode()
+    except HTTPError as e:
+        status = e.code
+        resp_body = e.read().decode()
+    except URLError as e:
+        return {
+            "description": case.get("description", endpoint),
+            "passed": False,
+            "error": f"Connection failed: {e.reason}",
+        }
+    except Exception as e:
+        return {
+            "description": case.get("description", endpoint),
+            "passed": False,
+            "error": str(e),
+        }
+
+    # Check status
+    expected_status = case.get("expected_status", 200)
+    status_ok = status == expected_status
+
+    # Check body (if specified)
+    body_ok = True
+    if "expected_body" in case:
+        try:
+            actual = json.loads(resp_body)
+            expected = json.loads(case["expected_body"])
+            body_ok = actual == expected
+        except (json.JSONDecodeError, TypeError):
+            body_ok = resp_body.strip() == case["expected_body"].strip()
+
+    passed = status_ok and body_ok
+
+    result = {
+        "description": case.get("description", endpoint),
+        "passed": passed,
+        "status": status,
+        "expected_status": expected_status,
+    }
+    if not status_ok:
+        result["status_mismatch"] = f"got {status}, expected {expected_status}"
+    if not body_ok:
+        result["body_mismatch"] = f"response did not match expected"
+
+    return result
+
+
+def _coverage_suggestions(flow_yaml_path: str, eval_cases: list[dict]) -> list[dict]:
+    """Check eval case coverage of actions in flow.yaml, return suggestions for uncovered actions."""
+    flow_path = Path(flow_yaml_path)
+    if not flow_path.exists():
+        return []
+
+    with open(flow_path) as f:
+        flow_data = yaml.safe_load(f) or {}
+
+    # Collect all non-evolve actions
+    all_actions = set()
+    for action in flow_data.get("direct_actions", []):
+        name = action.get("action", "")
+        if not name.startswith("evolve_") and name not in ("inspect", "setup_claude"):
+            all_actions.add(name)
+    for flow_name, flow in (flow_data.get("flows") or {}).items():
+        if isinstance(flow, dict):
+            for t in flow.get("transitions", []):
+                name = t.get("action", "")
+                if not name.startswith("evolve_"):
+                    all_actions.add(name)
+
+    # Collect actions covered by eval cases (inferred from description or endpoint)
+    covered = set()
+    for case in eval_cases:
+        desc = case.get("description", "").lower()
+        endpoint = case.get("endpoint", "").lower()
+        for action in all_actions:
+            # Simple matching: action name appears in description or endpoint
+            action_words = action.replace("_", " ").replace("-", " ")
+            if action_words in desc or action in endpoint or action.replace("_", "/") in endpoint:
+                covered.add(action)
+
+    uncovered = all_actions - covered
+    if not uncovered:
+        return []
+
+    coverage_pct = len(covered) / len(all_actions) * 100 if all_actions else 100
+    suggestions = []
+    for action in sorted(uncovered):
+        suggestions.append({
+            "primitive": "flow",
+            "action": f"Add eval case for action '{action}'",
+            "reason": f"Action '{action}' has no API test case (coverage: {coverage_pct:.0f}%)",
+        })
+    return suggestions
+
+
+def _skill_api_mismatch(agent_flow_dir: str, base_url: str) -> list[dict]:
+    """Check API paths in SKILL.md against actual backend routes."""
+    import re
+    flow_dir = Path(agent_flow_dir)
+
+    # Collect skill directories from both project and framework built-in
+    skill_dirs: list[Path] = []
+    if flow_dir.is_dir():
+        skill_dirs.extend(d for d in flow_dir.iterdir() if d.is_dir())
+    try:
+        import socialwares
+        builtin_flow = Path(socialwares.__file__).parent / "templates" / "agent" / "flow"
+        if builtin_flow.is_dir():
+            project_names = {d.name for d in skill_dirs}
+            for d in builtin_flow.iterdir():
+                if d.is_dir() and d.name not in project_names:
+                    skill_dirs.append(d)
+    except ImportError:
+        pass
+
+    # Extract API paths from all SKILL.md files
+    api_pattern = re.compile(r'(GET|POST|PUT|DELETE|PATCH)\s+(/\S+)')
+    skill_apis: dict[str, list[tuple[str, str]]] = {}  # action → [(method, path)]
+
+    for skill_dir in skill_dirs:
+        skill_md = skill_dir / "SKILL.md"
+        if not skill_md.is_file():
+            continue
+        content = skill_md.read_text(encoding="utf-8")
+        matches = api_pattern.findall(content)
+        if matches:
+            skill_apis[skill_dir.name] = matches
+
+    if not skill_apis:
+        return []
+
+    # Test each documented API path against the backend
+    suggestions = []
+    for action, apis in sorted(skill_apis.items()):
+        for method, path in apis:
+            # Clean path (remove {id} style params for testing)
+            test_path = re.sub(r'\{[^}]+\}', '1', path)
+            url = f"{base_url}{test_path}"
+            try:
+                req = Request(url, method=method)
+                resp = urlopen(req, timeout=3)
+                # Any non-404 response means the route exists
+            except HTTPError as e:
+                if e.code == 404:
+                    suggestions.append({
+                        "primitive": "flow",
+                        "action": f"Fix {action}: {method} {path} returns 404",
+                        "reason": f"SKILL.md documents {method} {path} but backend returns 404. Either fix the API path in SKILL.md or implement the endpoint.",
+                    })
+                # Other errors (400, 422, etc.) mean the route exists but input is wrong — OK
+            except URLError:
+                pass  # Backend not reachable — skip
+            except Exception:
+                pass
+
+    return suggestions
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Run eval cases against Socialware App")
+    parser.add_argument("--cases", required=True, help="Path to eval_cases.yaml")
+    default_port = os.environ.get("APP_PORT", "8001")
+    parser.add_argument("--base-url", default=f"http://localhost:{default_port}", help="App base URL (default reads APP_PORT env var)")
+    parser.add_argument("--flow-yaml", default=".runtime/flow.yaml", help="flow.yaml for coverage check")
+    parser.add_argument("--agent-flow-dir", default="agent/flow", help="agent/flow dir for SKILL.md API path check")
+    args = parser.parse_args()
+
+    api_checks = load_cases(Path(args.cases))
+
+    if not api_checks:
+        print("No eval cases found.")
+        sys.exit(0)
+
+    # Run API checks
+    results = []
+    print(f"Running {len(api_checks)} API checks against {args.base_url}")
+    print()
+    for case in api_checks:
+        result = run_case(case, args.base_url)
+        results.append(result)
+        status = "PASS" if result["passed"] else "FAIL"
+        print(f"  [{status}] {result['description']}")
+        if not result["passed"]:
+            for key in ["status_mismatch", "body_mismatch", "error"]:
+                if key in result:
+                    print(f"         {result[key]}")
+
+    passed = sum(1 for r in results if r["passed"])
+    total = len(results)
+    score = passed / total if total > 0 else 0
+    print(f"\nAPI Score: {passed}/{total} ({score:.0%})")
+
+    # Check SKILL.md API path consistency
+    mismatches = _skill_api_mismatch(args.agent_flow_dir, args.base_url)
+    if mismatches:
+        print(f"\nSKILL.md API Mismatches: {len(mismatches)}")
+        for m in mismatches:
+            print(f"  ✗ {m['action']}")
+
+    # Save report (only if .runtime/ exists — means we're in a workspace)
+    if not Path(".runtime").exists():
+        sys.exit(0)
+    report_dir = Path(".runtime/data/evolve/reports")
+    report_dir.mkdir(parents=True, exist_ok=True)
+    timestamp_str = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+    report_file = report_dir / f"eval_{timestamp_str}.json"
+
+    report_data = {
+        "type": "eval",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "source": str(args.cases),
+        "score": score,
+        "passed": passed,
+        "total": total,
+        "summary": f"API Score: {passed}/{total} ({score:.0%})",
+        "details": results,
+        "suggestions": [
+            {"primitive": "flow", "action": f"Fix API for: {r['description']}", "reason": r.get("status_mismatch", r.get("body_mismatch", "failed"))}
+            for r in results if not r["passed"]
+        ] + _coverage_suggestions(args.flow_yaml, api_checks)
+          + _skill_api_mismatch(args.agent_flow_dir, args.base_url),
+    }
+    with open(report_file, "w") as f:
+        json.dump(report_data, f, indent=2, ensure_ascii=False)
+    print(f"Report saved to {report_file}")
+
+
+if __name__ == "__main__":
+    main()

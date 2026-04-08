@@ -1,0 +1,18 @@
+[project]
+name = "{{APP_NAME}}"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.32.0",
+    "pyyaml>=6.0",
+    "socialwares @ git+ssh://git@github.com/ezagent42/Socialwares.git@v0.2.0",
+]
+
+[tool.socialwares]
+agent_dir = "agent"
+adapter = "claude"
+api_port = 8001
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
