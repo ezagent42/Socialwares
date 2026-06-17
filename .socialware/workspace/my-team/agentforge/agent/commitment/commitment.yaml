@@ -1,0 +1,31 @@
+# Commitment — evaluation standards for flow edges
+#
+# Each commitment defines what "good" looks like between two role-actions.
+# Commitment is an evaluation standard, NOT an enforcement mechanism.
+# Agents are not forced to comply; only the evolver sees these for assessment.
+#
+# Unified schema: from/to/condition/on_violation
+#   from       — edge start: who did what (trigger)
+#   to         — edge end: who must do what (responsible party)
+#   condition  — natural language evaluation standard
+#   on_violation — suggested escalation path (optional)
+#
+# Data flow:
+#   UserPromptSubmit (log_prompt.sh) + PreToolUse (log_tool.sh) hooks
+#   capture prompts and tool calls to .runtime/data/prompts/.
+#   Evolver's diagnose.py reads these logs + commitment.yaml,
+#   compares events against conditions, and computes fulfillment rates.
+#   Violations are written to .runtime/data/evolve/violations/.
+
+commitments:
+  C1:
+    from: { role: default, action: export_agent }
+    to:   { role: default, action: import_agent }
+    condition: "导出的配置包能被成功导入并立即使用"
+    on_violation: null
+
+  C2:
+    from: { role: default, action: import_agent }
+    to:   { role: default, action: manage_agent }
+    condition: "导入时自动检测缺失的必要字段并提示用户，不静默失败"
+    on_violation: null

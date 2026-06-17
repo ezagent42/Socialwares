@@ -1,0 +1,17 @@
+# API eval cases — direct HTTP checks for backend endpoints.
+# Used by: run_eval.py
+# Run: uv run run_eval.py --cases eval_cases.yaml --base-url <APP_BASE_URL>
+
+api_checks:
+  - description: "Health check returns ok"
+    method: GET
+    endpoint: /health
+    expected_status: 200
+    expected_body: '{"status":"ok"}'
+
+  # Add more API checks as your app grows:
+  # - description: "Create task returns 200"
+  #   method: POST
+  #   endpoint: /tasks
+  #   body: '{"title":"test"}'
+  #   expected_status: 200
